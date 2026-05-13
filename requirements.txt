@@ -1,3 +1,4 @@
 pytest
-unittest
 pika
+numpy
+pandas
