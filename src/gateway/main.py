@@ -3,6 +3,7 @@ import logging
 import socket
 import signal
 import multiprocessing
+from typing import cast
 import message_handler
 from common import middleware, message_protocol
 
@@ -11,50 +12,59 @@ SERVER_PORT = int(os.environ["SERVER_PORT"])
 
 MOM_HOST = os.environ["MOM_HOST"]
 INPUT_QUEUE = os.environ["INPUT_QUEUE"]
-OUTPUT_QUEUE = os.environ["OUTPUT_QUEUE"]
+#OUTPUT_QUEUE = os.environ["OUTPUT_QUEUE"]
 
 
 def handle_client_request(client_socket, message_handler):
-    output_queue = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, OUTPUT_QUEUE)
+    #output_queue = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, OUTPUT_QUEUE)
 
     try:
         while True:
-            message = message_protocol.external.recv_msg(client_socket)
+            msg_type, payload = message_protocol.external.recv_msg(client_socket)
 
-            if message[0] == message_protocol.external.MsgType.LOTE:
-                lote = message[1]
+            if msg_type == message_protocol.external.MsgType.LOTE:
+                if not isinstance(payload, list):
+                    continue
+                lote = cast(list, payload)
                 for record in lote:
                     serialized_message = message_handler.serialize_data_message(record)
-                    output_queue.send(serialized_message)
+                    #output_queue.send(serialized_message)
+                    print(f"LOTE: {serialized_message}")
                 message_protocol.external.send_msg(
                     client_socket, message_protocol.external.MsgType.ACK
                 )
 
-            if message[0] == message_protocol.external.MsgType.END_OF_RECODS:
-                serialized_message = message_handler.serialize_eof_message(message[1])
-                output_queue.send(serialized_message)
+            if msg_type == message_protocol.external.MsgType.END_OF_RECODS:
+                serialized_message = message_handler.serialize_eof_message(payload)
+                print(f"EOF: {serialized_message}")
+                #output_queue.send(serialized_message)
                 message_protocol.external.send_msg(
-                    client_socket, message_protocol.external.MsgType.ACK
+                    client_socket,
+                    message_protocol.external.MsgType.REPORTE,
+                    "Procesamiento completado",
                 )
+                message_protocol.external.recv_msg(client_socket)
                 return
     except socket.error:
         logging.error("The connection with the server was lost")
     except Exception as e:
         logging.error(e)
-    finally:
-        output_queue.close()
+    #finally:
+        #output_queue.close()
 
 
 def handle_client_response(client_list):
-    input_queue = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, INPUT_QUEUE)
+    # input_queue = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, INPUT_QUEUE)
 
     def _consume_result(message, ack, nack):
         client_index = 0
         try:
             for [message_handler_instance, client_socket] in client_list:
-                deserialized_message = (
-                    message_handler_instance.deserialize_result_message(message)
-                )
+                
+                # deserialized_message = (
+                #     message_handler_instance.deserialize_result_message(message)
+                # )
+                deserialized_message = "termino"
 
                 if not deserialized_message:
                     client_index += 1
@@ -76,17 +86,32 @@ def handle_client_response(client_list):
         except Exception as e:
             logging.error(e)
             nack()
-            input_queue.stop_consuming()
+            #input_queue.stop_consuming()
 
-    input_queue.start_consuming(_consume_result)
-    input_queue.close()
+    # input_queue.start_consuming(_consume_result)
+    # input_queue.close()
 
 
 def handle_sigterm(server_socket, client_list, sigterm_received):
-    server_socket.shutdown(socket.SHUT_RDWR)
-    for [_, client_socket] in client_list:
-        client_socket.shutdown(socket.SHUT_RDWR)
+    logging.info("Recibida señal de terminación, iniciando cierre graceful...")
     sigterm_received.value = 1
+    try:
+        server_socket.shutdown(socket.SHUT_RDWR)
+    except Exception:
+        pass
+    try:
+        server_socket.close()
+    except Exception:
+        pass
+    for [_, client_socket] in client_list:
+        try:
+            client_socket.shutdown(socket.SHUT_RDWR)
+        except Exception:
+            pass
+        try:
+            client_socket.close()
+        except Exception:
+            pass
 
 
 def main():
@@ -99,15 +124,17 @@ def main():
             processes_pool.apply_async(handle_client_response, (client_list,))
 
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
+                server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 logging.info("Listening to connections")
                 server_socket.bind((SERVER_HOST, SERVER_PORT))
                 server_socket.listen()
-                signal.signal(
-                    signal.SIGTERM,
-                    lambda signum, frame: handle_sigterm(
-                        server_socket, client_list, sigterm_received
-                    ),
-                )
+                
+                def signal_handler(signum, frame):
+                    handle_sigterm(server_socket, client_list, sigterm_received)
+
+                signal.signal(signal.SIGTERM, signal_handler)
+                signal.signal(signal.SIGINT, signal_handler)
+                
                 while True:
                     try:
                         client_socket, _ = server_socket.accept()
@@ -124,10 +151,17 @@ def main():
                             logging.error("The connection with the client was lost")
                             return 1
                         else:
-                            return 0
+                            logging.info("Cerrando servidor...")
+                            break
                     except Exception as e:
                         logging.error(e)
                         return 2
+            
+            logging.info("Esperando a que finalicen los procesos...")
+            processes_pool.terminate()
+            processes_pool.join()
+    
+    logging.info("Gateway cerrado correctamente")
     return 0
 
 
