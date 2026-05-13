@@ -21,12 +21,14 @@ def handle_client_request(client_socket, message_handler):
         while True:
             message = message_protocol.external.recv_msg(client_socket)
 
-            # if message[0] == message_protocol.external.MsgType.FRUIT_RECORD:
-            #     serialized_message = message_handler.serialize_data_message(message[1])
-            #     output_queue.send(serialized_message)
-            #     message_protocol.external.send_msg(
-            #         client_socket, message_protocol.external.MsgType.ACK
-            #     )
+            if message[0] == message_protocol.external.MsgType.LOTE:
+                lote = message[1]
+                for record in lote:
+                    serialized_message = message_handler.serialize_data_message(record)
+                    output_queue.send(serialized_message)
+                message_protocol.external.send_msg(
+                    client_socket, message_protocol.external.MsgType.ACK
+                )
 
             if message[0] == message_protocol.external.MsgType.END_OF_RECODS:
                 serialized_message = message_handler.serialize_eof_message(message[1])
@@ -60,7 +62,7 @@ def handle_client_response(client_list):
 
                 message_protocol.external.send_msg(
                     client_socket,
-                    message_protocol.external.MsgType.FRUIT_TOP,
+                    message_protocol.external.MsgType.REPORTE,
                     deserialized_message,
                 )
                 message_protocol.external.recv_msg(client_socket)

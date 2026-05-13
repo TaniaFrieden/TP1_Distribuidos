@@ -1,13 +1,14 @@
 from asyncio import IncompleteReadError
+import json
 
 from . import external_serializer
 
 
 class MsgType:
-    FRUIT_RECORD = 1
-    FRUIT_TOP = 2
     ACK = 3
     END_OF_RECODS = 4
+    REPORTE = 5
+    LOTE = 6
 
 
 def _recv_sized(socket, size):
@@ -25,37 +26,40 @@ def _recv_sized(socket, size):
     return bytes(buf)
 
 
-def _recv_fruit_record(socket):
-    fruit_size = external_serializer.deserialize_uint32(
-        _recv_sized(socket, external_serializer.UINT32_SIZE)
-    )
-    fruit = external_serializer.deserialize_string(_recv_sized(socket, fruit_size))
-    amount = external_serializer.deserialize_uint32(
-        _recv_sized(socket, external_serializer.UINT32_SIZE)
-    )
-    return (fruit, amount)
-
-
-def _recv_fruit_top(socket):
-    fruit_top_size = external_serializer.deserialize_uint32(
-        _recv_sized(socket, external_serializer.UINT32_SIZE)
-    )
-    fruit_top = []
-    for i in range(fruit_top_size):
-        fruit_record = _recv_fruit_record(socket)
-        fruit_top.append(fruit_record)
-    return fruit_top
-
-
 def _recv_empty(socket):
     return None
 
 
+def _recv_reporte(socket):
+    """Recibe un reporte como string."""
+    reporte_size = external_serializer.deserialize_uint32(
+        _recv_sized(socket, external_serializer.UINT32_SIZE)
+    )
+    reporte = external_serializer.deserialize_string(_recv_sized(socket, reporte_size))
+    return reporte
+
+
+def _recv_lote(socket):
+    """Recibe un lote de registros como dicts JSON."""
+    lote_size = external_serializer.deserialize_uint32(
+        _recv_sized(socket, external_serializer.UINT32_SIZE)
+    )
+    lote = []
+    for _ in range(lote_size):
+        record_size = external_serializer.deserialize_uint32(
+            _recv_sized(socket, external_serializer.UINT32_SIZE)
+        )
+        record_bytes = _recv_sized(socket, record_size)
+        record = json.loads(record_bytes.decode("utf-8"))
+        lote.append(record)
+    return lote
+
+
 RECV_MSG_HANDLERS = {
-    MsgType.FRUIT_RECORD: _recv_fruit_record,
-    MsgType.FRUIT_TOP: _recv_fruit_top,
     MsgType.ACK: _recv_empty,
     MsgType.END_OF_RECODS: _recv_empty,
+    MsgType.REPORTE: _recv_reporte,
+    MsgType.LOTE: _recv_lote,
 }
 
 
@@ -67,30 +71,6 @@ def recv_msg(socket):
     return (msg_type, msg_handler(socket))
 
 
-def _serialize_fruit_record(fruit, amount):
-    return b"".join(
-        [
-            external_serializer.serialize_uint32(len(fruit)),
-            external_serializer.serialize_string(fruit),
-            external_serializer.serialize_uint32(amount),
-        ]
-    )
-
-
-def _send_fruit_record(socket, fruit, amount):
-    msg = external_serializer.serialize_uint32(MsgType.FRUIT_RECORD)
-    msg += _serialize_fruit_record(fruit, amount)
-    socket.sendall(msg)
-
-
-def _send_fruit_top(socket, fruit_top):
-    msg = external_serializer.serialize_uint32(MsgType.FRUIT_TOP)
-    msg += external_serializer.serialize_uint32(len(fruit_top))
-    for fruit_record in fruit_top:
-        msg += _serialize_fruit_record(*fruit_record)
-    socket.sendall(msg)
-
-
 def _send_ack(socket):
     socket.sendall(external_serializer.serialize_uint32(MsgType.ACK))
 
@@ -99,11 +79,32 @@ def _send_end_of_records(socket):
     socket.sendall(external_serializer.serialize_uint32(MsgType.END_OF_RECODS))
 
 
+def _send_reporte(socket, reporte):
+    """Envía un reporte como string."""
+    msg = external_serializer.serialize_uint32(MsgType.REPORTE)
+    msg += external_serializer.serialize_uint32(len(reporte))
+    msg += external_serializer.serialize_string(reporte)
+    socket.sendall(msg)
+
+
+def _send_lote(socket, lote):
+    """Envía un lote de registros como dicts JSON."""
+    msg = external_serializer.serialize_uint32(MsgType.LOTE)
+    msg += external_serializer.serialize_uint32(len(lote))
+    
+    for record in lote:
+        record_json = json.dumps(record, ensure_ascii=False).encode("utf-8")
+        msg += external_serializer.serialize_uint32(len(record_json))
+        msg += record_json
+    
+    socket.sendall(msg)
+
+
 SEND_MSG_HANDLERS = {
-    MsgType.FRUIT_RECORD: _send_fruit_record,
-    MsgType.FRUIT_TOP: _send_fruit_top,
     MsgType.ACK: _send_ack,
     MsgType.END_OF_RECODS: _send_end_of_records,
+    MsgType.REPORTE: _send_reporte,
+    MsgType.LOTE: _send_lote,
 }
 
 

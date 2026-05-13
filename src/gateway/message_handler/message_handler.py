@@ -10,8 +10,10 @@ class MessageHandler:
         MessageHandler._next_id += 1
 
     def serialize_data_message(self, message):
-        [fruit, amount] = message
-        return message_protocol.internal.serialize([self.client_id, fruit, amount])
+        # Serializar dict de transacción con client_id
+        payload = dict(message)
+        payload["client_id"] = self.client_id
+        return message_protocol.internal.serialize(payload)
 
     def serialize_eof_message(self, message):
         return message_protocol.internal.serialize([self.client_id])
@@ -20,9 +22,9 @@ class MessageHandler:
         fields = message_protocol.internal.deserialize(message)
 
         if self._is_a_result_message(fields):
-            result_client_id, fruit_top = fields
+            result_client_id, result_data = fields
             if result_client_id == self.client_id:
-                return fruit_top
+                return result_data
             return None
 
         return fields
