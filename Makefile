@@ -3,11 +3,11 @@ PIP := $(PYTHON) -m pip
 PYTEST := PYTHONPATH=src $(PYTHON) -m pytest
 
 # Variables del cliente
-INPUT_FILE ?= test/notebook/transacciones_sample.csv
+INPUT_FILE ?= datasets/transacciones_sample.csv
 OUTPUT_FILE ?= output/client_output.csv
 SERVER_HOST ?= 127.0.0.1
 SERVER_PORT ?= 5678
-BATCH_SIZE ?= 10000
+BATCH_SIZE ?= 2000
 
 # Variables del gateway
 MOM_HOST ?= localhost
