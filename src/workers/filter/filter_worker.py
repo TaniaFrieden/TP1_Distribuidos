@@ -190,6 +190,12 @@ class FilterWorker(BaseWorker):
     def procesar_mensaje(self, mensaje: bytes, ack, nack):
         datos = json.loads(mensaje)
 
+        if "client_id" in datos and len(datos) == 1:
+            self._middleware_salida.send(mensaje)
+            logger.debug("[FilterWorker] EOF propagado.")
+            ack()
+            return
+
         if self._cumple_condiciones(datos):
             self._middleware_salida.send(mensaje)
             logger.debug(f"[FilterWorker] Mensaje pasó → {self._cola_salida}")

@@ -3,18 +3,18 @@ PIP := $(PYTHON) -m pip
 PYTEST := PYTHONPATH=src $(PYTHON) -m pytest
 
 # Variables del cliente
-INPUT_FILE ?= test/notebook/query1/transacciones_menores_50.csv
-OUTPUT_FILE ?= /tmp/client_output.txt
+INPUT_FILE ?= test/notebook/transacciones_sample.csv
+OUTPUT_FILE ?= output/client_output.csv
 SERVER_HOST ?= 127.0.0.1
 SERVER_PORT ?= 5678
-BATCH_SIZE ?= 2
+BATCH_SIZE ?= 10000
 
 # Variables del gateway
 MOM_HOST ?= localhost
 INPUT_QUEUE ?= input_queue
 OUTPUT_QUEUE ?= output_queue
 
-.PHONY: help venv install test test-worker-base client test-server gateway docker-up docker-down docker-logs
+.PHONY: help venv install test test-worker-base clean gateway-stop client test-server gateway docker-up docker-down docker-logs
 
 help:
 	@echo "Targets disponibles:"
@@ -22,6 +22,7 @@ help:
 	@echo "  make install           - instala las dependencias en .venv"
 	@echo "  make test              - corre todos los tests"
 	@echo "  make test-worker-base  - corre solo el test de BaseWorker"
+	@echo "  make clean             - limpia caches y artefactos temporales"
 	@echo "  make test-server       - inicia servidor de prueba"
 	@echo "  make docker-up         - levanta docker-compose (RabbitMQ + servicios)"
 	@echo "  make docker-down       - detiene docker-compose"
@@ -82,6 +83,18 @@ test:
 test-worker-base:
 	$(PYTEST) test/common/worker_base/test_worker_base.py -q
 
+clean:
+	-@$(MAKE) gateway-stop
+	rm -rf .pytest_cache
+	find . -type d -name '__pycache__' -prune -exec rm -rf {} +
+	rm -f /tmp/client_output.txt
+	rm -f output/client_output.txt
+	rm -f output/client_output.csv
+
+gateway-stop:
+	@echo "Intentando liberar puerto $(SERVER_PORT) y detener gateway..."
+	@if command -v fuser >/dev/null 2>&1; then fuser -k $(SERVER_PORT)/tcp >/dev/null 2>&1 || true; fi
+
 test-server:
 	PYTHONPATH=src $(PYTHON) scripts/test_server.py
 
@@ -94,6 +107,7 @@ client:
 	PYTHONPATH=src $(PYTHON) src/client/main.py
 
 gateway:
+	@if command -v fuser >/dev/null 2>&1; then fuser -k $(SERVER_PORT)/tcp >/dev/null 2>&1 || true; fi
 	SERVER_HOST=$(SERVER_HOST) \
 	SERVER_PORT=$(SERVER_PORT) \
 	MOM_HOST=$(MOM_HOST) \

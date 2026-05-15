@@ -219,6 +219,17 @@ class TestProcesarMensaje:
         ack.assert_called_once()
         nack.assert_not_called()
 
+    def test_eof_se_propagada_sin_aplicar_filtros(self, worker, middleware_salida):
+        mensaje = json.dumps({"client_id": 7}).encode()
+        ack = MagicMock()
+        nack = MagicMock()
+
+        worker._callback_interno(mensaje, ack, nack)
+
+        middleware_salida.send.assert_called_once_with(mensaje)
+        ack.assert_called_once()
+        nack.assert_not_called()
+
     def test_al_cerrar_cierra_middleware_salida(self, worker, middleware_salida):
         worker.al_cerrar()
         middleware_salida.close.assert_called_once()

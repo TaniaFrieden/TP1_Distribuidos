@@ -28,7 +28,12 @@ class MessageMiddlewareQueueRabbitMQ(RabbitMQBase):
 
     @handle_pika_errors("declarar la cola")
     def _declare_queue(self):
-        self.channel.queue_declare(queue=self.queue_name)
+        self.channel.queue_declare(
+            queue=self.queue_name,
+            durable=True,
+            auto_delete=False,
+            exclusive=False,
+        )
         self.channel.basic_qos(prefetch_count=MAX_MESSAGES_PER_WORKER)
 
     @handle_pika_errors("enviar a la cola")

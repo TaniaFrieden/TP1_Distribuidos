@@ -1,6 +1,7 @@
 import os
 import logging
 import csv
+import json
 import socket
 import signal
 
@@ -106,8 +107,10 @@ class Client:
             raise RuntimeError(f"Esperaba REPORTE, recibí tipo {msg_type}")
         
         # Guardar reporte
-        with open(output_file, "w") as f:
-            f.write(reporte)
+        output_dir = os.path.dirname(output_file)
+        if output_dir:
+            os.makedirs(output_dir, exist_ok=True)
+        self._save_report_as_csv(reporte, output_file)
         logging.info(f"Reporte guardado en {output_file}")
         
         # Enviar ACK
@@ -115,6 +118,30 @@ class Client:
             self.server_socket,
             message_protocol.external.MsgType.ACK
         )
+
+    def _save_report_as_csv(self, reporte, output_file):
+        """Convierte el reporte JSON (lista de dicts) a CSV."""
+        try:
+            parsed_report = json.loads(reporte)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("El reporte recibido no es JSON válido") from exc
+
+        if not isinstance(parsed_report, list):
+            raise RuntimeError("El reporte recibido no tiene formato de lista")
+
+        if not parsed_report:
+            with open(output_file, "w", newline="") as csvfile:
+                csvfile.write("")
+            return
+
+        if not all(isinstance(row, dict) for row in parsed_report):
+            raise RuntimeError("El reporte no es una lista de registros")
+
+        fieldnames = list(parsed_report[0].keys())
+        with open(output_file, "w", newline="") as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(parsed_report)
 
 
 def main() -> int:

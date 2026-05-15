@@ -20,7 +20,11 @@ services:
       context: ./src/
       dockerfile: gateway/Dockerfile
     container_name: gateway
+    ports:
+    - "8080:8080"
     environment:
     - PYTHONUNBUFFERED=1
     - SERVER_HOST=gateway
     - SERVER_PORT=5678
+    - HTTP_HOST=0.0.0.0
+    - HTTP_PORT=8080
