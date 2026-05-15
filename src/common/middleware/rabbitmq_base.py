@@ -16,7 +16,7 @@ def handle_pika_errors(action_name):
         def wrapper(self, *args, **kwargs):
             try:
                 return func(self, *args, **kwargs)
-            except exceptions.GracefulExit:
+            except exceptions.GracefulExitException:
                 raise
             except pika.exceptions.AMQPConnectionError as e:
                 self._cleanup_resources()

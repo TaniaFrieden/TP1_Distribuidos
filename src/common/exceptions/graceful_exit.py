@@ -1,2 +1,0 @@
-class GracefulExit(Exception):
-    pass
