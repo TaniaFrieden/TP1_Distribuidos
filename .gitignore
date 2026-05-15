@@ -3,6 +3,8 @@
 datasets
 output
 scripts
+output
+datasets
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
