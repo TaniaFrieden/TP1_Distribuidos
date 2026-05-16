@@ -115,10 +115,10 @@ gateway:
 	OUTPUT_QUEUE=$(OUTPUT_QUEUE) \
 	PYTHONPATH=src $(PYTHON) src/gateway/main.py
 
-docker-up:
-	docker compose up
+start:
+	docker compose up --build
 
-docker-down:
+down:
 	docker compose down
 
 docker-logs:

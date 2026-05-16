@@ -8,7 +8,7 @@ from common import middleware
 logger = logging.getLogger(__name__)
 
 ID = int(os.getenv("ID"))
-MOM_HOST = os.getenv("MOM_HOST", "localhost")
+MOM_HOST = os.getenv("MOM_HOST")
 NODE_PREFIX = os.getenv("NODE_PREFIX", "node")
 INPUT_QUEUE = os.getenv("INPUT_QUEUE", "input_queue")
 CONTROL_EXCHANGE = os.getenv("CONTROL_EXCHANGE", "control_exchange")
@@ -51,11 +51,11 @@ class BaseWorker(ABC):
         self.condicion_pendiente = threading.Condition(threading.Lock())
 
         self._registrar_senales()
-
+        logging.info(f"[{self.__class__.__name__}] Conectando al middleware…")
+        logging.info(f"{MOM_HOST=}, {INPUT_QUEUE=}, {CONTROL_EXCHANGE=}, {NODE_PREFIX=}, {ID=}, {NUM_SIBLINGS=}, {OUTPUT_QUEUE=}")
         self.input_queue = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, INPUT_QUEUE)
         self.control_exchange = middleware.FanoutExchangeRabbitMQ(MOM_HOST, CONTROL_EXCHANGE)
         self.control_queue = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, f"{NODE_PREFIX}_{ID}", CONTROL_EXCHANGE)
-
     # ------------------------------------------------------------------
     # Señales del SO
     # ------------------------------------------------------------------

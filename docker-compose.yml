@@ -42,8 +42,8 @@ services:
       - gateway
     environment:
     - MOM_HOST=rabbitmq
-    - COLA_ENTRADA=raw_data
-    - COLA_SALIDA=filtered_data
+    - INPUT_QUEUE=raw_data
+    - OUTPUT_QUEUE=filtered_data
     - PYTHONUNBUFFERED=1
     - FILTER_TYPE=usd
     - NODE_PREFIX=filter_usd
