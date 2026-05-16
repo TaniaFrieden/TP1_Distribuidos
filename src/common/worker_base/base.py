@@ -1,31 +1,58 @@
 import signal
 import logging
+import os
+import threading
 from abc import ABC, abstractmethod
+from common import middleware
 
 logger = logging.getLogger(__name__)
 
+ID = int(os.getenv("ID"))
+MOM_HOST = os.getenv("MOM_HOST", "localhost")
+NODE_PREFIX = os.getenv("NODE_PREFIX", "node")
+INPUT_QUEUE = os.getenv("INPUT_QUEUE", "input_queue")
+CONTROL_EXCHANGE = os.getenv("CONTROL_EXCHANGE", "control_exchange")
+NUM_SIBLINGS = int(os.getenv("NUM_SIBLINGS", 1))
 
 class BaseWorker(ABC):
     """
     Worker base reutilizable para todos los nodos del pipeline.
 
     Responsabilidades:
-    - Conectarse al middleware al arrancar.
+    - conectarse al middleware de mensajería (RabbitMQ) al iniciar.
+    - crear conexion con la cola de entrada
+    - crear conexion con la cola de control
+    - iniciar middleware para consumir mensajes de la cola de entrada, delegando en `procesar_mensaje` la lógica de negocio.
+      las implementaciones deben pasar la input_queue, control_queue y control_exchange al constructor de BaseWorker
+
+    - el base worker debe saber a donde enviar los mensajes, tanto a exchanges de colas o a exchanges de sharding
+      dependiendo de la configuracion dada por variables de entorno, pero la logica de negocio de cada worker no deberia preocuparse por eso.
+
     - Consumir mensajes en loop llamando a `procesar_mensaje` por cada uno.
     - Capturar SIGTERM / SIGINT y detener el consumo limpiamente sin perder
       mensajes en tránsito (espera a que el mensaje actual termine antes de salir).
 
     Subclases deben implementar:
     - `procesar_mensaje(mensaje, ack, nack)`: lógica de negocio del worker.
-    - `inicializar_middleware()`: crear y retornar la instancia de MessageMiddleware
-      adecuada (cola, exchange, etc.).
+
     - `al_cerrar()`: lógica de limpieza extra antes de cerrar (flush de estado).
     """
 
     def __init__(self):
-        self._middleware = None
+        
         self._cierre_solicitado = False
         self._registrar_senales()
+
+        self.input_queue = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, INPUT_QUEUE)
+        self.control_exchange = middleware.FanoutExchangeRabbitMQ(MOM_HOST, CONTROL_EXCHANGE)
+        self.control_queue = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, f"{NODE_PREFIX}_{ID}", CONTROL_EXCHANGE)
+
+        # Condition para sincronizar el flush con el procesamiento de datos.
+        # El thread de control espera a que no haya mensajes de datos en vuelo
+        # antes de hacer flush, evitando que un dato llegue despues de la señal
+        # de control del mismo cliente
+        self.mensajes_pendientes = 0
+        self.condicion_pendiente = threading.Condition(threading.Lock())
 
     # ------------------------------------------------------------------
     # Señales del SO
@@ -39,13 +66,10 @@ class BaseWorker(ABC):
         nombre_senal = signal.Signals(num_senal).name
         logger.info(f"[BaseWorker] Señal {nombre_senal} recibida. Iniciando cierre graceful…")
         self._cierre_solicitado = True
-        # Le pedimos al middleware que deje de entregar nuevos mensajes.
-        # El mensaje que se está procesando en este momento terminará normalmente.
-        if self._middleware is not None:
-            try:
-                self._middleware.stop_consuming()
-            except Exception as e:
-                logger.warning(f"[BaseWorker] Error al detener consumo: {e}")
+        with self.condicion_pendiente:
+            self.condicion_pendiente.notify_all() 
+        self.input_queue.stop_consuming()
+        self.control_queue.stop_consuming()
 
     # ------------------------------------------------------------------
     # Ciclo de vida principal
@@ -53,12 +77,18 @@ class BaseWorker(ABC):
 
     def iniciar(self):
         """Punto de entrada del worker. Conecta, consume y cierra."""
-        logger.info(f"[{self.__class__.__name__}] Arrancando…")
+        logger.info(f"[{self.__class__.__name__}] Arrancando worker…")
 
         try:
-            self._middleware = self.inicializar_middleware()
-            logger.info(f"[{self.__class__.__name__}] Middleware listo. Comenzando consumo.")
-            self._middleware.start_consuming(self._callback_interno)
+            logger.info(f"[{self.__class__.__name__}]  listo. Comenzando consumo.")
+            control_thread = threading.Thread(
+                target=self.control_queue.start_consuming, 
+                args=(self._process_control_message,),
+            )
+            control_thread.start()
+            self.input_queue.start_consuming(self._callback_interno)
+            control_thread.join()
+        
         except Exception as e:
             if self._cierre_solicitado:
                 # stop_consuming() puede lanzar excepciones en algunos casos; es esperado.
@@ -85,8 +115,10 @@ class BaseWorker(ABC):
             except Exception as e:
                 logger.warning(f"[BaseWorker] Error al cerrar middleware: {e}")
 
+
+
     # ------------------------------------------------------------------
-    # Callback interno (wrappea el de la subclase)
+    # Callback interno
     # ------------------------------------------------------------------
 
     def _callback_interno(self, mensaje, ack, nack):
@@ -116,15 +148,16 @@ class BaseWorker(ABC):
             except Exception:
                 pass
 
+    def _process_control_message(self, message, ack, nack):
+        # fields = message_protocol.internal.deserialize(message)
+        # client_id = fields[0]
+        logging.info(f"[{self.__class__.__name__}] Mensaje de control recibido: {message}")
+        # logging.info(f"Worker {self.__class__.__name__}: process control message for client {client_id}")
+        ack()
+
     # ------------------------------------------------------------------
     # API para subclases
     # ------------------------------------------------------------------
-
-    @abstractmethod
-    def inicializar_middleware(self):
-        """
-        Crea y retorna la instancia de MessageMiddleware que este worker usará.
-        """
 
     @abstractmethod
     def procesar_mensaje(self, mensaje: bytes, ack, nack):

@@ -5,9 +5,11 @@ Worker de filtrado genérico configurable por variables de entorno.
 Hereda de BaseWorker y descarta mensajes que no cumplan las condiciones.
 
 Variables de entorno requeridas:
-    RABBITMQ_HOST   - host de RabbitMQ (default: "rabbitmq")
-    COLA_ENTRADA    - cola de la que se consumen mensajes
-    COLA_SALIDA     - cola a la que se publican los mensajes que pasan
+    RABBITMQ_HOST     - host de RabbitMQ (default: "rabbitmq")
+    COLA_ENTRADA      - cola de la que se consumen mensajes
+    COLA_SALIDA       - cola a la que se publican los mensajes que pasan
+    SHARD_SALIDA      - si se quiere usar sharding, nombre base de la cola de salida. Se publicará en SHARD_SALIDA_{n} según
+    FUNCION_SHARDING  - función de sharding a usar si se especifica SHARD_SALIDA. Soporta:
 
 Variables de entorno opcionales:
     FILTROS         - condiciones separadas por coma. Formato por condición:
