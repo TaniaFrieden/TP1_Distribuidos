@@ -108,12 +108,13 @@ class BaseWorker(ABC):
         except Exception as e:
             logger.warning(f"[BaseWorker] Error en al_cerrar(): {e}")
 
-        if self._middleware is not None:
-            try:
-                self._middleware.close()
-                logger.info(f"[{self.__class__.__name__}] Conexión cerrada.")
-            except Exception as e:
-                logger.warning(f"[BaseWorker] Error al cerrar middleware: {e}")
+        try:
+            self.input_queue.close()
+            self.control_queue.close()
+            self.control_exchange.close()
+            logger.info(f"[{self.__class__.__name__}] Conexión cerrada.")
+        except Exception as e:
+            logger.warning(f"[BaseWorker] Error al cerrar middleware: {e}")
 
 
 
