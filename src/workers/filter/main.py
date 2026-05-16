@@ -18,6 +18,7 @@ from common.worker_base.base import BaseWorker
 logger = logging.getLogger(__name__)
 
 FILTER_TYPE = os.getenv("FILTER_TYPE")
+ID = int(os.getenv("ID"))
 
 # ------------------------------------------------------------------
 # Funciones de filtrado
@@ -60,6 +61,10 @@ class FilterWorker(BaseWorker):
         self._filtrar = FILTROS[FILTER_TYPE]
         logger.info(f"[FilterWorker] Filtro activo: {FILTER_TYPE}")
 
+    def iniciar(self):
+        logger.info(f"[FilterWorker] Iniciando worker con ID={ID} y filtro={FILTER_TYPE}")
+        super().iniciar()
+
     # ------------------------------------------------------------------
     # BaseWorker API
     # ------------------------------------------------------------------
@@ -88,9 +93,20 @@ class FilterWorker(BaseWorker):
     def al_cerrar(self):
         pass  # El base worker cierra las colas
 
+
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
 
     def _es_eof(self, datos: dict) -> bool:
         return "client_id" in datos and len(datos) == 1
+  
+
+
+def __main__():
+    worker = FilterWorker()
+    worker.iniciar()
+
+
+if __name__ == "__main__":
+    __main__()

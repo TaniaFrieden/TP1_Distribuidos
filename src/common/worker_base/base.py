@@ -13,6 +13,7 @@ NODE_PREFIX = os.getenv("NODE_PREFIX", "node")
 INPUT_QUEUE = os.getenv("INPUT_QUEUE", "input_queue")
 CONTROL_EXCHANGE = os.getenv("CONTROL_EXCHANGE", "control_exchange")
 NUM_SIBLINGS = int(os.getenv("NUM_SIBLINGS", 1))
+OUTPUT_QUEUE = os.getenv("OUTPUT_QUEUE")
 
 class BaseWorker(ABC):
     """
@@ -178,6 +179,38 @@ class BaseWorker(ABC):
         una vez por invocación.
         """
 
+    
+    # @abstractmethod
+    # def process_eof(self, ack, nack):
+    #     """
+    #     Lógica de negocio a ejecutar al recibir un mensaje EOF.
+
+    #     Parámetros
+    #     ----------
+    #     ack : callable
+    #         Llámalo cuando el mensaje EOF fue procesado exitosamente.
+    #     nack : callable
+    #         Llámalo si el mensaje EOF debe volver a la cola (requeue=True).
+
+    #     La subclase es responsable de llamar a ack() o nack() exactamente
+    #     una vez por invocación.
+    #     """
+
+    # @abstractmethod
+    # def _process_control_eof(self, ack, nack):
+    #     """
+    #     Lógica de negocio a ejecutar al recibir un mensaje EOF de control.
+    #     Si un worker recibe un EOF de control, se asume que no va a recibir más mensajes de datos, 
+    #     por lo que puede hacer flush de su estado y prepararse para cerrar.
+    #     """
+    
+    # @abstractmethod
+    # def _process_control_finish(self, message, ack, nack):
+    #     """
+    #     Lógica de negocio a ejecutar al recibir N-1 mensajes de control FINISH.
+    #     """
+
+    @abstractmethod
     def al_cerrar(self):
         """
         Se ejecuta justo antes de cerrar la conexión.

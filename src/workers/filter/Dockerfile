@@ -6,6 +6,6 @@ WORKDIR /app
 ENV PYTHONPATH=/app
 
 COPY common ./common
-COPY gateway ./gateway
+COPY workers/filter ./ 
 
-ENTRYPOINT ["python3", "gateway/main.py"]
+ENTRYPOINT ["python3", "main.py"]

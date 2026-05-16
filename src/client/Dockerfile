@@ -1,7 +1,10 @@
 FROM python:3-alpine
 RUN pip3 install pika
 
-COPY common ./common
-COPY client .
+WORKDIR /app
+ENV PYTHONPATH=/app
 
-ENTRYPOINT ["python3", "main.py"]
+COPY common ./common
+COPY client ./client
+
+ENTRYPOINT ["python3", "client/main.py"]
