@@ -42,11 +42,6 @@ class BaseWorker(ABC):
     def __init__(self):
         
         self._cierre_solicitado = False
-        self._registrar_senales()
-
-        self.input_queue = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, INPUT_QUEUE)
-        self.control_exchange = middleware.FanoutExchangeRabbitMQ(MOM_HOST, CONTROL_EXCHANGE)
-        self.control_queue = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, f"{NODE_PREFIX}_{ID}", CONTROL_EXCHANGE)
 
         # Condition para sincronizar el flush con el procesamiento de datos.
         # El thread de control espera a que no haya mensajes de datos en vuelo
@@ -54,6 +49,12 @@ class BaseWorker(ABC):
         # de control del mismo cliente
         self.mensajes_pendientes = 0
         self.condicion_pendiente = threading.Condition(threading.Lock())
+
+        self._registrar_senales()
+
+        self.input_queue = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, INPUT_QUEUE)
+        self.control_exchange = middleware.FanoutExchangeRabbitMQ(MOM_HOST, CONTROL_EXCHANGE)
+        self.control_queue = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, f"{NODE_PREFIX}_{ID}", CONTROL_EXCHANGE)
 
     # ------------------------------------------------------------------
     # Señales del SO
@@ -67,8 +68,10 @@ class BaseWorker(ABC):
         nombre_senal = signal.Signals(num_senal).name
         logger.info(f"[BaseWorker] Señal {nombre_senal} recibida. Iniciando cierre graceful…")
         self._cierre_solicitado = True
-        with self.condicion_pendiente:
-            self.condicion_pendiente.notify_all() 
+        condicion = getattr(self, "condicion_pendiente", None)
+        if condicion is not None:
+            with condicion:
+                condicion.notify_all()
         self.input_queue.stop_consuming()
         self.control_queue.stop_consuming()
 

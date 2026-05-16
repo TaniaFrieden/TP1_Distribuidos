@@ -1,20 +1,4 @@
 services:
-  client_0:
-    build:
-      context: ./src
-      dockerfile: client/Dockerfile
-    container_name: client_0
-    depends_on:
-      - gateway
-    environment:
-    - INPUT_FILE=/datasets/input_0.csv
-    - OUTPUT_FILE=/output/output_0.csv
-    - PYTHONUNBUFFERED=1
-    - SERVER_HOST=gateway
-    - SERVER_PORT=5678
-    volumes:
-    - ./datasets:/datasets
-    - ./output:/output
   gateway:
     build:
       context: ./src
@@ -22,7 +6,6 @@ services:
     container_name: gateway
     depends_on:
       - rabbitmq
-      - filter_usd_01
     ports:
     - "8080:8080"
     environment:
@@ -55,6 +38,7 @@ services:
     container_name: filter_usd_01
     depends_on:
       - rabbitmq
+      - gateway
     environment:
     - MOM_HOST=rabbitmq
     - COLA_ENTRADA=raw_data
