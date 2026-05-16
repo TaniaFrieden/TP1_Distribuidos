@@ -1,5 +1,6 @@
 
 import pika
+import time
 from functools import wraps
 from .middleware import (
     MessageMiddlewareCloseError, 
@@ -33,7 +34,19 @@ def handle_pika_errors(action_name):
 
 class RabbitMQBase:
     def __init__(self, host):
-        self.connection = pika.BlockingConnection(pika.ConnectionParameters(host=host))
+        last_error = None
+        for attempt in range(30):
+            try:
+                self.connection = pika.BlockingConnection(
+                    pika.ConnectionParameters(host=host)
+                )
+                break
+            except Exception as exc:
+                last_error = exc
+                if attempt == 29:
+                    raise last_error
+                time.sleep(1)
+
         self.channel = self.connection.channel()
 
     def __enter__(self):
