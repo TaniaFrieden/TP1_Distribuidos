@@ -41,6 +41,7 @@ class BaseWorker(ABC):
         control_exchange = os.getenv("CONTROL_EXCHANGE", "control_exchange_default")
         node_prefix      = os.getenv("NODE_PREFIX", "node")
         node_id          = int(os.getenv("ID", "0"))
+        output_queue     = os.getenv("OUTPUT_QUEUE", "output_queue2")
 
         logging.info(f"[{self.__class__.__name__}] Conectando al middleware…")
         logging.info(f"{mom_host=}, {input_queue=}, {control_exchange=}, {node_prefix=}, {node_id=}")
@@ -48,7 +49,7 @@ class BaseWorker(ABC):
         self.input_queue      = middleware.MessageMiddlewareQueueRabbitMQ(mom_host, input_queue)
         self.control_exchange = middleware.FanoutExchangeRabbitMQ(mom_host, control_exchange)
         self.control_queue    = middleware.FanoutQueueRabbitMQ(mom_host, f"{node_prefix}_{node_id}", control_exchange)
-
+        self.output_queue     = middleware.MessageMiddlewareQueueRabbitMQ(mom_host, output_queue)
     # ------------------------------------------------------------------
     # Señales del SO
     # ------------------------------------------------------------------
@@ -108,6 +109,7 @@ class BaseWorker(ABC):
             self.input_queue.close()
             self.control_queue.close()
             self.control_exchange.close()
+            self.output_queue.close()
             logger.info(f"[{self.__class__.__name__}] Conexión cerrada.")
         except Exception as e:
             logger.warning(f"[BaseWorker] Error al cerrar middleware: {e}")
@@ -136,6 +138,19 @@ class BaseWorker(ABC):
     def _process_control_message(self, message, ack, nack):
         logging.info(f"[{self.__class__.__name__}] Mensaje de control recibido: {message}")
         ack()
+
+    def _enviar(self, mensaje: bytes):
+        """
+        Enviar mensaje al siguiente componente del pipeline.
+
+        El base worker se encarga de decidir a dónde enviar el mensaje
+        dependiendo de la configuración (exchange de sharding o exchange de colas).
+        """
+        try:
+            self.output_queue.send(mensaje)
+            logger.debug(f"[BaseWorker] Mensaje enviado al siguiente componente.")
+        except Exception as e:
+            logger.error(f"[BaseWorker] Error enviando mensaje: {e}", exc_info=True)
 
     # ------------------------------------------------------------------
     # API para subclases

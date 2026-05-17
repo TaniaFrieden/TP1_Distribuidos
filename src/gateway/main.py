@@ -1,221 +1,141 @@
-import json
-import logging
-import multiprocessing
 import os
-import signal
 import socket
 import threading
-from typing import cast
+import logging
+import uuid
+import signal
+import sys
 
-import message_handler
 from common import message_protocol, middleware
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
-SERVER_HOST = os.environ["SERVER_HOST"]
-SERVER_PORT = int(os.environ["SERVER_PORT"])
-COLA_ENTRADA = os.getenv("INPUT_QUEUE", "raw_data")
-COLA_SALIDA = os.getenv("OUTPUT_QUEUE", "filtered_data")
+SERVER_HOST = os.environ.get("SERVER_HOST", "0.0.0.0")
+SERVER_PORT = int(os.environ.get("SERVER_PORT", "12345"))
+COLA_ENTRADA = os.getenv("INPUT_QUEUE", "filtered_data2")
+COLA_SALIDA = os.getenv("OUTPUT_QUEUE", "raw_data2")
 MOM_HOST = os.getenv("MOM_HOST", "localhost")
 
+clientes_conectados = {}
+servidor_corriendo = True
 
-def _is_usd_record(record):
-    """Acepta variantes de nombre de campo para moneda."""
-    currency = (
-        record.get("payment_currency")
-        or record.get("Payment Currency")
-        or record.get("Receiving Currency")
-        or record.get("currency")
-    )
-    if not isinstance(currency, str):
-        return False
-
-    normalized = currency.strip().lower().replace("_", " ")
-    return normalized in {"usd", "us dollar", "us dollars", "dolar estadounidense"}
-
-
-def _listen_input_queue(client_socket, input_queue):
-    """Hilo secundario: Consume de RabbitMQ de forma bloqueante y envía al cliente."""
+def escuchar_respuestas_backend():
+    """
+    Lee resultados crudos del backend.
+    Espera el formato: "client_id|contenido" o "client_id|EOF"
+    """
+    cola_entrada = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, COLA_ENTRADA)
     
     def on_message(body, ack, nack):
         try:
-            logging.info(f"Recibido mensaje desde {COLA_ENTRADA}. Enviando reporte al cliente...")
-            message_protocol.external.send_msg(
-                client_socket,
-                message_protocol.external.MsgType.REPORTE,
-                body,
-            )
-            ack()  # Si se envió bien por el socket, confirmamos a RabbitMQ
-        except socket.error:
-            logging.error("Error de socket enviando reporte. Se hará nack para encolar de nuevo.")
-            nack()
-        except Exception as exc:
-            logging.error(f"Error procesando mensaje de entrada: {exc}")
+            # 1. Decodificamos el string crudo
+            mensaje_str = body.decode("utf-8")
+            
+            # 2. Separamos el ID del cliente del resto del mensaje
+            # Usamos split("|", 1) para partirlo solo en la primera coincidencia
+            partes = mensaje_str.split("|", 1)
+            
+            if len(partes) != 2:
+                logging.warning(f"Mensaje descartado. Formato inválido desde backend: {mensaje_str}")
+                ack()
+                return
+                
+            client_id, contenido = partes
+            
+            # 3. Ruteamos al socket correspondiente
+            if client_id in clientes_conectados:
+                client_socket = clientes_conectados[client_id]
+                
+                if contenido == "EOF":
+                    message_protocol.external.send_msg(client_socket, message_protocol.external.MsgType.END_OF_RECODS)
+                    logging.info(f"Enviado EOF final al cliente {client_id}")
+                else:
+                    # Le mandamos el contenido del reporte directo
+                    message_protocol.external.send_msg(client_socket, message_protocol.external.MsgType.REPORTE, contenido)
+                    
+            ack()
+        except Exception as e:
+            logging.error(f"Error ruteando respuesta del backend: {e}")
             nack()
 
+    logging.info("Gateway: Escuchando reportes del backend en texto plano...")
     try:
-        logging.info("Hilo de escucha de COLA_ENTRADA iniciado.")
-        # Esto bloquea el hilo hasta que se llame a stop_consuming() desde afuera
-        input_queue.start_consuming(on_message)
-    except Exception as exc:
-        logging.error(f"Error en el hilo de lectura de la cola de entrada: {exc}")
-    finally:
-        logging.info("Hilo de escucha de COLA_ENTRADA finalizado.")
+        cola_entrada.start_consuming(on_message)
+    except Exception:
+        pass
 
 
-def handle_client_request(client_socket, handler, sigterm_received):
-    """Hilo principal del cliente: Recibe lotes del socket y los manda a COLA_SALIDA."""
-    usd_records = []
+def atender_cliente(client_socket):
+    """
+    Recibe las líneas de CSV, les concatena el client_id con un '|' y las manda.
+    """
+    client_id = str(uuid.uuid4())
+    clientes_conectados[client_id] = client_socket
+    logging.info(f"Cliente {client_id} conectado.")
     
-    q1_queue = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, COLA_SALIDA)
-    # Instanciamos la cola de entrada aquí para tener control sobre ella y poder detenerla
-    input_queue = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, COLA_ENTRADA)
-
-    # Iniciar el hilo que escucha de RabbitMQ de forma asíncrona
-    back_thread = threading.Thread(
-        target=_listen_input_queue, 
-        args=(client_socket, input_queue),
-        daemon=True
-    )
-    back_thread.start()
+    cola_salida = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, COLA_SALIDA)
 
     try:
-        while sigterm_received.value == 0:
+        while True:
             msg_type, payload = message_protocol.external.recv_msg(client_socket)
 
             if msg_type == message_protocol.external.MsgType.LOTE:
-                if not isinstance(payload, list):
-                    continue
+                # 1. Iterar sobre las filas (ahora son strings de texto)
+                for record in payload:
+                    # 2. Inyección del client_id pegándolo al principio
+                    mensaje_crudo = f"{client_id}|{record}"
+                    cola_salida.send(mensaje_crudo.encode("utf-8"))
 
-                lote = cast(list, payload)
-                for record in lote:
-                    serialized_message = handler.serialize_data_message(record)
-                    logging.info(f"LOTE: {serialized_message}")
-                    q1_queue.send(serialized_message)
-                    if isinstance(record, dict) and _is_usd_record(record):
-                        usd_records.append(record)
+                # 3. Confirmar lote
+                message_protocol.external.send_msg(client_socket, message_protocol.external.MsgType.ACK)
 
-                message_protocol.external.send_msg(
-                    client_socket,
-                    message_protocol.external.MsgType.ACK,
-                )
-                continue
+            elif msg_type == message_protocol.external.MsgType.END_OF_RECODS:
+                # 1. Le avisamos al filtro mandando el ID y la palabra EOF
+                mensaje_eof = f"{client_id}|EOF"
+                cola_salida.send(mensaje_eof.encode("utf-8"))
+                logging.info(f"Cliente {client_id} terminó de enviar datos.")
+                break
 
-            if msg_type == message_protocol.external.MsgType.END_OF_RECODS:
-                serialized_message = handler.serialize_eof_message(payload)
-                logging.info(f"EOF: {serialized_message}")
-                
-                # Avisamos al backend que se terminaron los registros
-                q1_queue.send(serialized_message)
-                
-                # Reporte local opcional
-                reporte_local = json.dumps(usd_records, ensure_ascii=False)
-                message_protocol.external.send_msg(
-                    client_socket,
-                    message_protocol.external.MsgType.REPORTE,
-                    reporte_local,
-                )
-                
-                # Esperamos un ACK final del cliente
-                message_protocol.external.recv_msg(client_socket)
-                return
-                
     except socket.error:
-        logging.error("Se perdió la conexión con el cliente en el hilo emisor.")
-    except Exception as exc:
-        logging.error(f"Error general en handle_client_request: {exc}")
+        logging.warning(f"Cliente {client_id} se desconectó bruscamente.")
+    except Exception as e:
+        logging.error(f"Error procesando cliente {client_id}: {e}")
     finally:
-        # 1. Cerramos la cola de salida local
-        q1_queue.close()
-        
-        # 2. Frenamos el ciclo de consumo bloqueante de Pika (thread-safe)
-        logging.info("Deteniendo consumo de la cola de entrada...")
-        input_queue.stop_consuming()
-        
-        # 3. Esperamos a que el hilo secundario caiga limpiamente
-        back_thread.join(timeout=2.0)
-        
-        # 4. Cerramos la conexión de la cola de entrada
-        try:
-            # Asumo que tienes un método close() heredado de RabbitMQBase
-            input_queue.close() 
-        except Exception:
-            pass
-
-
-def handle_sigterm(server_socket, client_list, sigterm_received):
-    logging.info("Recibida señal de terminación, iniciando cierre graceful...")
-    sigterm_received.value = 1
-
-    try:
-        server_socket.shutdown(socket.SHUT_RDWR)
-    except Exception:
-        pass
-
-    try:
-        server_socket.close()
-    except Exception:
-        pass
-
-    for [_, client_socket] in client_list:
-        try:
-            client_socket.shutdown(socket.SHUT_RDWR)
-        except Exception:
-            pass
-        try:
-            client_socket.close()
-        except Exception:
-            pass
+        cola_salida.close()
 
 
 def main():
-    logging.basicConfig(level=logging.INFO)
+    global servidor_corriendo
 
-    with multiprocessing.Manager() as manager:
-        client_list = manager.list()
-        sigterm_received = manager.Value("c_short", 0)
+    hilo_respuestas = threading.Thread(target=escuchar_respuestas_backend, daemon=True)
+    hilo_respuestas.start()
 
-        with multiprocessing.Pool(processes=os.process_cpu_count()) as processes_pool:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
-                server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                server_socket.bind((SERVER_HOST, SERVER_PORT))
-                server_socket.listen()
-                logging.info(f"Gateway escuchando en {SERVER_HOST}:{SERVER_PORT}")
+    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    server_socket.bind((SERVER_HOST, SERVER_PORT))
+    server_socket.listen()
+    
+    logging.info(f"Gateway crudo listo en {SERVER_HOST}:{SERVER_PORT}")
 
-                def signal_handler(signum, frame):
-                    handle_sigterm(server_socket, client_list, sigterm_received)
+    def cerrar_graceful(sig, frame):
+        logging.info("Apagando Gateway...")
+        global servidor_corriendo
+        servidor_corriendo = False
+        server_socket.close()
+        sys.exit(0)
+        
+    signal.signal(signal.SIGINT, cerrar_graceful)
+    signal.signal(signal.SIGTERM, cerrar_graceful)
 
-                signal.signal(signal.SIGTERM, signal_handler)
-                signal.signal(signal.SIGINT, signal_handler)
-
-                while True:
-                    try:
-                        client_socket, _ = server_socket.accept()
-                        logging.info("Nuevo cliente conectado")
-                        handler = message_handler.MessageHandler()
-                        client_list.append([handler, client_socket])
-                        
-                        processes_pool.apply_async(
-                            handle_client_request,
-                            (client_socket, handler, sigterm_received),
-                        )
-                    except socket.error:
-                        if sigterm_received.value == 0:
-                            logging.error("Se perdió la conexión con un cliente (Server Socket)")
-                            return 1
-                        logging.info("Cerrando servidor principal...")
-                        break
-                    except Exception as exc:
-                        logging.error(exc)
-                        return 2
-
-            logging.info("Esperando a que finalicen los procesos...")
-            processes_pool.terminate()
-            processes_pool.join()
-
-    logging.info("Gateway cerrado correctamente")
-    return 0
-
+    try:
+        while servidor_corriendo:
+            client_sock, addr = server_socket.accept()
+            hilo_cliente = threading.Thread(target=atender_cliente, args=(client_sock,), daemon=True)
+            hilo_cliente.start()
+    except Exception:
+        pass
+    finally:
+        server_socket.close()
 
 if __name__ == "__main__":
     main()

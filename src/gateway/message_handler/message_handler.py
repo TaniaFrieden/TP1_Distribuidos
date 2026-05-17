@@ -16,7 +16,9 @@ class MessageHandler:
         return message_protocol.internal.serialize(payload)
 
     def serialize_eof_message(self, message):
-        return message_protocol.internal.serialize([self.client_id])
+        # Los workers esperan un EOF con la forma {"client_id": ...}
+        # Usar make_eof para generar el formato correcto.
+        return message_protocol.internal.make_eof(self.client_id)
 
     def deserialize_result_message(self, message):
         fields = message_protocol.internal.deserialize(message)

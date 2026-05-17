@@ -15,8 +15,8 @@ services:
     - SERVER_HOST=gateway
     - SERVER_PORT=5678
     - MOM_HOST=rabbitmq
-    - COLA_SALIDA=raw_data
-    - COLA_ENTRADA=filtered_data
+    - OUTPUT_QUEUE=raw_data
+    - INPUT_QUEUE=filtered_data
     - HTTP_HOST=0.0.0.0
     - HTTP_PORT=8080
   rabbitmq:

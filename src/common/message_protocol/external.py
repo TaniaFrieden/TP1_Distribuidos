@@ -38,9 +38,22 @@ def _recv_reporte(socket):
     reporte = external_serializer.deserialize_string(_recv_sized(socket, reporte_size))
     return reporte
 
+def _send_lote(socket, lote):
+    """Envía un lote de registros como strings de texto plano."""
+    msg = external_serializer.serialize_uint32(MsgType.LOTE)
+    msg += external_serializer.serialize_uint32(len(lote))
+    
+    for record in lote:
+        # Convertimos el string a bytes directamente, SIN json.dumps()
+        record_bytes = str(record).encode("utf-8")
+        msg += external_serializer.serialize_uint32(len(record_bytes))
+        msg += record_bytes
+    
+    socket.sendall(msg)
+
 
 def _recv_lote(socket):
-    """Recibe un lote de registros como dicts JSON."""
+    """Recibe un lote de registros como strings de texto plano."""
     lote_size = external_serializer.deserialize_uint32(
         _recv_sized(socket, external_serializer.UINT32_SIZE)
     )
@@ -50,9 +63,13 @@ def _recv_lote(socket):
             _recv_sized(socket, external_serializer.UINT32_SIZE)
         )
         record_bytes = _recv_sized(socket, record_size)
-        record = json.loads(record_bytes.decode("utf-8"))
+        
+        # Decodificamos de bytes a string, SIN json.loads()
+        record = record_bytes.decode("utf-8")
         lote.append(record)
+        
     return lote
+
 
 
 RECV_MSG_HANDLERS = {
@@ -87,17 +104,6 @@ def _send_reporte(socket, reporte):
     socket.sendall(msg)
 
 
-def _send_lote(socket, lote):
-    """Envía un lote de registros como dicts JSON."""
-    msg = external_serializer.serialize_uint32(MsgType.LOTE)
-    msg += external_serializer.serialize_uint32(len(lote))
-    
-    for record in lote:
-        record_json = json.dumps(record, ensure_ascii=False).encode("utf-8")
-        msg += external_serializer.serialize_uint32(len(record_json))
-        msg += record_json
-    
-    socket.sendall(msg)
 
 
 SEND_MSG_HANDLERS = {
