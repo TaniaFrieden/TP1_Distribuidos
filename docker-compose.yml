@@ -45,6 +45,6 @@ services:
     - INPUT_QUEUE=raw_data
     - OUTPUT_QUEUE=filtered_data
     - PYTHONUNBUFFERED=1
-    - FILTER_TYPE=usd
+    - FILTER_TYPE=USD
     - NODE_PREFIX=filter_usd
     - ID=1

@@ -1,5 +1,5 @@
 def __init__(self):
-    
+
     self._cierre_solicitado = False
     self.mensajes_pendientes = 0
     self.condicion_pendiente = threading.Condition(threading.Lock())
@@ -17,4 +17,4 @@ def __init__(self):
 
     self.input_queue      = middleware.MessageMiddlewareQueueRabbitMQ(mom_host, input_queue)
     self.control_exchange = middleware.FanoutExchangeRabbitMQ(mom_host, control_exchange)
-    self.control_queue    = middleware.MessageMiddlewareQueueRabbitMQ(mom_host, f"{node_prefix}_{node_id}", control_exchange)
+    self.control_queue    = middleware.FanoutQueueRabbitMQ(mom_host, f"{node_prefix}_{node_id}", control_exchange)
