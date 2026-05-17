@@ -85,6 +85,7 @@ test-worker-base:
 
 clean:
 	-@$(MAKE) free-ports
+	-@$(MAKE) down
 	-docker compose down --vols --remove-orphans 2>/dev/null || true
 	-docker network prune -f 2>/dev/null || true
 	rm -rf .pytest_cache

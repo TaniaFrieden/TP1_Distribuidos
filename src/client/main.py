@@ -61,7 +61,7 @@ class Client:
                     amount = float(raw_amount) if raw_amount != "" else 0.0
 
                     # Añadir el valor parseado a la fila para facilidad del servidor
-                    row["_AmountReceivedParsed"] = amount
+                    # row["_AmountReceivedParsed"] = amount
 
                     # Enviar la fila completa (como dict) en el lote
                     batch.append(row)
