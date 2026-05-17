@@ -28,6 +28,8 @@ class BaseWorker(ABC):
     - `al_cerrar()`: lógica de limpieza extra antes de cerrar (flush de estado).
     """
 
+# Modificaciones internas dentro de BaseWorker en common/worker_base/base.py
+
     def __init__(self):
         logging.basicConfig(level=logging.INFO)
         self._cierre_solicitado = False
@@ -40,16 +42,85 @@ class BaseWorker(ABC):
         input_queue      = os.getenv("INPUT_QUEUE", "input_queue")
         control_exchange = os.getenv("CONTROL_EXCHANGE", "control_exchange_default")
         node_prefix      = os.getenv("NODE_PREFIX", "node")
-        node_id          = int(os.getenv("ID", "0"))
+        
+        # 👇 GUARDAMOS ESTOS EN LA INSTANCIA PARA USARLOS downstream 👇
+        self.node_id       = int(os.getenv("ID", "0"))
+        self.total_workers = int(os.getenv("TOTAL_WORKERS", "1")) # Cuántas réplicas tiene este grupo
+        
+        # Estructura para registrar los votos de fin de procesamiento: { client_id: { "workers": set(), "msg": bytes } }
+        self._coordinaciones_eof = {}
+        self._coordinacion_lock = threading.Lock()
+        
         output_queue     = os.getenv("OUTPUT_QUEUE", "output_queue2")
 
         logging.info(f"[{self.__class__.__name__}] Conectando al middleware…")
-        logging.info(f"{mom_host=}, {input_queue=}, {control_exchange=}, {node_prefix=}, {node_id=}")
+        logging.info(f"{mom_host=}, {input_queue=}, {control_exchange=}, {node_prefix=}, self.node_id={self.node_id}, self.total_workers={self.total_workers}")
 
         self.input_queue      = middleware.MessageMiddlewareQueueRabbitMQ(mom_host, input_queue)
         self.control_exchange = middleware.FanoutExchangeRabbitMQ(mom_host, control_exchange)
-        self.control_queue    = middleware.FanoutQueueRabbitMQ(mom_host, f"{node_prefix}_{node_id}", control_exchange)
+        self.control_queue    = middleware.FanoutQueueRabbitMQ(mom_host, f"{node_prefix}_{self.node_id}", control_exchange)
         self.output_queue     = middleware.MessageMiddlewareQueueRabbitMQ(mom_host, output_queue)
+
+    # 👇 NUEVO MÉTODO PARA ENVIAR MENSAJES DE CONTROL AL GRUPO 👇
+    def _enviar_control(self, msg_dict: dict):
+        import json
+        try:
+            self.control_exchange.send(json.dumps(msg_dict).encode('utf-8'))
+        except Exception as e:
+            logger.error(f"[BaseWorker] Error enviando control: {e}")
+
+    # 👇 LOGICA PARA INICIAR LA COORDINACIÓN DESDE LA SUBCLASE 👇
+    def coordinar_eof(self, client_id: str, mensaje_original: bytes):
+        """Método público que llamará el FilterWorker al detectar un EOF."""
+        with self._coordinacion_lock:
+            self._coordinaciones_eof[client_id] = {
+                "workers": set(),
+                "mensaje_original": mensaje_original
+            }
+        
+        # Le avisamos a todo el grupo (Fanout) que inició el fin de este cliente
+        self._enviar_control({
+            "type": "EOF_RECEIVED",
+            "client_id": client_id,
+            "originator": self.node_id
+        })
+
+    # 👇 EL HILO DE CONTROL GESTIONA LA BARRERA AQUÍ 👇
+    def _process_control_message(self, message, ack, nack):
+        import json
+        try:
+            msg_dict = json.loads(message.decode('utf-8'))
+            msg_type = msg_dict.get("type")
+            client_id = msg_dict.get("client_id")
+            originator = msg_dict.get("originator")
+
+            if msg_type == "EOF_RECEIVED":
+                # Al recibir la notificación del grupo, este worker avisa que ya está liberado
+                self._enviar_control({
+                    "type": "WORKER_FINISHED",
+                    "client_id": client_id,
+                    "originator": originator,
+                    "worker_id": self.node_id
+                })
+
+            elif msg_type == "WORKER_FINISHED":
+                # Si yo soy el dueño/originador de este proceso de EOF, cuento el voto
+                if originator == self.node_id:
+                    with self._coordinacion_lock:
+                        if client_id in self._coordinaciones_eof:
+                            self._coordinaciones_eof[client_id]["workers"].add(msg_dict.get("worker_id"))
+                            
+                            # Si todas las réplicas del grupo confirmaron terminación
+                            if len(self._coordinaciones_eof[client_id]["workers"]) >= self.total_workers:
+                                msg_original = self._coordinaciones_eof[client_id]["mensaje_original"]
+                                logger.info(f"[{self.__class__.__name__}] Grupo sincronizado para {client_id}. Despachando EOF río abajo.")
+                                self._enviar(msg_original)
+                                del self._coordinaciones_eof[client_id]
+                                
+        except Exception as e:
+            logger.error(f"[BaseWorker] Error en procesamiento de control: {e}")
+        finally:
+            ack()
     # ------------------------------------------------------------------
     # Señales del SO
     # ------------------------------------------------------------------
@@ -135,9 +206,6 @@ class BaseWorker(ABC):
             except Exception:
                 pass
 
-    def _process_control_message(self, message, ack, nack):
-        logging.info(f"[{self.__class__.__name__}] Mensaje de control recibido: {message}")
-        ack()
 
     def _enviar(self, mensaje: bytes):
         """

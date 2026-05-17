@@ -51,3 +51,25 @@ services:
     - FILTER_TYPE=USD
     - NODE_PREFIX=filter_usd
     - ID=1
+    - TOTAL_WORKERS=2
+    - FILTER_COLUMN_INDEX=8
+  filter_usd_02:
+    build:
+      context: ./src
+      dockerfile: workers/filter/Dockerfile
+    container_name: filter_usd_02
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    environment:
+    - MOM_HOST=rabbitmq
+    - INPUT_QUEUE=raw_data
+    - OUTPUT_QUEUE=filtered_data
+    - PYTHONUNBUFFERED=1
+    - FILTER_TYPE=USD
+    - NODE_PREFIX=filter_usd
+    - FILTER_COLUMN_INDEX=8
+    - ID=2
+    - TOTAL_WORKERS=2
