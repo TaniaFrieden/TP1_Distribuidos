@@ -19,6 +19,7 @@ services:
     - INPUT_QUEUE=filtered_data
     - HTTP_HOST=0.0.0.0
     - HTTP_PORT=8080
+
   rabbitmq:
     image: rabbitmq:3-management
     container_name: rabbitmq
@@ -31,8 +32,9 @@ services:
       test: rabbitmq-diagnostics check_port_connectivity
       timeout: 3s
     ports:
-    - 5672:5672
-    - 15672:15672
+    - "5672:5672"
+    - "15672:15672"
+
   filter_usd_01:
     build:
       context: ./src
@@ -46,15 +48,14 @@ services:
     environment:
     - MOM_HOST=rabbitmq
     - INPUT_QUEUE=raw_data
-    - OUTPUT_QUEUE=filtered_data
+    - OUTPUT_QUEUE=usd_to_minor_50
     - PYTHONUNBUFFERED=1
     - NODE_PREFIX=filter_usd
     - ID=1
-    - TOTAL_WORKERS=2
-    - FILTER_INDEX=8
-    - FILTER_OPERATOR=eq
+    - TOTAL_WORKERS=5
+    - FILTER_FIELD=Payment Currency
     - FILTER_VALUE=US Dollar
-    - HEADER_NAME=Payment Currency
+    - FILTER_OPERATOR=eq
   filter_usd_02:
     build:
       context: ./src
@@ -68,12 +69,137 @@ services:
     environment:
     - MOM_HOST=rabbitmq
     - INPUT_QUEUE=raw_data
-    - OUTPUT_QUEUE=filtered_data
+    - OUTPUT_QUEUE=usd_to_minor_50
     - PYTHONUNBUFFERED=1
     - NODE_PREFIX=filter_usd
     - ID=2
-    - TOTAL_WORKERS=2
-    - FILTER_INDEX=8
-    - FILTER_OPERATOR=eq
+    - TOTAL_WORKERS=5
+    - FILTER_FIELD=Payment Currency
     - FILTER_VALUE=US Dollar
-    - HEADER_NAME=Payment Currency
+    - FILTER_OPERATOR=eq
+  filter_usd_03:
+    build:
+      context: ./src
+      dockerfile: workers/filter/Dockerfile
+    container_name: filter_usd_03
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    environment:
+    - MOM_HOST=rabbitmq
+    - INPUT_QUEUE=raw_data
+    - OUTPUT_QUEUE=usd_to_minor_50
+    - PYTHONUNBUFFERED=1
+    - NODE_PREFIX=filter_usd
+    - ID=3
+    - TOTAL_WORKERS=5
+    - FILTER_FIELD=Payment Currency
+    - FILTER_VALUE=US Dollar
+    - FILTER_OPERATOR=eq
+  filter_usd_04:
+    build:
+      context: ./src
+      dockerfile: workers/filter/Dockerfile
+    container_name: filter_usd_04
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    environment:
+    - MOM_HOST=rabbitmq
+    - INPUT_QUEUE=raw_data
+    - OUTPUT_QUEUE=usd_to_minor_50
+    - PYTHONUNBUFFERED=1
+    - NODE_PREFIX=filter_usd
+    - ID=4
+    - TOTAL_WORKERS=5
+    - FILTER_FIELD=Payment Currency
+    - FILTER_VALUE=US Dollar
+    - FILTER_OPERATOR=eq
+  filter_usd_05:
+    build:
+      context: ./src
+      dockerfile: workers/filter/Dockerfile
+    container_name: filter_usd_05
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    environment:
+    - MOM_HOST=rabbitmq
+    - INPUT_QUEUE=raw_data
+    - OUTPUT_QUEUE=usd_to_minor_50
+    - PYTHONUNBUFFERED=1
+    - NODE_PREFIX=filter_usd
+    - ID=5
+    - TOTAL_WORKERS=5
+    - FILTER_FIELD=Payment Currency
+    - FILTER_VALUE=US Dollar
+    - FILTER_OPERATOR=eq
+  minor_than_50_01:
+    build:
+      context: ./src
+      dockerfile: workers/filter/Dockerfile
+    container_name: minor_than_50_01
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    environment:
+    - MOM_HOST=rabbitmq
+    - INPUT_QUEUE=usd_to_minor_50
+    - OUTPUT_QUEUE=filtered_data
+    - PYTHONUNBUFFERED=1
+    - NODE_PREFIX=minor_than_50
+    - ID=1
+    - TOTAL_WORKERS=3
+    - FILTER_FIELD=Amount Paid
+    - FILTER_VALUE=50
+    - FILTER_OPERATOR=lt
+  minor_than_50_02:
+    build:
+      context: ./src
+      dockerfile: workers/filter/Dockerfile
+    container_name: minor_than_50_02
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    environment:
+    - MOM_HOST=rabbitmq
+    - INPUT_QUEUE=usd_to_minor_50
+    - OUTPUT_QUEUE=filtered_data
+    - PYTHONUNBUFFERED=1
+    - NODE_PREFIX=minor_than_50
+    - ID=2
+    - TOTAL_WORKERS=3
+    - FILTER_FIELD=Amount Paid
+    - FILTER_VALUE=50
+    - FILTER_OPERATOR=lt
+  minor_than_50_03:
+    build:
+      context: ./src
+      dockerfile: workers/filter/Dockerfile
+    container_name: minor_than_50_03
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    environment:
+    - MOM_HOST=rabbitmq
+    - INPUT_QUEUE=usd_to_minor_50
+    - OUTPUT_QUEUE=filtered_data
+    - PYTHONUNBUFFERED=1
+    - NODE_PREFIX=minor_than_50
+    - ID=3
+    - TOTAL_WORKERS=3
+    - FILTER_FIELD=Amount Paid
+    - FILTER_VALUE=50
+    - FILTER_OPERATOR=lt

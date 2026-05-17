@@ -1,0 +1,22 @@
+{
+  "worker_groups": [
+    {
+      "prefix": "filter_usd",
+      "replicas": 5,
+      "input_queue": "raw_data",
+      "output_queue": "usd_to_minor_50",
+      "filter_field": "Payment Currency",
+      "filter_value": "US Dollar",
+      "filter_operator": "eq"
+    },
+    {
+      "prefix": "minor_than_50",
+      "replicas": 3,
+      "input_queue": "usd_to_minor_50",
+      "output_queue": "filtered_data",
+      "filter_field": "Amount Paid",
+      "filter_value": "50",
+      "filter_operator": "lt"
+    }
+  ]
+}

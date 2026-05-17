@@ -3,6 +3,7 @@ import logging
 import os
 import threading
 import json
+import time # <-- Necesario para el sleep
 from abc import ABC, abstractmethod
 from common import middleware
 
@@ -12,8 +13,8 @@ logger = logging.getLogger(__name__)
 class BaseWorker(ABC):
     """
     Worker base reutilizable para todos los nodos del pipeline.
-    Maneja la conexión, el protocolo de red (separador '|'), los EOF,
-    y la barrera de sincronización distribuida.
+    Maneja la conexión, el protocolo de red (JSON), los EOF,
+    y la barrera de sincronización distribuida segura.
     """
 
     def __init__(self):
@@ -34,6 +35,12 @@ class BaseWorker(ABC):
         
         self._coordinaciones_eof = {}
         self._coordinacion_lock = threading.Lock()
+        
+        # --- NUEVO: Rastreo de mensajes en procesamiento por cliente ---
+        # Mantiene un conteo de mensajes actualmente en el método _callback_interno
+        self._mensajes_en_vuelo = {} 
+        self._vuelo_lock = threading.Lock()
+        # ---------------------------------------------------------------
         
         output_queue     = os.getenv("OUTPUT_QUEUE", "output_queue2")
 
@@ -75,6 +82,24 @@ class BaseWorker(ABC):
             originator = msg_dict.get("originator")
 
             if msg_type == "EOF_RECEIVED":
+                # --- NUEVO: Lógica de espera para secundarios ---
+                if originator != self.node_id:
+                    logger.info(f"[{self.__class__.__name__}] Aviso EOF recibido por control para cliente {client_id}. Validando memoria...")
+                    
+                    # Esperamos activamente hasta que no queden mensajes en procesamiento para este cliente
+                    while True:
+                        with self._vuelo_lock:
+                            en_vuelo = self._mensajes_en_vuelo.get(client_id, 0)
+                        
+                        if en_vuelo == 0:
+                            break
+                        
+                        logger.info(f"[{self.__class__.__name__}] Drenando memoria: Aún procesando {en_vuelo} mensajes de {client_id}. Esperando...")
+                        time.sleep(0.1) # Pequeña pausa para no quemar CPU
+
+                    logger.info(f"[{self.__class__.__name__}] Memoria limpia. Enviando WORKER_FINISHED al originator {originator}.")
+                # ------------------------------------------------
+
                 self._enviar_control({
                     "type": "WORKER_FINISHED",
                     "client_id": client_id,
@@ -88,13 +113,17 @@ class BaseWorker(ABC):
                         if client_id in self._coordinaciones_eof:
                             self._coordinaciones_eof[client_id]["workers"].add(msg_dict.get("worker_id"))
                             
+                            # --- NUEVO: Log solicitado cuando un secundario confirma ---
+                            logger.info(f"[{self.__class__.__name__}] Confirmación WORKER_FINISHED recibida del nodo {msg_dict.get('worker_id')}.")
+                            # -----------------------------------------------------------
+
                             if len(self._coordinaciones_eof[client_id]["workers"]) >= self.total_workers:
                                 msg_original = self._coordinaciones_eof[client_id]["mensaje_original"]
                                 
                                 # Disparamos el hook para subclases que acumulan estado
                                 self.al_completar_cliente(client_id)
                                 
-                                logger.info(f"[{self.__class__.__name__}] Grupo sincronizado para {client_id}. Despachando EOF.")
+                                logger.info(f"[{self.__class__.__name__}] Grupo sincronizado (Nodos: {len(self._coordinaciones_eof[client_id]['workers'])}) para {client_id}. Despachando EOF.")
                                 self._enviar(msg_original)
                                 del self._coordinaciones_eof[client_id]
                                 
@@ -159,36 +188,70 @@ class BaseWorker(ABC):
     # ------------------------------------------------------------------
 
     def _callback_interno(self, mensaje, ack, nack):
-        """Intercepta el mensaje crudo, aplica el protocolo y delega el negocio a la subclase."""
+        """Intercepta el mensaje JSON, extrae metadatos y delega el negocio a la subclase."""
         if self._cierre_solicitado:
             nack()
             return
 
         try:
             mensaje_str = mensaje.decode('utf-8')
-            partes = mensaje_str.split("|", 1)
             
-            if len(partes) != 2:
-                logger.warning(f"[{self.__class__.__name__}] Mensaje mal formado omitido: {mensaje_str[:30]}...")
+            try:
+                transaccion = json.loads(mensaje_str)
+            except json.JSONDecodeError:
+                logger.warning(f"[{self.__class__.__name__}] Mensaje omitido (No es JSON válido): {mensaje_str[:30]}...")
                 ack()
                 return
-                
-            client_id, payload = partes
+            
+            client_id = transaccion.get("client_id")
+            
+            if not client_id:
+                logger.warning(f"[{self.__class__.__name__}] Mensaje omitido (Falta client_id en JSON): {mensaje_str[:30]}...")
+                ack()
+                return
 
-            if payload == "EOF":
-                logger.info(f"[{self.__class__.__name__}] EOF interceptado para cliente {client_id}. Iniciando barrera...")
+            # --- NUEVO: Registrar que estamos procesando un mensaje para este cliente ---
+            if not transaccion.get("EOF"):
+                with self._vuelo_lock:
+                    self._mensajes_en_vuelo[client_id] = self._mensajes_en_vuelo.get(client_id, 0) + 1
+            # ----------------------------------------------------------------------------
+
+            if transaccion.get("EOF"):
+                logger.info(f"[{self.__class__.__name__}] EOF principal interceptado para cliente {client_id}. Iniciando barrera...")
                 self.coordinar_eof(client_id, mensaje)
                 ack()
             else:
-                # Le pasamos la pelota (el string limpio) a la lógica de negocio de la subclase
-                self.procesar_payload(client_id, payload, mensaje, ack, nack)
+                try:
+                    # Envolvemos las funciones originales de ack/nack para descontar el contador
+                    # independientemente de cómo termine la subclase su trabajo.
+                    def ack_wrapper():
+                        self._descontar_vuelo(client_id)
+                        ack()
+                        
+                    def nack_wrapper():
+                        self._descontar_vuelo(client_id)
+                        nack()
+
+                    self.procesar_payload(client_id, mensaje_str, mensaje, ack_wrapper, nack_wrapper)
+                except Exception as e:
+                    logger.error(f"Error interno en procesar_payload: {e}")
+                    self._descontar_vuelo(client_id)
+                    nack()
 
         except Exception as e:
-            logger.error(f"[{self.__class__.__name__}] Error decodificando mensaje: {e}", exc_info=True)
+            logger.error(f"[{self.__class__.__name__}] Error procesando mensaje general: {e}", exc_info=True)
             try:
                 nack()
             except Exception:
                 pass
+
+    def _descontar_vuelo(self, client_id):
+        """Disminuye el contador de mensajes en proceso de forma segura."""
+        with self._vuelo_lock:
+            if client_id in self._mensajes_en_vuelo:
+                self._mensajes_en_vuelo[client_id] -= 1
+                if self._mensajes_en_vuelo[client_id] <= 0:
+                    del self._mensajes_en_vuelo[client_id]
 
     def _enviar(self, mensaje: bytes):
         try:
@@ -203,8 +266,7 @@ class BaseWorker(ABC):
     @abstractmethod
     def procesar_payload(self, client_id: str, payload: str, mensaje_original: bytes, ack, nack):
         """
-        Lógica de negocio del worker.
-        Reemplaza a `procesar_mensaje`. Recibe el string CSV limpio.
+        Lógica de negocio del worker. Recibe el string JSON limpio.
         """
 
     @abstractmethod
@@ -214,7 +276,6 @@ class BaseWorker(ABC):
     def al_completar_cliente(self, client_id: str):
         """
         Hook Opcional. 
-        Se dispara automáticamente cuando el grupo sincroniza un EOF de un cliente.
-        Ideal para Shards/Agregadores que acumulan estado y deben hacer un flush.
+        Se dispara automáticamente cuando el grupo sincroniza un EOF.
         """
         pass

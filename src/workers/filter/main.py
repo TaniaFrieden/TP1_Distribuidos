@@ -1,6 +1,8 @@
 import logging
 import os
 import operator
+import json
+
 from base import BaseWorker
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -10,52 +12,69 @@ class GenericFilterWorker(BaseWorker):
     def __init__(self):
         super().__init__()
         
-        # 1. Leemos la regla de negocio desde el entorno
-        self.indice = int(os.environ["FILTER_INDEX"])
+        self.campo_objetivo = os.environ["FILTER_FIELD"]
         self.valor_objetivo = os.environ["FILTER_VALUE"]
         
-        # Operador lógico (por defecto es "igual a")
-        operador_str = os.environ.get("FILTER_OPERATOR", "eq").lower()
+        # Guardamos el string del operador para saber si es matemático
+        self.operador_str = os.environ.get("FILTER_OPERATOR", "eq").lower()
         
-        # Mapeo mágico: convierte un string en una operación matemática real
         operaciones = {
             "eq": operator.eq,              # ==
             "neq": operator.ne,             # !=
-            "contains": lambda a, b: b in a # a contiene b
+            "contains": lambda a, b: b in str(a), # a contiene b
+            "lt": operator.lt,              # <  (Less Than)
+            "gt": operator.gt,              # >  (Greater Than)
+            "lte": operator.le,             # <= (Less Than or Equal)
+            "gte": operator.ge              # >= (Greater Than or Equal)
         }
-        self.operacion = operaciones.get(operador_str, operator.eq)
-        
-        # 2. Configuración para dejar pasar la cabecera sin filtrarla
-        self.nombre_cabecera = os.environ.get("HEADER_NAME", "Payment Currency")
+        self.operacion = operaciones.get(self.operador_str, operator.eq)
 
-        logger.info(f"[GenericFilter] Iniciado: Columna {self.indice} {operador_str} '{self.valor_objetivo}'")
+        logger.info(f"[GenericFilter] Iniciado: Campo '{self.campo_objetivo}' {self.operador_str} '{self.valor_objetivo}'")
 
     def procesar_payload(self, client_id: str, payload: str, mensaje_original: bytes, ack, nack):
         try:
-            columnas = [col.strip() for col in payload.split(",")]
+            transaccion = json.loads(payload)
 
-            if len(columnas) > self.indice:
-                valor_actual = columnas[self.indice]
+            if transaccion.get("EOF"):
+                logger.info(f"[EOF] Reenviando señal de fin para cliente {client_id}.")
+                self._enviar(mensaje_original)
+                ack()
+                return
 
-                # 1. Si es la cabecera, la dejamos pasar río abajo
-                if valor_actual == self.nombre_cabecera:
-                    logger.info(f"[CABECERA] Reenviando fila de títulos al output para cliente {client_id}.")
-                    self._enviar(mensaje_original)
-                
-                # 2. Evaluamos la regla dinámica (ej: valor_actual == valor_objetivo)
-                elif self.operacion(valor_actual, self.valor_objetivo):
+            if self.campo_objetivo in transaccion:
+                valor_actual = transaccion[self.campo_objetivo]
+                valor_referencia = self.valor_objetivo
+
+                # --- NUEVO: Si es un operador matemático, forzamos a que sean números (float) ---
+                if self.operador_str in ["lt", "gt", "lte", "gte"]:
+                    try:
+                        # Convertimos a float para que compare 50.0 > 10.5 correctamente
+                        valor_actual = float(valor_actual)
+                        valor_referencia = float(valor_referencia)
+                    except (ValueError, TypeError):
+                        logger.warning(f"[ERROR_TIPO] No se pudo convertir a número: '{valor_actual}'. Se descarta la transacción.")
+                        ack()
+                        return
+                else:
+                    # Si no es matemático (ej: 'eq' o 'contains'), aseguramos que ambos sean strings
+                    valor_actual = str(valor_actual)
+                    valor_referencia = str(valor_referencia)
+
+                # Evaluamos la regla
+                if self.operacion(valor_actual, valor_referencia):
                     logger.info(f"[PASÓ] Cliente {client_id}: {valor_actual} (Enviado)")
                     self._enviar(mensaje_original)
-                
-                # 3. No cumple la regla, se descarta
                 else:
                     logger.info(f"[FILTRADO] Cliente {client_id}: {valor_actual} (Descartado)")
 
             else:
-                logger.warning(f"[FALTA_COLUMNA] Fila del cliente {client_id} no contiene el índice {self.indice}")
+                logger.warning(f"[FALTA_CAMPO] El JSON del cliente {client_id} no contiene el campo '{self.campo_objetivo}'")
 
             ack()
 
+        except json.JSONDecodeError:
+            logger.error(f"Error parseando JSON del cliente {client_id}: {payload}")
+            nack() 
         except Exception as e:
             logger.error(f"Error procesando regla genérica: {e}", exc_info=True)
             nack()

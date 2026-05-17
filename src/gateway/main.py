@@ -4,6 +4,7 @@ import threading
 import logging
 import uuid
 import signal
+import json
 import sys
 
 from common import message_protocol, middleware
@@ -17,62 +18,89 @@ COLA_SALIDA = os.getenv("OUTPUT_QUEUE", "raw_data2")
 MOM_HOST = os.getenv("MOM_HOST", "localhost")
 
 clientes_conectados = {}
+clientes_locks = {}  # <-- NUEVO: Candados para evitar colisiones al escribir en el socket
 servidor_corriendo = True
 
+CSV_HEADERS = [
+    "Timestamp", "From Bank", "Account", "To Bank", "Account.1", 
+    "Amount Received", "Receiving Currency", "Amount Paid", 
+    "Payment Currency", "Payment Format", "Is Laundering"
+]
+
 def escuchar_respuestas_backend():
-    """
-    Lee resultados crudos del backend.
-    Espera el formato: "client_id|contenido" o "client_id|EOF"
-    """
+    """Hilo que lee de RabbitMQ y le manda los resultados al cliente."""
     cola_entrada = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, COLA_ENTRADA)
-    
-    def on_message(body, ack, nack):
+
+    # --- CAMBIO ACÁ: Usamos la firma (body, ack, nack) que espera tu middleware ---
+    def callback(body, ack, nack):
         try:
-            # 1. Decodificamos el string crudo
-            mensaje_str = body.decode("utf-8")
-            
-            # 2. Separamos el ID del cliente del resto del mensaje
-            # Usamos split("|", 1) para partirlo solo en la primera coincidencia
-            partes = mensaje_str.split("|", 1)
-            
-            if len(partes) != 2:
-                logging.warning(f"Mensaje descartado. Formato inválido desde backend: {mensaje_str}")
-                ack()
-                return
-                
-            client_id, contenido = partes
-            
-            # 3. Ruteamos al socket correspondiente
+            mensaje_str = body.decode('utf-8')
+            transaccion = json.loads(mensaje_str)
+            client_id = transaccion.get("client_id")
+
             if client_id in clientes_conectados:
-                client_socket = clientes_conectados[client_id]
-                
-                if contenido == "EOF":
-                    message_protocol.external.send_msg(client_socket, message_protocol.external.MsgType.END_OF_RECODS)
-                    logging.info(f"Enviado EOF final al cliente {client_id}")
-                else:
-                    # Le mandamos el contenido del reporte directo
-                    message_protocol.external.send_msg(client_socket, message_protocol.external.MsgType.REPORTE, contenido)
+                sock = clientes_conectados[client_id]
+                lock = clientes_locks.get(client_id)
+
+                # Si por algún motivo perdimos el lock, lo ignoramos
+                if not lock:
+                    ack()
+                    return
+
+                if transaccion.get("EOF"):
+                    logging.info(f"[GATEWAY -> CLIENTE] Enviando EOF final a {client_id}")
+                    with lock:
+                        message_protocol.external.send_msg(sock, message_protocol.external.MsgType.END_OF_RECODS)
                     
+                    # Limpieza de memoria
+                    del clientes_conectados[client_id]
+                    del clientes_locks[client_id]
+                
+                else:
+                    valores_csv = [str(transaccion.get(col, "")) for col in CSV_HEADERS]
+                    fila_texto_plano = ",".join(valores_csv)
+
+                    logging.info(f"[GATEWAY -> CLIENTE] Ruteando TX filtrada: {fila_texto_plano[:50]}...")
+                    
+                    with lock:
+                        message_protocol.external.send_msg(sock, message_protocol.external.MsgType.REPORTE, fila_texto_plano)
+            else:
+                logging.warning(f"Mensaje para cliente desconectado: {client_id}")
+
+            # Confirmamos a RabbitMQ que ya procesamos el mensaje exitosamente
             ack()
+
+        except json.JSONDecodeError:
+            logging.error("Llegó un mensaje a la cola que no es un JSON válido.")
+            # Si es basura irrecuperable, le damos ACK para sacarlo de la cola y que no trabe
+            ack() 
         except Exception as e:
-            logging.error(f"Error ruteando respuesta del backend: {e}")
-            nack()
+            logging.error(f"Error procesando respuesta del backend: {e}", exc_info=True)
+            # Si es un error del sistema, le damos NACK para que se reencole
+            nack() 
 
-    logging.info("Gateway: Escuchando reportes del backend en texto plano...")
-    try:
-        cola_entrada.start_consuming(on_message)
-    except Exception:
-        pass
-
-
+    logging.info("Gateway escuchando respuestas de los workers (Backend -> Cliente)...")
+    cola_entrada.start_consuming(callback)
 def atender_cliente(client_socket):
     """
-    Recibe las líneas de CSV, les concatena el client_id con un '|' y las manda.
+    Recibe las líneas de CSV, las parsea a diccionario, 
+    inyecta el client_id y manda todo a RabbitMQ.
     """
     client_id = str(uuid.uuid4())
     clientes_conectados[client_id] = client_socket
-    logging.info(f"Cliente {client_id} conectado.")
+    clientes_locks[client_id] = threading.Lock() # Creamos el lock para este cliente específico
     
+    logging.info(f"Cliente {client_id} conectado. Iniciando recepción...")
+    
+    # 1. ENVIAR ENCABEZADOS AL CONECTARSE
+    try:
+        encabezados_str = ",".join(CSV_HEADERS)
+        with clientes_locks[client_id]:
+            message_protocol.external.send_msg(client_socket, message_protocol.external.MsgType.REPORTE, encabezados_str)
+        logging.info(f"[GATEWAY -> CLIENTE] Encabezados CSV enviados a {client_id}")
+    except Exception as e:
+        logging.error(f"Error al enviar encabezados: {e}")
+
     cola_salida = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, COLA_SALIDA)
 
     try:
@@ -80,26 +108,39 @@ def atender_cliente(client_socket):
             msg_type, payload = message_protocol.external.recv_msg(client_socket)
 
             if msg_type == message_protocol.external.MsgType.LOTE:
-                # 1. Iterar sobre las filas (ahora son strings de texto)
+                logging.info(f"[CLIENTE -> GATEWAY] Recibido lote de {len(payload)} líneas de {client_id}")
+                
                 for record in payload:
-                    # 2. Inyección del client_id pegándolo al principio
-                    mensaje_crudo = f"{client_id}|{record}"
-                    cola_salida.send(mensaje_crudo.encode("utf-8"))
+                    valores = record.split(',')
+                    
+                    # 2. SALTEAR LA FILA DE TÍTULOS
+                    if valores[0] == "Timestamp":
+                        continue
 
-                # 3. Confirmar lote
-                message_protocol.external.send_msg(client_socket, message_protocol.external.MsgType.ACK)
+                    if len(valores) == len(CSV_HEADERS):
+                        transaccion_dict = dict(zip(CSV_HEADERS, valores))
+                        transaccion_dict["client_id"] = client_id
+                        
+                        mensaje_json = json.dumps(transaccion_dict)
+                        cola_salida.send(mensaje_json.encode("utf-8"))
+                        # logging.info(f"[GATEWAY -> RABBITMQ] Enviado a cola: {valores[2]}") # Opcional si querés loguear envío a cola
+                    else:
+                        logging.warning(f"Fila descartada por formato incorrecto: {record}")
+
+                # Confirmar lote usando el lock
+                with clientes_locks[client_id]:
+                    message_protocol.external.send_msg(client_socket, message_protocol.external.MsgType.ACK)
 
             elif msg_type == message_protocol.external.MsgType.END_OF_RECODS:
-                # 1. Le avisamos al filtro mandando el ID y la palabra EOF
-                mensaje_eof = f"{client_id}|EOF"
+                mensaje_eof = json.dumps({"client_id": client_id, "EOF": True})
                 cola_salida.send(mensaje_eof.encode("utf-8"))
-                logging.info(f"Cliente {client_id} terminó de enviar datos.")
+                logging.info(f"[CLIENTE -> GATEWAY] {client_id} terminó de enviar datos (EOF principal).")
                 break
 
     except socket.error:
         logging.warning(f"Cliente {client_id} se desconectó bruscamente.")
     except Exception as e:
-        logging.error(f"Error procesando cliente {client_id}: {e}")
+        logging.error(f"Error procesando cliente {client_id}: {e}", exc_info=True)
     finally:
         cola_salida.close()
 
@@ -115,7 +156,7 @@ def main():
     server_socket.bind((SERVER_HOST, SERVER_PORT))
     server_socket.listen()
     
-    logging.info(f"Gateway crudo listo en {SERVER_HOST}:{SERVER_PORT}")
+    logging.info(f"Gateway listo y escuchando en {SERVER_HOST}:{SERVER_PORT}")
 
     def cerrar_graceful(sig, frame):
         logging.info("Apagando Gateway...")

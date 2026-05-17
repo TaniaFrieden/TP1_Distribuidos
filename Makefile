@@ -134,5 +134,5 @@ start:
 down:
 	docker compose down
 
-docker-logs:
-	docker compose logs -f
+generar:
+	$(PYTHON) ./generar_compose.py
