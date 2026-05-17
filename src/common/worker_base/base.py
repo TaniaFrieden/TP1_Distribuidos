@@ -38,7 +38,7 @@ class BaseWorker(ABC):
 
         mom_host         = os.getenv("MOM_HOST", "localhost")
         input_queue      = os.getenv("INPUT_QUEUE", "input_queue")
-        control_exchange = os.getenv("CONTROL_EXCHANGE", "control_exchange")
+        control_exchange = os.getenv("CONTROL_EXCHANGE", "control_exchange_default")
         node_prefix      = os.getenv("NODE_PREFIX", "node")
         node_id          = int(os.getenv("ID", "0"))
 

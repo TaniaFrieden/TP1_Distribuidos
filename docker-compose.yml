@@ -9,6 +9,7 @@ services:
         condition: service_healthy
     ports:
     - "8080:8080"
+    - "5678:5678"
     environment:
     - PYTHONUNBUFFERED=1
     - SERVER_HOST=gateway
@@ -38,8 +39,10 @@ services:
       dockerfile: workers/filter/Dockerfile
     container_name: filter_usd_01
     depends_on:
-      - rabbitmq
-      - gateway
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
     environment:
     - MOM_HOST=rabbitmq
     - INPUT_QUEUE=raw_data
