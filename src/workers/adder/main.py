@@ -24,7 +24,7 @@ Cuando escalen, solo cambian N_PRODUCTORES en el docker-compose.
 
 import os
 import logging
-from common.worker_base.base import BaseWorker
+from src.workers.base import BaseWorker
 from common.middleware.middleware_rabbitmq import DirectQueueRabbitMQ
 from common.message_protocol import internal as protocol
 
