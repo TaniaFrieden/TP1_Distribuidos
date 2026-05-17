@@ -48,11 +48,13 @@ services:
     - INPUT_QUEUE=raw_data
     - OUTPUT_QUEUE=filtered_data
     - PYTHONUNBUFFERED=1
-    - FILTER_TYPE=USD
     - NODE_PREFIX=filter_usd
     - ID=1
     - TOTAL_WORKERS=2
-    - FILTER_COLUMN_INDEX=8
+    - FILTER_INDEX=8
+    - FILTER_OPERATOR=eq
+    - FILTER_VALUE=US Dollar
+    - HEADER_NAME=Payment Currency
   filter_usd_02:
     build:
       context: ./src
@@ -68,8 +70,10 @@ services:
     - INPUT_QUEUE=raw_data
     - OUTPUT_QUEUE=filtered_data
     - PYTHONUNBUFFERED=1
-    - FILTER_TYPE=USD
     - NODE_PREFIX=filter_usd
-    - FILTER_COLUMN_INDEX=8
     - ID=2
     - TOTAL_WORKERS=2
+    - FILTER_INDEX=8
+    - FILTER_OPERATOR=eq
+    - FILTER_VALUE=US Dollar
+    - HEADER_NAME=Payment Currency
