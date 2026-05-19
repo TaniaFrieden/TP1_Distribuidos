@@ -9,4 +9,6 @@ Para ejecutar el proyecto, seguí estos pasos:
 - Iniciá el backend: Ejecutá `make gateway` en una terminal para levantar RabbitMQ, el Gateway y los workers distribuidos.
 - Ejecutá el cliente: En otra terminal, ejecutá `make client` para iniciar la transmisión masiva de datos y recibir los reportes filtrados en tiempo real.
 
+> Para deterner todos los servicios, y limpiar los puertos, ejecutá `make clean`.
+
 (Opcional) Para ver los logs de cada worker hace `docker compose logs -f <nombre_worker>` (ejemplo: `docker compose logs -f filter_usd_1`)
