@@ -3,7 +3,7 @@ import threading
 import logging
 import sys
 from common import message_protocol
-from config import SERVER_HOST, SERVER_PORT, TRANSACTIONS_FILE, ACCOUNTS_FILE
+from config import SERVER_HOST, SERVER_PORT, TRANSACTIONS_FILE
 from receiver import escuchar_respuesta
 from sender import enviar_archivo
 
@@ -17,9 +17,9 @@ def main():
         return 1
 
     socket_lock = threading.Lock()
-    hilo_receptor, hilo_transacciones, hilo_cuentas = _iniciar_hilos(sock, socket_lock)
+    hilo_receptor, hilo_transacciones = _iniciar_hilos(sock, socket_lock)
     
-    _esperar_envios(hilo_transacciones, hilo_cuentas)
+    _esperar_envios(hilo_transacciones)
     _enviar_fin_registros(sock, socket_lock)
     _finalizar_conexion(hilo_receptor, sock)
     
@@ -49,20 +49,13 @@ def _iniciar_hilos(sock, lock):
         target=enviar_archivo,
         args=(TRANSACTIONS_FILE, message_protocol.external.MsgType.LOTE_TRANSACCIONES, sock, lock)
     )
-    hilo_cuentas = threading.Thread(
-        target=enviar_archivo,
-        args=(ACCOUNTS_FILE, message_protocol.external.MsgType.LOTE_CUENTAS, sock, lock)
-    )
-
     hilo_receptor.start()
     hilo_transacciones.start()
-    hilo_cuentas.start()
 
-    return hilo_receptor, hilo_transacciones, hilo_cuentas
+    return hilo_receptor, hilo_transacciones
 
-def _esperar_envios(hilo_transacciones, hilo_cuentas):
+def _esperar_envios(hilo_transacciones):
     hilo_transacciones.join()
-    hilo_cuentas.join()
 
 def _enviar_fin_registros(sock, lock):
     with lock:

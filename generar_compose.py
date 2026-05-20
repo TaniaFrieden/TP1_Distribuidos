@@ -32,7 +32,7 @@ def generar_docker_compose():
     - SERVER_PORT=5678
     - MOM_HOST=rabbitmq
     - OUTPUT_QUEUE=raw_data
-    - INPUT_QUEUE=filtered_data
+    - INPUT_QUEUE=q1_results
     - HTTP_HOST=0.0.0.0
     - HTTP_PORT=8080
 

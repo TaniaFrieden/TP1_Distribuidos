@@ -16,7 +16,7 @@ services:
     - SERVER_PORT=5678
     - MOM_HOST=rabbitmq
     - OUTPUT_QUEUE=raw_data
-    - INPUT_QUEUE=filtered_data
+    - INPUT_QUEUE=q1_results
     - HTTP_HOST=0.0.0.0
     - HTTP_PORT=8080
 
@@ -153,7 +153,7 @@ services:
     environment:
     - MOM_HOST=rabbitmq
     - INPUT_QUEUE=usd_to_minor_50
-    - OUTPUT_QUEUE=filtered_data
+    - OUTPUT_QUEUE=q1_results
     - PYTHONUNBUFFERED=1
     - NODE_PREFIX=minor_than_50
     - ID=1
@@ -174,7 +174,7 @@ services:
     environment:
     - MOM_HOST=rabbitmq
     - INPUT_QUEUE=usd_to_minor_50
-    - OUTPUT_QUEUE=filtered_data
+    - OUTPUT_QUEUE=q1_results
     - PYTHONUNBUFFERED=1
     - NODE_PREFIX=minor_than_50
     - ID=2
@@ -195,7 +195,7 @@ services:
     environment:
     - MOM_HOST=rabbitmq
     - INPUT_QUEUE=usd_to_minor_50
-    - OUTPUT_QUEUE=filtered_data
+    - OUTPUT_QUEUE=q1_results
     - PYTHONUNBUFFERED=1
     - NODE_PREFIX=minor_than_50
     - ID=3

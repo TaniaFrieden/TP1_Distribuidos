@@ -8,4 +8,4 @@ ENV PYTHONPATH=/app
 COPY common ./common
 COPY gateway ./gateway
 
-ENTRYPOINT ["python3", "gateway/main.py"]
+ENTRYPOINT ["python3", "gateway/gateway.py"]

@@ -8,8 +8,7 @@ class MsgType:
     ACK = 3
     END_OF_RECODS = 4
     REPORTE = 5
-    LOTE_TRANSACCIONES = 6   
-    LOTE_CUENTAS = 7  
+    LOTE_TRANSACCIONES = 6
 
   
 def _recv_sized(socket, size):
@@ -32,11 +31,21 @@ def _recv_empty(socket):
 
 
 def _recv_reporte(socket):
-    """Recibe un reporte como string."""
     reporte_size = external_serializer.deserialize_uint32(
         _recv_sized(socket, external_serializer.UINT32_SIZE)
     )
-    reporte = external_serializer.deserialize_string(_recv_sized(socket, reporte_size))
+    
+    # Capturamos los bytes brutos ANTES de decodificarlos
+    raw_bytes = _recv_sized(socket, reporte_size)
+    
+    try:
+        # Intentamos decodificar
+        reporte = raw_bytes.decode("utf-8")
+    except UnicodeDecodeError:
+        # Si falla, imprimimos lo que realmente llegó
+        print(f"DEBUG CRÍTICO: Recibidos {reporte_size} bytes que no son UTF-8: {raw_bytes.hex()}")
+        raise
+        
     return reporte
 
 def _send_lote(socket, lote):
@@ -75,8 +84,7 @@ RECV_MSG_HANDLERS = {
     MsgType.ACK: _recv_empty,
     MsgType.END_OF_RECODS: _recv_empty,
     MsgType.REPORTE: _recv_reporte,
-    MsgType.LOTE_TRANSACCIONES: _recv_lote,
-    MsgType.LOTE_CUENTAS: _recv_lote,
+    MsgType.LOTE_TRANSACCIONES: _recv_lote
 }
 
 
@@ -98,18 +106,18 @@ def _send_end_of_records(socket):
 
 def _send_reporte(socket, reporte):
     """Envía un reporte como string."""
-    msg = external_serializer.serialize_uint32(MsgType.REPORTE)
-    msg += external_serializer.serialize_uint32(len(reporte))
+    msg = external_serializer.serialize_uint32(len(reporte))
     msg += external_serializer.serialize_string(reporte)
     socket.sendall(msg)
 
+def _send_empty(socket):
+    pass
 
 SEND_MSG_HANDLERS = {
-    MsgType.ACK: _send_ack,
+    MsgType.ACK: _send_empty,
     MsgType.END_OF_RECODS: _send_end_of_records,
     MsgType.REPORTE: _send_reporte,
-    MsgType.LOTE_TRANSACCIONES: _send_lote,
-    MsgType.LOTE_CUENTAS: _send_lote,
+    MsgType.LOTE_TRANSACCIONES: _send_lote
 }
 
 

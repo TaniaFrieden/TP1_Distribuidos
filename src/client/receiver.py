@@ -8,7 +8,7 @@ KEY_QUERY = 'query'
 KEY_RESULT = 'resultado'
 KEY_EOF = 'eof'
 
-OUTPUT_PREFIX = "output_{q_id}.txt"
+OUTPUT_FILE_NAME = "output_{q_id}.csv"
 COUNT_QUERIES = 5
 
 def escuchar_respuesta(sock):
@@ -42,7 +42,7 @@ def _es_eof(resultado):
 
 def _inicializar_entorno():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
-    archivos = {i: open(os.path.join(OUTPUT_DIR, OUTPUT_PREFIX.format(q_id=i)), "w", encoding="utf-8") for i in range(1, COUNT_QUERIES + 1)}
+    archivos = {i: open(os.path.join(OUTPUT_DIR, OUTPUT_FILE_NAME.format(q_id=i)), "w", encoding="utf-8") for i in range(1, COUNT_QUERIES + 1)}
     cabeceras = {i: False for i in range(1, COUNT_QUERIES + 1)}
     return archivos, cabeceras
 

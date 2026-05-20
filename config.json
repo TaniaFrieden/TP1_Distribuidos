@@ -13,7 +13,7 @@
       "prefix": "minor_than_50",
       "replicas": 3,
       "input_queue": "usd_to_minor_50",
-      "output_queue": "filtered_data",
+      "output_queue": "q1_results",
       "filter_field": "Amount Paid",
       "filter_value": "50",
       "filter_operator": "lt"

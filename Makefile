@@ -3,8 +3,8 @@ PIP := $(PYTHON) -m pip
 PYTEST := PYTHONPATH=src $(PYTHON) -m pytest
 
 # Variables del cliente
-INPUT_FILE ?= datasets/transacciones_sample.csv
-OUTPUT_FILE ?= output/client_output.csv
+TRANSACTIONS_FILE ?= datasets/transacciones_sample.csv
+OUTPUT_DIR ?= output
 SERVER_HOST ?= 127.0.0.1
 SERVER_PORT ?= 5678
 BATCH_SIZE ?= 2000
@@ -39,8 +39,8 @@ help:
 	@echo "  4. Ctrl+C para detener"
 	@echo "  5. make down            (detiene servicios)"
 	@echo ""
-	@echo "Variables del cliente (override con: make client INPUT_FILE=...):"
-	@echo "  INPUT_FILE=$(INPUT_FILE)"
+	@echo "Variables del cliente (override con: make client TRANSACTIONS_FILE=...):"
+	@echo "  TRANSACTIONS_FILE=$(TRANSACTIONS_FILE)"
 	@echo "  OUTPUT_FILE=$(OUTPUT_FILE)"
 	@echo "  SERVER_HOST=$(SERVER_HOST)"
 	@echo "  SERVER_PORT=$(SERVER_PORT)"
@@ -91,8 +91,7 @@ clean:
 	rm -rf .pytest_cache
 	find . -type d -name '__pycache__' -prune -exec rm -rf {} +
 	rm -f /tmp/client_output.txt
-	rm -f output/client_output.txt
-	rm -f output/client_output.csv
+	rm -f output/*.csv
 
 free-ports:
 	@echo "=== Liberando puerto $(SERVER_PORT) (Gateway) ==="
@@ -112,12 +111,12 @@ test-server:
 	PYTHONPATH=src $(PYTHON) scripts/test_server.py
 
 client:
-	INPUT_FILE=$(INPUT_FILE) \
-	OUTPUT_FILE=$(OUTPUT_FILE) \
+	TRANSACTIONS_FILE=$(TRANSACTIONS_FILE) \
+	OUTPUT_DIR=$(OUTPUT_DIR) \
 	SERVER_HOST=$(SERVER_HOST) \
 	SERVER_PORT=$(SERVER_PORT) \
 	BATCH_SIZE=$(BATCH_SIZE) \
-	PYTHONPATH=src $(PYTHON) src/client/main.py
+	PYTHONPATH=src $(PYTHON) src/client/client.py
 
 gateway:
 	@if command -v fuser >/dev/null 2>&1; then fuser -k $(SERVER_PORT)/tcp >/dev/null 2>&1 || true; fi
@@ -126,7 +125,7 @@ gateway:
 	MOM_HOST=$(MOM_HOST) \
 	INPUT_QUEUE=$(INPUT_QUEUE) \
 	OUTPUT_QUEUE=$(OUTPUT_QUEUE) \
-	PYTHONPATH=src $(PYTHON) src/gateway/main.py
+	PYTHONPATH=src $(PYTHON) src/gateway/gateway.py
 
 start:
 	docker compose up --build
@@ -136,3 +135,11 @@ down:
 
 generar:
 	$(PYTHON) ./generar_compose.py
+
+log:
+	@if [ -z "$(filter-out $@,$(MAKECMDGOALS))" ]; then \
+		echo "Error: Debes especificar el nombre del servicio."; \
+		echo "Ejemplo: make log gateway"; \
+		exit 1; \
+	fi
+	docker compose logs -f $(filter-out $@,$(MAKECMDGOALS))
