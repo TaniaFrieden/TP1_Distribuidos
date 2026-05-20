@@ -16,10 +16,10 @@ SERVER_PORT = int(os.environ.get("SERVER_PORT", "12345"))
 MOM_HOST = os.getenv("MOM_HOST", "localhost")
 
 # Colas de entrada al sistema (Backend -> RabbitMQ)
-OUTPUT_QUEUE = os.getenv("INPUT_QUEUE", "raw_data")
+OUTPUT_QUEUE = os.getenv("OUTPUT_QUEUE", "raw_data")
 
 # Constantes de negocio
-NUM_QUERIES = 1
+NUM_QUERIES = 2
 CSV_HEADERS_TX = [
     "Timestamp", "From Bank", "Account", "To Bank", "Account.1", 
     "Amount Received", "Receiving Currency", "Amount Paid", 
