@@ -3,7 +3,7 @@ import logging
 import os
 import threading
 import json
-import time # <-- Necesario para el sleep
+import time 
 from abc import ABC, abstractmethod
 from common import middleware
 
@@ -36,7 +36,7 @@ class BaseWorker(ABC):
         self._coordinaciones_eof = {}
         self._coordinacion_lock = threading.Lock()
         
-        # --- NUEVO: Rastreo de mensajes en procesamiento por cliente ---
+        # --- Rastreo de mensajes en procesamiento por cliente ---
         # Mantiene un conteo de mensajes actualmente en el método _callback_interno
         self._mensajes_en_vuelo = {} 
         self._vuelo_lock = threading.Lock()
@@ -82,7 +82,6 @@ class BaseWorker(ABC):
             originator = msg_dict.get("originator")
 
             if msg_type == "EOF_RECEIVED":
-                # --- NUEVO: Lógica de espera para secundarios ---
                 if originator != self.node_id:
                     logger.info(f"[{self.__class__.__name__}] Aviso EOF recibido por control para cliente {client_id}. Validando memoria...")
                     
@@ -113,7 +112,6 @@ class BaseWorker(ABC):
                         if client_id in self._coordinaciones_eof:
                             self._coordinaciones_eof[client_id]["workers"].add(msg_dict.get("worker_id"))
                             
-                            # --- NUEVO: Log solicitado cuando un secundario confirma ---
                             logger.info(f"[{self.__class__.__name__}] Confirmación WORKER_FINISHED recibida del nodo {msg_dict.get('worker_id')}.")
                             # -----------------------------------------------------------
 
@@ -210,7 +208,7 @@ class BaseWorker(ABC):
                 ack()
                 return
 
-            # --- NUEVO: Registrar que estamos procesando un mensaje para este cliente ---
+            # --- Registrar que estamos procesando un mensaje para este cliente ---
             if not transaccion.get("EOF"):
                 with self._vuelo_lock:
                     self._mensajes_en_vuelo[client_id] = self._mensajes_en_vuelo.get(client_id, 0) + 1

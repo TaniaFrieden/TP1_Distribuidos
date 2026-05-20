@@ -6,7 +6,7 @@ OUTPUT_FILE = "docker-compose.yml"
 
 def generar_docker_compose():
     if not os.path.exists(CONFIG_FILE):
-        print(f"❌ Error: No se encontró el archivo {CONFIG_FILE}")
+        print(f"Error: No se encontró el archivo {CONFIG_FILE}")
         return
 
     with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
@@ -91,8 +91,8 @@ def generar_docker_compose():
     with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
         f.write(yaml_content + "\n")
 
-    print(f"✅ ¡Éxito! '{OUTPUT_FILE}' generado correctamente.")
-    print(f"🚀 Se configuraron {total_workers_creados} workers en total distribuidos en {len(worker_groups)} grupos.")
+    print(f"¡Éxito! '{OUTPUT_FILE}' generado correctamente.")
+    print(f"Se configuraron {total_workers_creados} workers en total distribuidos en {len(worker_groups)} grupos.")
 
 if __name__ == "__main__":
     generar_docker_compose()
