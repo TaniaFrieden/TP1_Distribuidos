@@ -8,9 +8,10 @@ class MsgType:
     ACK = 3
     END_OF_RECODS = 4
     REPORTE = 5
-    LOTE = 6
+    LOTE_TRANSACCIONES = 6   
+    LOTE_CUENTAS = 7  
 
-
+  
 def _recv_sized(socket, size):
     """
     Receives exactly 'num_bytes' bytes through the provided socket.
@@ -39,12 +40,12 @@ def _recv_reporte(socket):
     return reporte
 
 def _send_lote(socket, lote):
-    """Envía un lote de registros como strings de texto plano."""
-    msg = external_serializer.serialize_uint32(MsgType.LOTE)
-    msg += external_serializer.serialize_uint32(len(lote))
+    """Envía un lote de registros como strings de texto plano.
+       El MsgType ya se envió en la función send_msg.
+    """
+    msg = external_serializer.serialize_uint32(len(lote))
     
     for record in lote:
-        # Convertimos el string a bytes directamente, SIN json.dumps()
         record_bytes = str(record).encode("utf-8")
         msg += external_serializer.serialize_uint32(len(record_bytes))
         msg += record_bytes
@@ -64,19 +65,18 @@ def _recv_lote(socket):
         )
         record_bytes = _recv_sized(socket, record_size)
         
-        # Decodificamos de bytes a string, SIN json.loads()
         record = record_bytes.decode("utf-8")
         lote.append(record)
         
     return lote
 
 
-
 RECV_MSG_HANDLERS = {
     MsgType.ACK: _recv_empty,
     MsgType.END_OF_RECODS: _recv_empty,
     MsgType.REPORTE: _recv_reporte,
-    MsgType.LOTE: _recv_lote,
+    MsgType.LOTE_TRANSACCIONES: _recv_lote,
+    MsgType.LOTE_CUENTAS: _recv_lote,
 }
 
 
@@ -104,16 +104,17 @@ def _send_reporte(socket, reporte):
     socket.sendall(msg)
 
 
-
-
 SEND_MSG_HANDLERS = {
     MsgType.ACK: _send_ack,
     MsgType.END_OF_RECODS: _send_end_of_records,
     MsgType.REPORTE: _send_reporte,
-    MsgType.LOTE: _send_lote,
+    MsgType.LOTE_TRANSACCIONES: _send_lote,
+    MsgType.LOTE_CUENTAS: _send_lote,
 }
 
 
 def send_msg(socket, msg_type, *args):
+    socket.sendall(external_serializer.serialize_uint32(msg_type))
+    
     msg_handler = SEND_MSG_HANDLERS[msg_type]
     msg_handler(socket, *args)
