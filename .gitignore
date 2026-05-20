@@ -2,8 +2,6 @@
 *.csv
 datasets
 scripts
-output
-datasets
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
