@@ -25,7 +25,9 @@ class GenericFilterWorker(BaseWorker):
             "lt": operator.lt,              # <  (Less Than)
             "gt": operator.gt,              # >  (Greater Than)
             "lte": operator.le,             # <= (Less Than or Equal)
-            "gte": operator.ge              # >= (Greater Than or Equal)
+            "gte": operator.ge,              # >= (Greater Than or Equal)
+            "between": lambda a, b: b[0] <= a <= b[1],
+            "in": lambda a, b: a in b
         }
         self.operacion = operaciones.get(self.operador_str, operator.eq)
 
@@ -46,17 +48,32 @@ class GenericFilterWorker(BaseWorker):
                 valor_referencia = self.valor_objetivo
 
                 # --- NUEVO: Si es un operador matemático, forzamos a que sean números (float) ---
-                if self.operador_str in ["lt", "gt", "lte", "gte"]:
+                if self.operador_str == "between":
+                    # Esperamos que valor_objetivo sea "valor1,valor2"
+                    limites = [limite.strip() for limite in str(self.valor_objetivo).split(",")]
+                    if len(limites) == 2:
+                        valor_referencia = limites
+                        valor_actual = str(valor_actual)
+                    else:
+                        logger.error(f"[ERROR_RANGO] FILTER_VALUE debe ser 'min,max' para 'between'. Recibido: {self.valor_objetivo}")
+                        ack()
+                        return
+                elif self.operador_str == "in":
+                    # Convierte "Wire, ACH" en una lista: ['Wire', 'ACH']
+                    valor_referencia = [opcion.strip() for opcion in str(self.valor_objetivo).split(",")]
+                    valor_actual = str(valor_actual)
+
+                elif self.operador_str in ["lt", "gt", "lte", "gte"]:
                     try:
-                        # Convertimos a float para que compare 50.0 > 10.5 correctamente
+                        # Intentamos convertir a float (para números)
                         valor_actual = float(valor_actual)
                         valor_referencia = float(valor_referencia)
                     except (ValueError, TypeError):
-                        logger.warning(f"[ERROR_TIPO] No se pudo convertir a número: '{valor_actual}'. Se descarta la transacción.")
-                        ack()
-                        return
+                        # Si falla (ej. son fechas '2022-09-01'), las comparamos como strings
+                        valor_actual = str(valor_actual)
+                        valor_referencia = str(valor_referencia)
                 else:
-                    # Si no es matemático (ej: 'eq' o 'contains'), aseguramos que ambos sean strings
+                    # eq, neq, contains
                     valor_actual = str(valor_actual)
                     valor_referencia = str(valor_referencia)
 

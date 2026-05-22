@@ -10,13 +10,31 @@
       "filter_operator": "eq"
     },
     {
-      "prefix": "minor_than_50",
+      "prefix": "filter_minor_than_50",
       "replicas": 3,
       "input_queue": "usd_to_minor_50",
       "output_queue": "q1_results",
       "filter_field": "Amount Paid",
       "filter_value": "50",
       "filter_operator": "lt"
+    },
+    {
+      "prefix": "filter_period",
+      "replicas": 2,
+      "input_queue": "raw_data",
+      "output_queue": "period_to_format",
+      "filter_field": "Timestamp",
+      "filter_value": "2022/09/01, 2022/09/05",
+      "filter_operator": "between"
+    },
+    {
+      "prefix": "filter_format",
+      "replicas": 2,
+      "input_queue": "period_to_format",
+      "output_queue": "q2_results",
+      "filter_field": "Payment Format",
+      "filter_value": "Wire, ACH",
+      "filter_operator": "in"
     }
   ]
 }
