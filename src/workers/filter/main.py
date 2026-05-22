@@ -53,7 +53,10 @@ class GenericFilterWorker(BaseWorker):
                     limites = [limite.strip() for limite in str(self.valor_objetivo).split(",")]
                     if len(limites) == 2:
                         valor_referencia = limites
-                        valor_actual = str(valor_actual)
+                        # Truncar al largo del límite para comparar solo la parte relevante
+                        # (ej: "2022/09/05 00:00:00" ->"2022/09/05")
+                        max_len = min(len(limites[0]), len(limites[1]))
+                        valor_actual = str(valor_actual)[:max_len]
                     else:
                         logger.error(f"[ERROR_RANGO] FILTER_VALUE debe ser 'min,max' para 'between'. Recibido: {self.valor_objetivo}")
                         ack()

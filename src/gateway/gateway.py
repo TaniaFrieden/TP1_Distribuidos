@@ -74,14 +74,16 @@ def escuchar_respuestas_backend(query_id):
                 # Si es el final de esta query, actualizamos el estado de control global
                 if es_eof:
                     logging.info(f"[GATEWAY -> CLIENTE] EOF de query {query_id} enviado a {client_id}")
-                    eof_status.add(query_id)
-                    
+                    with lock:
+                        eof_status.add(query_id)
+                        todas_listas = len(eof_status) == NUM_QUERIES
+
                     # Si ya terminaron todas las queries, mandamos el fin de registros global
-                    if len(eof_status) == NUM_QUERIES:
+                    if todas_listas:
                         logging.info(f"Todas las queries finalizadas para {client_id}. Enviando EOF global y cerrando sesión.")
                         with lock:
                             message_protocol.external.send_msg(sock, message_protocol.external.MsgType.END_OF_RECODS)
-                        
+
                         # Limpieza de memoria interna del Gateway
                         del clientes_conectados[client_id]
                         del clientes_locks[client_id]
