@@ -3,7 +3,7 @@
     {
       "prefix": "filter_usd",
       "replicas": 5,
-      "input_queue": "raw_data",
+      "input_queue": "q1_raw_data",
       "output_queue": "usd_to_minor_50",
       "filter_field": "Payment Currency",
       "filter_value": "US Dollar",
@@ -21,7 +21,7 @@
     {
       "prefix": "filter_period",
       "replicas": 2,
-      "input_queue": "raw_data",
+      "input_queue": "q5_raw_data",
       "output_queue": "period_to_format",
       "filter_field": "Timestamp",
       "filter_value": "2022/09/01, 2022/09/05",
