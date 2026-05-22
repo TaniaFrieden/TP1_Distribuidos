@@ -2,21 +2,57 @@
   "worker_groups": [
     {
       "prefix": "filter_usd",
-      "replicas": 5,
-      "input_queue": "raw_data",
+      "replicas": 10,
+      "input_queue": "q1_raw_data",
       "output_queue": "usd_to_minor_50",
       "filter_field": "Payment Currency",
       "filter_value": "US Dollar",
       "filter_operator": "eq"
     },
     {
-      "prefix": "minor_than_50",
-      "replicas": 3,
+      "prefix": "filter_minor_than_50",
+      "replicas": 4,
       "input_queue": "usd_to_minor_50",
       "output_queue": "q1_results",
       "filter_field": "Amount Paid",
       "filter_value": "50",
       "filter_operator": "lt"
+    },
+    {
+      "prefix": "filter_period",
+      "replicas": 4,
+      "input_queue": "q5_raw_data",
+      "output_queue": "period_to_format",
+      "filter_field": "Timestamp",
+      "filter_value": "2022/09/01, 2022/09/05",
+      "filter_operator": "between"
+    },
+    {
+      "prefix": "filter_format",
+      "replicas": 2,
+      "input_queue": "period_to_format",
+      "output_queue": "format_to_convert",
+      "filter_field": "Payment Format",
+      "filter_value": "Wire, ACH",
+      "filter_operator": "in"
+    },
+    {
+      "prefix": "converter_q5",
+      "replicas": 2,
+      "dockerfile": "workers/converter/Dockerfile",
+      "input_queue": "format_to_convert",
+      "output_queue": "filtered_q5",
+      "extra_env": {
+        "START_DATE": "2022-09-01",
+        "END_DATE": "2022-09-05"
+      }
+    },
+    {
+      "prefix": "counter_q5",
+      "replicas": 1,
+      "dockerfile": "workers/counter/Dockerfile",
+      "input_queue": "filtered_q5",
+      "output_queue": "q5_results"
     }
   ]
 }

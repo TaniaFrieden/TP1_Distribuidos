@@ -16,20 +16,17 @@ SERVER_PORT = int(os.environ.get("SERVER_PORT", "12345"))
 MOM_HOST = os.getenv("MOM_HOST", "localhost")
 
 # Colas de entrada al sistema (Backend -> RabbitMQ)
-OUTPUT_QUEUE = os.getenv("OUTPUT_QUEUE", "raw_data")
+OUTPUT_QUEUES = [q.strip() for q in os.getenv("OUTPUT_QUEUES", "q1_results,q2_results,q3_results,q4_results,q5_results").split(",")]
 
-# Constantes de negocio
-NUM_QUERIES = 2
-CSV_HEADERS_TX = [
-    "Timestamp", "From Bank", "Account", "To Bank", "Account.1", 
-    "Amount Received", "Receiving Currency", "Amount Paid", 
-    "Payment Currency", "Payment Format", "Is Laundering"
-]
+# Queries implementadas 
+ACTIVE_QUERIES = [int(q) for q in os.getenv("ACTIVE_QUERIES", "1,5").split(",")]
+NUM_QUERIES = len(ACTIVE_QUERIES)
 
 # Control de estado de clientes
 clientes_conectados = {}
 clientes_locks = {}
 clientes_eof_status = {}  # Set para rastrear qué queries terminaron por cada cliente
+headers_globales = []
 servidor_corriendo = True
 
 def escuchar_respuestas_backend(query_id):
@@ -52,14 +49,21 @@ def escuchar_respuestas_backend(query_id):
                     ack()
                     return
 
-                # Limpiamos metadatos internos antes de enviar al cliente
+                # Limpiamos metadatos internos de control del backend
                 transaccion.pop("client_id", None)
                 es_eof = transaccion.pop("EOF", False) or transaccion.pop("eof", False)
 
-                # Armamos el JSON según el protocolo del cliente
+                # Armamos el objeto 'resultado' manteniendo el resto de las keys/values
+                resultado = transaccion.copy()
+                
+                # Inyectamos la clave 'eof' solo si es necesario (cuando termina la query)
+                if es_eof:
+                    resultado["eof"] = True
+
+                #Estructuramos el payload final bajo el formato requerido por el protocolo
                 payload = {
                     "query": query_id,
-                    "resultado": {"eof": True} if es_eof else transaccion
+                    "resultado": resultado
                 }
                 
                 payload_str = json.dumps(payload)
@@ -67,18 +71,20 @@ def escuchar_respuestas_backend(query_id):
                 with lock:
                     message_protocol.external.send_msg(sock, message_protocol.external.MsgType.REPORTE, payload_str)
 
-                # Si es el final de esta query, actualizamos el estado
+                # Si es el final de esta query, actualizamos el estado de control global
                 if es_eof:
                     logging.info(f"[GATEWAY -> CLIENTE] EOF de query {query_id} enviado a {client_id}")
-                    eof_status.add(query_id)
-                    
-                    # Si ya terminaron todas las queries, mandamos el fin global
-                    if len(eof_status) == NUM_QUERIES:
+                    with lock:
+                        eof_status.add(query_id)
+                        todas_listas = len(eof_status) == NUM_QUERIES
+
+                    # Si ya terminaron todas las queries, mandamos el fin de registros global
+                    if todas_listas:
                         logging.info(f"Todas las queries finalizadas para {client_id}. Enviando EOF global y cerrando sesión.")
                         with lock:
                             message_protocol.external.send_msg(sock, message_protocol.external.MsgType.END_OF_RECODS)
-                        
-                        # Limpieza de memoria
+
+                        # Limpieza de memoria interna del Gateway
                         del clientes_conectados[client_id]
                         del clientes_locks[client_id]
                         del clientes_eof_status[client_id]
@@ -97,9 +103,9 @@ def escuchar_respuestas_backend(query_id):
     logging.info(f"Gateway escuchando resultados en la cola: {cola_nombre}")
     cola_entrada.start_consuming(callback)
 
-
 def atender_cliente(client_socket):
-    """Recibe lotes, inyecta client_id y los rutea a la cola correspondiente."""
+    global headers_globales
+    
     client_id = str(uuid.uuid4())
     clientes_conectados[client_id] = client_socket
     clientes_locks[client_id] = threading.Lock()
@@ -107,35 +113,54 @@ def atender_cliente(client_socket):
     
     logging.info(f"Cliente {client_id} conectado. Iniciando recepción...")
     
-    cola_tx = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, OUTPUT_QUEUE)
+    # Instanciamos una conexión por cada cola definida en la variable de entorno
+    colas_tx = [middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, q_name) for q_name in OUTPUT_QUEUES]
 
     try:
         while True:
             msg_type, payload = message_protocol.external.recv_msg(client_socket)
 
             # --- MANEJO DE TRANSACCIONES ---
-            if msg_type == message_protocol.external.MsgType.LOTE_TRANSACCIONES :
+            if msg_type == message_protocol.external.MsgType.LOTE_TRANSACCIONES:
                 for record in payload:
-                    valores = record.split(',')
-                    if valores[0] == "Timestamp": continue  # Omitir cabecera original
+                    if not record.strip(): 
+                        continue 
                     
-                    if len(valores) == len(CSV_HEADERS_TX):
-                        transaccion_dict = dict(zip(CSV_HEADERS_TX, valores))
-                        transaccion_dict["client_id"] = client_id
-                        cola_tx.send(json.dumps(transaccion_dict).encode("utf-8"))
+                    valores = [v.strip() for v in record.split(',')]
+                    
+                    if valores[0] == "Timestamp":
+                        if not headers_globales:
+                            headers_globales = valores
+                            logging.info(f"Cabeceras globales registradas: {headers_globales}")
+                        continue
+                    
+                    if headers_globales:
+                        if len(valores) == len(headers_globales):
+                            transaccion_dict = dict(zip(headers_globales, valores))
+                            transaccion_dict["client_id"] = client_id
+                            
+                            # Convertimos a bytes
+                            mensaje_bytes = json.dumps(transaccion_dict).encode("utf-8")
+                            
+                            # Enviamos el mismo mensaje a todas las colas
+                            for cola in colas_tx:
+                                cola.send(mensaje_bytes)
+                        else:
+                            logging.warning(f"Fila omitida por desajuste de columnas ({len(valores)} vs {len(headers_globales)}): {record}")
+                    else:
+                        logging.error(f"Error: Llegaron datos antes de que el Gateway conociera las cabeceras. Cliente {client_id}")
                         
-                with clientes_locks.get(client_id, threading.Lock()):
-                    message_protocol.external.send_msg(client_socket, message_protocol.external.MsgType.ACK)
-
-                    
                 with clientes_locks.get(client_id, threading.Lock()):
                     message_protocol.external.send_msg(client_socket, message_protocol.external.MsgType.ACK)
 
             # --- FIN DE REGISTROS DEL CLIENTE ---
             elif msg_type == message_protocol.external.MsgType.END_OF_RECODS:
                 mensaje_eof = json.dumps({"client_id": client_id, "EOF": True}).encode("utf-8")
-                # Se envía el EOF a las colas para que los workers sepan que no hay más datos
-                cola_tx.send(mensaje_eof)
+                
+                #Enviamos el EOF a todas las colas
+                for cola in colas_tx:
+                    cola.send(mensaje_eof)
+                    
                 logging.info(f"[CLIENTE -> GATEWAY] {client_id} terminó de enviar datos de subida.")
                 break
 
@@ -144,7 +169,9 @@ def atender_cliente(client_socket):
     except Exception as e:
         logging.error(f"Error procesando cliente {client_id}: {e}", exc_info=True)
     finally:
-        cola_tx.close()
+        #Cerramos las conexiones de todas las colas
+        for cola in colas_tx:
+            cola.close()
 
 
 def main():
@@ -152,7 +179,7 @@ def main():
 
     # Levantamos 5 hilos, uno para cada cola de resultados de query
     hilos_queries = []
-    for q_id in range(1, NUM_QUERIES + 1):
+    for q_id in ACTIVE_QUERIES:
         t = threading.Thread(target=escuchar_respuestas_backend, args=(q_id,), daemon=True)
         t.start()
         hilos_queries.append(t)
