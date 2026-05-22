@@ -1,6 +1,6 @@
 FROM python:3-alpine
 
-RUN pip3 install pika
+RUN pip3 install pika requests
 
 WORKDIR /app
 ENV PYTHONPATH=/app

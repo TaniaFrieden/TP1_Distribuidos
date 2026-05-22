@@ -2,7 +2,7 @@
   "worker_groups": [
     {
       "prefix": "filter_usd",
-      "replicas": 5,
+      "replicas": 8,
       "input_queue": "q1_raw_data",
       "output_queue": "usd_to_minor_50",
       "filter_field": "Payment Currency",
@@ -11,7 +11,7 @@
     },
     {
       "prefix": "filter_minor_than_50",
-      "replicas": 3,
+      "replicas": 4,
       "input_queue": "usd_to_minor_50",
       "output_queue": "q1_results",
       "filter_field": "Amount Paid",
@@ -20,7 +20,7 @@
     },
     {
       "prefix": "filter_period",
-      "replicas": 2,
+      "replicas": 4,
       "input_queue": "q5_raw_data",
       "output_queue": "period_to_format",
       "filter_field": "Timestamp",
@@ -31,7 +31,7 @@
       "prefix": "filter_format",
       "replicas": 2,
       "input_queue": "period_to_format",
-      "output_queue": "q5_results",
+      "output_queue": "format_to_convert",
       "filter_field": "Payment Format",
       "filter_value": "Wire, ACH",
       "filter_operator": "in"

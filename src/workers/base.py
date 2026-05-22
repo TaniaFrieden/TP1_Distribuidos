@@ -3,7 +3,6 @@ import logging
 import os
 import threading
 import json
-import time 
 from abc import ABC, abstractmethod
 from common import middleware
 
@@ -38,8 +37,8 @@ class BaseWorker(ABC):
         
         # --- Rastreo de mensajes en procesamiento por cliente ---
         # Mantiene un conteo de mensajes actualmente en el método _callback_interno
-        self._mensajes_en_vuelo = {} 
-        self._vuelo_lock = threading.Lock()
+        self._mensajes_en_vuelo = {}
+        self._vuelo_cv = threading.Condition()
         # ---------------------------------------------------------------
         
         output_queue     = os.getenv("OUTPUT_QUEUE", "output_queue2")
@@ -85,16 +84,11 @@ class BaseWorker(ABC):
                 if originator != self.node_id:
                     logger.info(f"[{self.__class__.__name__}] Aviso EOF recibido por control para cliente {client_id}. Validando memoria...")
                     
-                    # Esperamos activamente hasta que no queden mensajes en procesamiento para este cliente
-                    while True:
-                        with self._vuelo_lock:
-                            en_vuelo = self._mensajes_en_vuelo.get(client_id, 0)
-                        
-                        if en_vuelo == 0:
-                            break
-                        
-                        logger.info(f"[{self.__class__.__name__}] Drenando memoria: Aún procesando {en_vuelo} mensajes de {client_id}. Esperando...")
-                        time.sleep(0.1) # Pequeña pausa para no quemar CPU
+                    # Esperamos con condition variable hasta que no queden mensajes en procesamiento
+                    with self._vuelo_cv:
+                        while self._mensajes_en_vuelo.get(client_id, 0) > 0:
+                            logger.info(f"[{self.__class__.__name__}] Drenando: esperando mensajes en vuelo de {client_id}...")
+                            self._vuelo_cv.wait()
 
                     logger.info(f"[{self.__class__.__name__}] Memoria limpia. Enviando WORKER_FINISHED al originator {originator}.")
                 # ------------------------------------------------
@@ -182,7 +176,7 @@ class BaseWorker(ABC):
             logger.warning(f"[BaseWorker] Error al cerrar middleware: {e}")
 
     # ------------------------------------------------------------------
-    # Protocolo Interno (La Magia)
+    # Protocolo Interno
     # ------------------------------------------------------------------
 
     def _callback_interno(self, mensaje, ack, nack):
@@ -210,7 +204,7 @@ class BaseWorker(ABC):
 
             # --- Registrar que estamos procesando un mensaje para este cliente ---
             if not transaccion.get("EOF"):
-                with self._vuelo_lock:
+                with self._vuelo_cv:
                     self._mensajes_en_vuelo[client_id] = self._mensajes_en_vuelo.get(client_id, 0) + 1
             # ----------------------------------------------------------------------------
 
@@ -244,12 +238,13 @@ class BaseWorker(ABC):
                 pass
 
     def _descontar_vuelo(self, client_id):
-        """Disminuye el contador de mensajes en proceso de forma segura."""
-        with self._vuelo_lock:
+        """Disminuye el contador de mensajes en proceso y notifica waiters."""
+        with self._vuelo_cv:
             if client_id in self._mensajes_en_vuelo:
                 self._mensajes_en_vuelo[client_id] -= 1
                 if self._mensajes_en_vuelo[client_id] <= 0:
                     del self._mensajes_en_vuelo[client_id]
+            self._vuelo_cv.notify_all()
 
     def _enviar(self, mensaje: bytes):
         try:

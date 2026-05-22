@@ -18,8 +18,9 @@ MOM_HOST = os.getenv("MOM_HOST", "localhost")
 # Colas de entrada al sistema (Backend -> RabbitMQ)
 OUTPUT_QUEUES = [q.strip() for q in os.getenv("OUTPUT_QUEUES", "q1_results,q2_results,q3_results,q4_results,q5_results").split(",")]
 
-# Constantes de negocio
-NUM_QUERIES = 5
+# Queries implementadas 
+ACTIVE_QUERIES = [int(q) for q in os.getenv("ACTIVE_QUERIES", "1,5").split(",")]
+NUM_QUERIES = len(ACTIVE_QUERIES)
 
 # Control de estado de clientes
 clientes_conectados = {}
@@ -48,18 +49,18 @@ def escuchar_respuestas_backend(query_id):
                     ack()
                     return
 
-                # 1. Limpiamos metadatos internos de control del backend
+                # Limpiamos metadatos internos de control del backend
                 transaccion.pop("client_id", None)
                 es_eof = transaccion.pop("EOF", False) or transaccion.pop("eof", False)
 
-                # 2. Armamos el objeto 'resultado' manteniendo el resto de las keys/values
+                # Armamos el objeto 'resultado' manteniendo el resto de las keys/values
                 resultado = transaccion.copy()
                 
-                # 3. Inyectamos la clave 'eof' solo si es necesario (cuando termina la query)
+                # Inyectamos la clave 'eof' solo si es necesario (cuando termina la query)
                 if es_eof:
                     resultado["eof"] = True
 
-                # 4. Estructuramos el payload final bajo el formato requerido por el protocolo
+                #Estructuramos el payload final bajo el formato requerido por el protocolo
                 payload = {
                     "query": query_id,
                     "resultado": resultado
@@ -110,7 +111,7 @@ def atender_cliente(client_socket):
     
     logging.info(f"Cliente {client_id} conectado. Iniciando recepción...")
     
-    # NUEVO: Instanciamos una conexión por cada cola definida en la variable de entorno
+    # Instanciamos una conexión por cada cola definida en la variable de entorno
     colas_tx = [middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, q_name) for q_name in OUTPUT_QUEUES]
 
     try:
@@ -136,10 +137,10 @@ def atender_cliente(client_socket):
                             transaccion_dict = dict(zip(headers_globales, valores))
                             transaccion_dict["client_id"] = client_id
                             
-                            # Convertimos a bytes una sola vez
+                            # Convertimos a bytes
                             mensaje_bytes = json.dumps(transaccion_dict).encode("utf-8")
                             
-                            # NUEVO: Enviamos el mismo mensaje a todas las colas
+                            # Enviamos el mismo mensaje a todas las colas
                             for cola in colas_tx:
                                 cola.send(mensaje_bytes)
                         else:
@@ -154,7 +155,7 @@ def atender_cliente(client_socket):
             elif msg_type == message_protocol.external.MsgType.END_OF_RECODS:
                 mensaje_eof = json.dumps({"client_id": client_id, "EOF": True}).encode("utf-8")
                 
-                # NUEVO: Enviamos el EOF a todas las colas
+                #Enviamos el EOF a todas las colas
                 for cola in colas_tx:
                     cola.send(mensaje_eof)
                     
@@ -166,7 +167,7 @@ def atender_cliente(client_socket):
     except Exception as e:
         logging.error(f"Error procesando cliente {client_id}: {e}", exc_info=True)
     finally:
-        # NUEVO: Cerramos las conexiones de todas las colas
+        #Cerramos las conexiones de todas las colas
         for cola in colas_tx:
             cola.close()
 
