@@ -13,8 +13,7 @@ def generar_docker_compose():
         config = json.load(f)
 
     yaml_content = "services:\n"
-    
-    # Las colas de salida del gateway se derivan de los input_queue de cada primer nodo de pipeline
+
     raw_queues = ",".join(
         group["input_queue"]
         for group in config.get("worker_groups", [])
@@ -59,23 +58,23 @@ def generar_docker_compose():
     - "15672:15672"
 """
 
-    #Generación dinámica de workers
     total_workers_creados = 0
     worker_groups = config.get("worker_groups", [])
 
     for group in worker_groups:
         prefix = group["prefix"]
         replicas = group["replicas"]
-        
+        dockerfile = group.get("dockerfile", "workers/filter/Dockerfile")
+
         for i in range(1, replicas + 1):
-            worker_name = f"{prefix}_{str(i).zfill(2)}"  # Ej: filter_usd_01
+            worker_name = f"{prefix}_{str(i).zfill(2)}"
             total_workers_creados += 1
-            
+
             yaml_content += f"""
   {worker_name}:
     build:
       context: ./src
-      dockerfile: workers/filter/Dockerfile
+      dockerfile: {dockerfile}
     container_name: {worker_name}
     depends_on:
       rabbitmq:
@@ -90,34 +89,19 @@ def generar_docker_compose():
     - NODE_PREFIX={prefix}
     - ID={i}
     - TOTAL_WORKERS={replicas}
+    - CONTROL_EXCHANGE=control_{prefix}"""
+
+            if "filter_field" in group:
+                yaml_content += f"""
     - FILTER_FIELD={group['filter_field']}
     - FILTER_VALUE={group['filter_value']}
     - FILTER_OPERATOR={group.get('filter_operator', 'eq')}"""
 
-    yaml_content += """
-  converter_q5_01:
-    build:
-      context: ./src
-      dockerfile: workers/converter/Dockerfile
-    container_name: converter_q5_01
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      gateway:
-        condition: service_started
-    environment:
-    - MOM_HOST=rabbitmq
-    - INPUT_QUEUE=format_to_convert
-    - OUTPUT_QUEUE=q5_results
-    - PYTHONUNBUFFERED=1
-    - NODE_PREFIX=converter_q5
-    - ID=1
-    - TOTAL_WORKERS=1
-    - START_DATE=2022-09-01
-    - END_DATE=2022-09-05
-"""
+            for key, value in group.get("extra_env", {}).items():
+                yaml_content += f"\n    - {key}={value}"
 
-    # Escribir el archivo
+            yaml_content += "\n"
+
     with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
         f.write(yaml_content)
 

@@ -177,7 +177,7 @@ def main():
 
     # Levantamos 5 hilos, uno para cada cola de resultados de query
     hilos_queries = []
-    for q_id in range(1, NUM_QUERIES + 1):
+    for q_id in ACTIVE_QUERIES:
         t = threading.Thread(target=escuchar_respuestas_backend, args=(q_id,), daemon=True)
         t.start()
         hilos_queries.append(t)

@@ -53,10 +53,12 @@ services:
     - PYTHONUNBUFFERED=1
     - NODE_PREFIX=filter_usd
     - ID=1
-    - TOTAL_WORKERS=8
+    - TOTAL_WORKERS=10
+    - CONTROL_EXCHANGE=control_filter_usd
     - FILTER_FIELD=Payment Currency
     - FILTER_VALUE=US Dollar
     - FILTER_OPERATOR=eq
+
   filter_usd_02:
     build:
       context: ./src
@@ -74,10 +76,12 @@ services:
     - PYTHONUNBUFFERED=1
     - NODE_PREFIX=filter_usd
     - ID=2
-    - TOTAL_WORKERS=8
+    - TOTAL_WORKERS=10
+    - CONTROL_EXCHANGE=control_filter_usd
     - FILTER_FIELD=Payment Currency
     - FILTER_VALUE=US Dollar
     - FILTER_OPERATOR=eq
+
   filter_usd_03:
     build:
       context: ./src
@@ -95,10 +99,12 @@ services:
     - PYTHONUNBUFFERED=1
     - NODE_PREFIX=filter_usd
     - ID=3
-    - TOTAL_WORKERS=8
+    - TOTAL_WORKERS=10
+    - CONTROL_EXCHANGE=control_filter_usd
     - FILTER_FIELD=Payment Currency
     - FILTER_VALUE=US Dollar
     - FILTER_OPERATOR=eq
+
   filter_usd_04:
     build:
       context: ./src
@@ -116,10 +122,12 @@ services:
     - PYTHONUNBUFFERED=1
     - NODE_PREFIX=filter_usd
     - ID=4
-    - TOTAL_WORKERS=8
+    - TOTAL_WORKERS=10
+    - CONTROL_EXCHANGE=control_filter_usd
     - FILTER_FIELD=Payment Currency
     - FILTER_VALUE=US Dollar
     - FILTER_OPERATOR=eq
+
   filter_usd_05:
     build:
       context: ./src
@@ -137,10 +145,12 @@ services:
     - PYTHONUNBUFFERED=1
     - NODE_PREFIX=filter_usd
     - ID=5
-    - TOTAL_WORKERS=8
+    - TOTAL_WORKERS=10
+    - CONTROL_EXCHANGE=control_filter_usd
     - FILTER_FIELD=Payment Currency
     - FILTER_VALUE=US Dollar
     - FILTER_OPERATOR=eq
+
   filter_usd_06:
     build:
       context: ./src
@@ -158,10 +168,12 @@ services:
     - PYTHONUNBUFFERED=1
     - NODE_PREFIX=filter_usd
     - ID=6
-    - TOTAL_WORKERS=8
+    - TOTAL_WORKERS=10
+    - CONTROL_EXCHANGE=control_filter_usd
     - FILTER_FIELD=Payment Currency
     - FILTER_VALUE=US Dollar
     - FILTER_OPERATOR=eq
+
   filter_usd_07:
     build:
       context: ./src
@@ -179,10 +191,12 @@ services:
     - PYTHONUNBUFFERED=1
     - NODE_PREFIX=filter_usd
     - ID=7
-    - TOTAL_WORKERS=8
+    - TOTAL_WORKERS=10
+    - CONTROL_EXCHANGE=control_filter_usd
     - FILTER_FIELD=Payment Currency
     - FILTER_VALUE=US Dollar
     - FILTER_OPERATOR=eq
+
   filter_usd_08:
     build:
       context: ./src
@@ -200,10 +214,58 @@ services:
     - PYTHONUNBUFFERED=1
     - NODE_PREFIX=filter_usd
     - ID=8
-    - TOTAL_WORKERS=8
+    - TOTAL_WORKERS=10
+    - CONTROL_EXCHANGE=control_filter_usd
     - FILTER_FIELD=Payment Currency
     - FILTER_VALUE=US Dollar
     - FILTER_OPERATOR=eq
+
+  filter_usd_09:
+    build:
+      context: ./src
+      dockerfile: workers/filter/Dockerfile
+    container_name: filter_usd_09
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    environment:
+    - MOM_HOST=rabbitmq
+    - INPUT_QUEUE=q1_raw_data
+    - OUTPUT_QUEUE=usd_to_minor_50
+    - PYTHONUNBUFFERED=1
+    - NODE_PREFIX=filter_usd
+    - ID=9
+    - TOTAL_WORKERS=10
+    - CONTROL_EXCHANGE=control_filter_usd
+    - FILTER_FIELD=Payment Currency
+    - FILTER_VALUE=US Dollar
+    - FILTER_OPERATOR=eq
+
+  filter_usd_10:
+    build:
+      context: ./src
+      dockerfile: workers/filter/Dockerfile
+    container_name: filter_usd_10
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    environment:
+    - MOM_HOST=rabbitmq
+    - INPUT_QUEUE=q1_raw_data
+    - OUTPUT_QUEUE=usd_to_minor_50
+    - PYTHONUNBUFFERED=1
+    - NODE_PREFIX=filter_usd
+    - ID=10
+    - TOTAL_WORKERS=10
+    - CONTROL_EXCHANGE=control_filter_usd
+    - FILTER_FIELD=Payment Currency
+    - FILTER_VALUE=US Dollar
+    - FILTER_OPERATOR=eq
+
   filter_minor_than_50_01:
     build:
       context: ./src
@@ -222,9 +284,11 @@ services:
     - NODE_PREFIX=filter_minor_than_50
     - ID=1
     - TOTAL_WORKERS=4
+    - CONTROL_EXCHANGE=control_filter_minor_than_50
     - FILTER_FIELD=Amount Paid
     - FILTER_VALUE=50
     - FILTER_OPERATOR=lt
+
   filter_minor_than_50_02:
     build:
       context: ./src
@@ -243,9 +307,11 @@ services:
     - NODE_PREFIX=filter_minor_than_50
     - ID=2
     - TOTAL_WORKERS=4
+    - CONTROL_EXCHANGE=control_filter_minor_than_50
     - FILTER_FIELD=Amount Paid
     - FILTER_VALUE=50
     - FILTER_OPERATOR=lt
+
   filter_minor_than_50_03:
     build:
       context: ./src
@@ -264,9 +330,11 @@ services:
     - NODE_PREFIX=filter_minor_than_50
     - ID=3
     - TOTAL_WORKERS=4
+    - CONTROL_EXCHANGE=control_filter_minor_than_50
     - FILTER_FIELD=Amount Paid
     - FILTER_VALUE=50
     - FILTER_OPERATOR=lt
+
   filter_minor_than_50_04:
     build:
       context: ./src
@@ -285,9 +353,11 @@ services:
     - NODE_PREFIX=filter_minor_than_50
     - ID=4
     - TOTAL_WORKERS=4
+    - CONTROL_EXCHANGE=control_filter_minor_than_50
     - FILTER_FIELD=Amount Paid
     - FILTER_VALUE=50
     - FILTER_OPERATOR=lt
+
   filter_period_01:
     build:
       context: ./src
@@ -306,9 +376,11 @@ services:
     - NODE_PREFIX=filter_period
     - ID=1
     - TOTAL_WORKERS=4
+    - CONTROL_EXCHANGE=control_filter_period
     - FILTER_FIELD=Timestamp
     - FILTER_VALUE=2022/09/01, 2022/09/05
     - FILTER_OPERATOR=between
+
   filter_period_02:
     build:
       context: ./src
@@ -327,9 +399,11 @@ services:
     - NODE_PREFIX=filter_period
     - ID=2
     - TOTAL_WORKERS=4
+    - CONTROL_EXCHANGE=control_filter_period
     - FILTER_FIELD=Timestamp
     - FILTER_VALUE=2022/09/01, 2022/09/05
     - FILTER_OPERATOR=between
+
   filter_period_03:
     build:
       context: ./src
@@ -348,9 +422,11 @@ services:
     - NODE_PREFIX=filter_period
     - ID=3
     - TOTAL_WORKERS=4
+    - CONTROL_EXCHANGE=control_filter_period
     - FILTER_FIELD=Timestamp
     - FILTER_VALUE=2022/09/01, 2022/09/05
     - FILTER_OPERATOR=between
+
   filter_period_04:
     build:
       context: ./src
@@ -369,9 +445,11 @@ services:
     - NODE_PREFIX=filter_period
     - ID=4
     - TOTAL_WORKERS=4
+    - CONTROL_EXCHANGE=control_filter_period
     - FILTER_FIELD=Timestamp
     - FILTER_VALUE=2022/09/01, 2022/09/05
     - FILTER_OPERATOR=between
+
   filter_format_01:
     build:
       context: ./src
@@ -390,9 +468,11 @@ services:
     - NODE_PREFIX=filter_format
     - ID=1
     - TOTAL_WORKERS=2
+    - CONTROL_EXCHANGE=control_filter_format
     - FILTER_FIELD=Payment Format
     - FILTER_VALUE=Wire, ACH
     - FILTER_OPERATOR=in
+
   filter_format_02:
     build:
       context: ./src
@@ -411,9 +491,11 @@ services:
     - NODE_PREFIX=filter_format
     - ID=2
     - TOTAL_WORKERS=2
+    - CONTROL_EXCHANGE=control_filter_format
     - FILTER_FIELD=Payment Format
     - FILTER_VALUE=Wire, ACH
     - FILTER_OPERATOR=in
+
   converter_q5_01:
     build:
       context: ./src
@@ -427,10 +509,53 @@ services:
     environment:
     - MOM_HOST=rabbitmq
     - INPUT_QUEUE=format_to_convert
-    - OUTPUT_QUEUE=q5_results
+    - OUTPUT_QUEUE=filtered_q5
     - PYTHONUNBUFFERED=1
     - NODE_PREFIX=converter_q5
     - ID=1
-    - TOTAL_WORKERS=1
+    - TOTAL_WORKERS=2
+    - CONTROL_EXCHANGE=control_converter_q5
     - START_DATE=2022-09-01
     - END_DATE=2022-09-05
+
+  converter_q5_02:
+    build:
+      context: ./src
+      dockerfile: workers/converter/Dockerfile
+    container_name: converter_q5_02
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    environment:
+    - MOM_HOST=rabbitmq
+    - INPUT_QUEUE=format_to_convert
+    - OUTPUT_QUEUE=filtered_q5
+    - PYTHONUNBUFFERED=1
+    - NODE_PREFIX=converter_q5
+    - ID=2
+    - TOTAL_WORKERS=2
+    - CONTROL_EXCHANGE=control_converter_q5
+    - START_DATE=2022-09-01
+    - END_DATE=2022-09-05
+
+  counter_q5_01:
+    build:
+      context: ./src
+      dockerfile: workers/counter/Dockerfile
+    container_name: counter_q5_01
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    environment:
+    - MOM_HOST=rabbitmq
+    - INPUT_QUEUE=filtered_q5
+    - OUTPUT_QUEUE=q5_results
+    - PYTHONUNBUFFERED=1
+    - NODE_PREFIX=counter_q5
+    - ID=1
+    - TOTAL_WORKERS=1
+    - CONTROL_EXCHANGE=control_counter_q5

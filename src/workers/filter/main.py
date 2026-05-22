@@ -47,7 +47,7 @@ class GenericFilterWorker(BaseWorker):
                 valor_actual = transaccion[self.campo_objetivo]
                 valor_referencia = self.valor_objetivo
 
-                # --- NUEVO: Si es un operador matemático, forzamos a que sean números (float) ---
+                # --- Si es un operador matemático, forzamos a que sean números (float) ---
                 if self.operador_str == "between":
                     # Esperamos que valor_objetivo sea "valor1,valor2"
                     limites = [limite.strip() for limite in str(self.valor_objetivo).split(",")]
