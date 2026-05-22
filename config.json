@@ -31,7 +31,7 @@
       "prefix": "filter_format",
       "replicas": 2,
       "input_queue": "period_to_format",
-      "output_queue": "q2_results",
+      "output_queue": "q5_results",
       "filter_field": "Payment Format",
       "filter_value": "Wire, ACH",
       "filter_operator": "in"
