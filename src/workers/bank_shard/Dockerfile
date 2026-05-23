@@ -6,7 +6,7 @@ WORKDIR /app
 ENV PYTHONPATH=/app
 
 COPY common ./common
-COPY workers/base.py ./
+COPY workers/base/*.py ./
 COPY workers/bank_shard/*.py ./
 
 ENTRYPOINT ["python3", "bank_shard.py"]

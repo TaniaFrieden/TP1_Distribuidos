@@ -53,7 +53,7 @@ class AgregadorBancarioWorker(BaseWorker):
                 # --- RAMAL DE BANCOS ---
                 elif "banks" in queue_name:
                     b_name = payload.get("Bank Name", payload.get("bank_name", "Desconocido"))
-                    logger.info(f"[INFO BANCO] Cliente {client_id} -> Banco {bank_id}: Nombre registrado: '{b_name}'")
+                    # logger.info(f"[INFO BANCO] Cliente {client_id} -> Banco {bank_id}: Nombre registrado: '{b_name}'")
                     self.estado_agregador[client_id][bank_id]["bank_name"] = b_name
 
             # Confirmación explícita al Middleware
