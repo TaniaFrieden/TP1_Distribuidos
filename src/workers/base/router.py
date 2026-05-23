@@ -1,6 +1,5 @@
-import hashlib
 import logging
-from common import middleware
+from common import middleware, sharding
 
 logger = logging.getLogger(__name__)
 
@@ -41,9 +40,6 @@ class MessageRouter:
                     "queues": shard_queues
                 })
 
-    def obtener_id_shard(self, valor_hash: str, total_shards: int) -> int:
-        hash_hex = hashlib.md5(str(valor_hash).encode('utf-8')).hexdigest()
-        return (int(hash_hex, 16) % total_shards) + 1
 
     def enviar(self, mensaje: bytes, payload: dict = None):
         try:
@@ -57,7 +53,7 @@ class MessageRouter:
                         q.send(mensaje)
                 else:
                     valor_hash = payload.get(shard_meta["hash_field"], "default")
-                    target_id = self.obtener_id_shard(valor_hash, shard_meta["total_workers"])
+                    target_id = sharding.obtener_id_shard(valor_hash, shard_meta["total_workers"])
                     shard_meta["queues"][target_id].send(mensaje)
         except Exception as e:
             logger.error(f"[Router] Error enviando mensaje: {e}", exc_info=True)

@@ -2,9 +2,8 @@ import socket
 import uuid
 import json
 import logging
-from common import message_protocol, middleware
+from common import message_protocol, middleware, sharding
 from config import GatewayConfig
-from utils import ShardHasher
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +66,7 @@ class ClientHandler:
                             banco_dict["client_id"] = client_id
                             
                             bank_val = banco_dict.get(hash_field, "default")
-                            shard_id = ShardHasher.obtener_id_shard(bank_val, total_workers)
+                            shard_id = sharding.obtener_id_shard(bank_val, total_workers)
                             
                             colas_bancos[shard_id].send(json.dumps(banco_dict).encode("utf-8"))
                         except json.JSONDecodeError:
