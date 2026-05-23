@@ -33,7 +33,9 @@ def handle_pika_errors(action_name):
 
 class RabbitMQBase:
     def __init__(self, host):
-        self.connection = pika.BlockingConnection(pika.ConnectionParameters(host=host))
+        self.connection = pika.BlockingConnection(
+           pika.ConnectionParameters(host=host, heartbeat=0)
+        )
         self.channel = self.connection.channel()
 
     def __enter__(self):
