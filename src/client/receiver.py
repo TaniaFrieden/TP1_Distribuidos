@@ -9,14 +9,17 @@ KEY_RESULT = 'resultado'
 KEY_EOF = 'eof'
 
 OUTPUT_FILE_NAME = "output_{q_id}.csv"
-COUNT_QUERIES = 5
 
 def escuchar_respuesta(sock):
     logging.info("Hilo receptor activo: Esperando reportes...")
-    archivos_salida, cabeceras_escritas = _inicializar_entorno()
+    # Ahora archivos y cabeceras comienzan vacíos
+    archivos_salida = {}
+    cabeceras_escritas = {}
+    
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
     
     try:
-        while archivos_salida:
+        while True: # Cambiado a True, el corte se maneja cuando ya no hay archivos activos o EOF global
             try:
                 msg_type, payload = message_protocol.external.recv_msg(sock)
             except Exception as e:
@@ -33,18 +36,36 @@ def escuchar_respuesta(sock):
         for f in archivos_salida.values():
             f.close()
 
-## --------------------
-## Funciones auxiliares
-## --------------------
+def _procesar_resultado(payload, archivos, cabeceras):
+    try:
+        data = json.loads(payload) if isinstance(payload, str) else payload
+    except json.JSONDecodeError:
+        return
 
+    q_id = data.get(KEY_QUERY)
+    resultado = data.get(KEY_RESULT)
+    
+    if q_id is None:
+        return
+
+    # Lógica dinámica: Crear archivo si es la primera vez que vemos este q_id
+    if q_id not in archivos:
+        path = os.path.join(OUTPUT_DIR, OUTPUT_FILE_NAME.format(q_id=q_id))
+        archivos[q_id] = open(path, "w", encoding="utf-8")
+        cabeceras[q_id] = False
+
+    es_mensaje_final = _es_eof(resultado)
+
+    if isinstance(resultado, dict) and not (len(resultado) == 1 and es_mensaje_final):
+        _escribir_cabecera(q_id, resultado, archivos, cabeceras)
+        _escribir_datos(q_id, resultado, archivos)
+
+    if es_mensaje_final:
+        _cerrar_archivo(q_id, archivos)
+
+## --- Funciones auxiliares mantenidas ---
 def _es_eof(resultado):
     return isinstance(resultado, dict) and resultado.get(KEY_EOF) is True
-
-def _inicializar_entorno():
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
-    archivos = {i: open(os.path.join(OUTPUT_DIR, OUTPUT_FILE_NAME.format(q_id=i)), "w", encoding="utf-8") for i in range(1, COUNT_QUERIES + 1)}
-    cabeceras = {i: False for i in range(1, COUNT_QUERIES + 1)}
-    return archivos, cabeceras
 
 def _escribir_cabecera(q_id, resultado, archivos, cabeceras):
     if not cabeceras[q_id]:
@@ -59,26 +80,6 @@ def _escribir_datos(q_id, resultado, archivos):
 
 def _cerrar_archivo(q_id, archivos):
     logging.info(f"EOF recibido para query {q_id}")
-    archivos[q_id].close()
-    del archivos[q_id]
-
-def _procesar_resultado(payload, archivos, cabeceras):
-    try:
-        data = json.loads(payload) if isinstance(payload, str) else payload
-    except json.JSONDecodeError:
-        return
-
-    q_id = data.get(KEY_QUERY)
-    resultado = data.get(KEY_RESULT)
-
-    if q_id not in archivos:
-        return
-
-    es_mensaje_final = _es_eof(resultado)
-
-    if isinstance(resultado, dict) and not (len(resultado) == 1 and es_mensaje_final):
-        _escribir_cabecera(q_id, resultado, archivos, cabeceras)
-        _escribir_datos(q_id, resultado, archivos)
-
-    if es_mensaje_final:
-        _cerrar_archivo(q_id, archivos)
+    if q_id in archivos:
+        archivos[q_id].close()
+        del archivos[q_id]
