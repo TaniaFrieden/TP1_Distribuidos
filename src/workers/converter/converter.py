@@ -77,9 +77,9 @@ class CurrencyConverterWorker(BaseWorker):
             return None
         return (monto / rate_origen) * rate_usd
 
-    def procesar_payload(self, client_id: str, payload: str, mensaje_original: bytes, ack, nack):
+    def procesar_payload(self, queue_name: str, client_id: str, payload: dict | str, mensaje_original: bytes, ack, nack):
         try:
-            t = json.loads(payload)
+            t = payload if isinstance(payload, dict) else json.loads(payload)
             iso = CURRENCY_MAP.get(t.get("Receiving Currency", ""))
             if not iso:
                 ack()

@@ -4,10 +4,12 @@ PYTEST := PYTHONPATH=src $(PYTHON) -m pytest
 
 # Variables del cliente
 TRANSACTIONS_FILE ?= datasets/transacciones_sample.csv
+ACCOUNTS_FILE ?= datasets/accounts_sample.csv
 OUTPUT_DIR ?= output
 SERVER_HOST ?= 127.0.0.1
 SERVER_PORT ?= 5678
 BATCH_SIZE ?= 2000
+
 
 # Variables del gateway
 MOM_HOST ?= localhost
@@ -41,7 +43,8 @@ help:
 	@echo ""
 	@echo "Variables del cliente (override con: make client TRANSACTIONS_FILE=...):"
 	@echo "  TRANSACTIONS_FILE=$(TRANSACTIONS_FILE)"
-	@echo "  OUTPUT_FILE=$(OUTPUT_FILE)"
+	@echo "  ACCOUNTS_FILE=$(ACCOUNTS_FILE)"
+	@echo "  OUTPUT_DIR=$(OUTPUT_DIR)"
 	@echo "  SERVER_HOST=$(SERVER_HOST)"
 	@echo "  SERVER_PORT=$(SERVER_PORT)"
 	@echo "  BATCH_SIZE=$(BATCH_SIZE)"
@@ -112,6 +115,7 @@ test-server:
 
 client:
 	TRANSACTIONS_FILE=$(TRANSACTIONS_FILE) \
+	ACCOUNTS_FILE=$(ACCOUNTS_FILE) \
 	OUTPUT_DIR=$(OUTPUT_DIR) \
 	SERVER_HOST=$(SERVER_HOST) \
 	SERVER_PORT=$(SERVER_PORT) \

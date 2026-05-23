@@ -6,7 +6,7 @@ WORKDIR /app
 ENV PYTHONPATH=/app
 
 COPY common ./common
-COPY workers/base.py ./
+COPY workers/base/*.py ./
 COPY workers/filter ./ 
 
-ENTRYPOINT ["python3", "main.py"]
+ENTRYPOINT ["python3", "filter.py"]

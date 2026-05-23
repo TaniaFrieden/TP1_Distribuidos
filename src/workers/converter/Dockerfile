@@ -6,7 +6,7 @@ WORKDIR /app
 ENV PYTHONPATH=/app
 
 COPY common ./common
-COPY workers/base.py ./
+COPY workers/base/*.py ./
 COPY workers/converter ./ 
 
 ENTRYPOINT ["python3", "converter.py"]

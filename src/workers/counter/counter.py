@@ -14,7 +14,7 @@ class CounterWorker(BaseWorker):
         self._conteos: dict = {}
         self._conteos_lock = threading.Lock()
 
-    def procesar_payload(self, client_id: str, payload: str, mensaje_original: bytes, ack, nack):
+    def procesar_payload(self, queue_name: str, client_id: str, payload: str, mensaje_original: bytes, ack, nack):
         try:
             with self._conteos_lock:
                 self._conteos[client_id] = self._conteos.get(client_id, 0) + 1

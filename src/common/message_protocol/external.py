@@ -9,6 +9,7 @@ class MsgType:
     END_OF_RECODS = 4
     REPORTE = 5
     LOTE_TRANSACCIONES = 6
+    LOTE_BANCOS = 7
 
   
 def _recv_sized(socket, size):
@@ -84,7 +85,8 @@ RECV_MSG_HANDLERS = {
     MsgType.ACK: _recv_empty,
     MsgType.END_OF_RECODS: _recv_empty,
     MsgType.REPORTE: _recv_reporte,
-    MsgType.LOTE_TRANSACCIONES: _recv_lote
+    MsgType.LOTE_TRANSACCIONES: _recv_lote,
+    MsgType.LOTE_BANCOS: _recv_lote
 }
 
 
@@ -106,8 +108,9 @@ def _send_end_of_records(socket):
 
 def _send_reporte(socket, reporte):
     """Envía un reporte como string."""
-    msg = external_serializer.serialize_uint32(len(reporte))
-    msg += external_serializer.serialize_string(reporte)
+    reporte_bytes = reporte.encode("utf-8")
+    msg = external_serializer.serialize_uint32(len(reporte_bytes))
+    msg += reporte_bytes
     socket.sendall(msg)
 
 def _send_empty(socket):
@@ -117,12 +120,12 @@ SEND_MSG_HANDLERS = {
     MsgType.ACK: _send_empty,
     MsgType.END_OF_RECODS: _send_end_of_records,
     MsgType.REPORTE: _send_reporte,
-    MsgType.LOTE_TRANSACCIONES: _send_lote
+    MsgType.LOTE_TRANSACCIONES: _send_lote,
+    MsgType.LOTE_BANCOS: _send_lote
 }
 
 
 def send_msg(socket, msg_type, *args):
     socket.sendall(external_serializer.serialize_uint32(msg_type))
-    
     msg_handler = SEND_MSG_HANDLERS[msg_type]
     msg_handler(socket, *args)
