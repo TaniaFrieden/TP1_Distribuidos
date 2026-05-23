@@ -1,0 +1,37 @@
+{
+  "banks_shard": {
+    "queue_shard_prefix": "q2_shard_banks",
+    "total_workers": 2,
+    "hash_field": "Bank ID"
+  },
+  "workers": [
+    {
+      "type": "filter",
+      "prefix": "q2_filter_usd",
+      "replicas": 2,
+      "input_queue": "q2_raw_data",
+      "output_queue": [
+        {
+          "queue_shard_prefix": "q2_shard_transactions",
+          "total_workers": 2,
+          "hash_field": "From Bank"
+        }
+      ],
+      "extra_env": {
+        "FILTER_FIELD": "Payment Currency",
+        "FILTER_VALUE": "US Dollar",
+        "FILTER_OPERATOR": "eq"
+      }
+    },
+    {
+      "type": "bank_shard",
+      "prefix": "q2_agregador_shard",
+      "replicas": 2,
+      "input_queue": [
+        "q2_shard_transactions",
+        "q2_shard_banks"
+      ],
+      "output_queue": "q2_results"
+    }
+  ]
+}

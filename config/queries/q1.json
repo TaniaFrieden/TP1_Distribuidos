@@ -1,0 +1,28 @@
+{
+  "workers": [
+    {
+      "type": "filter",
+      "prefix": "q1_filter_usd",
+      "replicas": 2,
+      "input_queue": "q1_raw_data",
+      "output_queue": "q1_usd_to_minor_50",
+      "extra_env": {
+        "FILTER_FIELD": "Payment Currency",
+        "FILTER_VALUE": "US Dollar",
+        "FILTER_OPERATOR": "eq"
+      }
+    },
+    {
+      "type": "filter",
+      "prefix": "q1_minor_than_50",
+      "replicas": 3,
+      "input_queue": "q1_usd_to_minor_50",
+      "output_queue": "q1_results",
+      "extra_env": {
+        "FILTER_FIELD": "Amount Paid",
+        "FILTER_VALUE": "50",
+        "FILTER_OPERATOR": "lt"
+      }
+    }
+  ]
+}

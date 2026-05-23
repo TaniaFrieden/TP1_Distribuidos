@@ -1,0 +1,14 @@
+{
+  "filter": {
+    "dockerfile": "workers/filter/Dockerfile"
+  },
+  "converter": {
+    "dockerfile": "workers/converter/Dockerfile"
+  },
+  "counter": {
+    "dockerfile": "workers/counter/Dockerfile"
+  },
+  "bank_shard": {
+    "dockerfile": "workers/bank_shard/Dockerfile"
+  }
+}

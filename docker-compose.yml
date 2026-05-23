@@ -8,19 +8,18 @@ services:
       rabbitmq:
         condition: service_healthy
     ports:
-    - "8080:8080"
-    - "5678:5678"
+    - 8080:8080
+    - 5678:5678
     environment:
       PYTHONUNBUFFERED: '1'
       SERVER_HOST: gateway
       SERVER_PORT: '5678'
       MOM_HOST: rabbitmq
-      OUTPUTS_QUEUE: q2_raw_data
-      INPUTS_QUEUE: q2_results
+      OUTPUTS_QUEUE: q5_raw_data, q1_raw_data, q2_raw_data
+      INPUTS_QUEUE: q5_results, q1_results, q2_results
       HTTP_HOST: 0.0.0.0
       HTTP_PORT: '8080'
       BANK_QUEUE: '{"queue_shard_prefix": "q2_shard_banks", "total_workers": 2, "hash_field": "Bank ID"}'
-
   rabbitmq:
     image: rabbitmq:3-management
     container_name: rabbitmq
@@ -33,119 +32,283 @@ services:
       test: rabbitmq-diagnostics check_port_connectivity
       timeout: 3s
     ports:
-    - "5672:5672"
-    - "15672:15672"
-  
-# Query 1:
-  # q1_filter_usd_01:
-  #   build:
-  #     context: ./src
-  #     dockerfile: workers/filter/Dockerfile
-  #   container_name: q1_filter_usd_01
-  #   depends_on:
-  #     rabbitmq:
-  #       condition: service_healthy
-  #     gateway:
-  #       condition: service_started
-  #   environment:
-  #   - MOM_HOST=rabbitmq
-  #   - INPUT_QUEUES=q1_raw_data
-  #   - OUTPUT_QUEUES=q1_usd_to_minor_50
-  #   - PYTHONUNBUFFERED=1
-  #   - NODE_PREFIX=q1_filter_usd
-  #   - ID=1
-  #   - TOTAL_WORKERS=2
-  #   - FILTER_FIELD=Payment Currency
-  #   - FILTER_VALUE=US Dollar
-  #   - FILTER_OPERATOR=eq
-  
-  # q1_filter_usd_02:
-  #   build:
-  #     context: ./src
-  #     dockerfile: workers/filter/Dockerfile
-  #   container_name: q1_filter_usd_02
-  #   depends_on:
-  #     rabbitmq:
-  #       condition: service_healthy
-  #     gateway:
-  #       condition: service_started
-  #   environment:
-  #   - MOM_HOST=rabbitmq
-  #   - INPUT_QUEUES=q1_raw_data
-  #   - OUTPUT_QUEUES=q1_usd_to_minor_50
-  #   - PYTHONUNBUFFERED=1
-  #   - NODE_PREFIX=q1_filter_usd
-  #   - ID=2
-  #   - TOTAL_WORKERS=2
-  #   - FILTER_FIELD=Payment Currency
-  #   - FILTER_VALUE=US Dollar
-  #   - FILTER_OPERATOR=eq
-  # q1_minor_than_50_01:
-  #   build:
-  #     context: ./src
-  #     dockerfile: workers/filter/Dockerfile
-  #   container_name: q1_minor_than_50_01
-  #   depends_on:
-  #     rabbitmq:
-  #       condition: service_healthy
-  #     gateway:
-  #       condition: service_started
-  #   environment:
-  #   - MOM_HOST=rabbitmq
-  #   - INPUT_QUEUES=q1_usd_to_minor_50
-  #   - OUTPUT_QUEUES=q1_results
-  #   - PYTHONUNBUFFERED=1
-  #   - NODE_PREFIX=q1_minor_than_50
-  #   - ID=1
-  #   - TOTAL_WORKERS=2
-  #   - FILTER_FIELD=Amount Paid
-  #   - FILTER_VALUE=50
-  #   - FILTER_OPERATOR=lt
-  # q1_minor_than_50_02:
-  #   build:
-  #     context: ./src
-  #     dockerfile: workers/filter/Dockerfile
-  #   container_name: q1_minor_than_50_02
-  #   depends_on:
-  #     rabbitmq:
-  #       condition: service_healthy
-  #     gateway:
-  #       condition: service_started
-  #   environment:
-  #   - MOM_HOST=rabbitmq
-  #   - INPUT_QUEUES=q1_usd_to_minor_50
-  #   - OUTPUT_QUEUES=q1_results
-  #   - PYTHONUNBUFFERED=1
-  #   - NODE_PREFIX=q1_minor_than_50
-  #   - ID=2
-  #   - TOTAL_WORKERS=3
-  #   - FILTER_FIELD=Amount Paid
-  #   - FILTER_VALUE=50
-  #   - FILTER_OPERATOR=lt
-
-  # q1_minor_than_50_03:
-  #   build:
-  #     context: ./src
-  #     dockerfile: workers/filter/Dockerfile
-  #   container_name: q1_minor_than_50_03
-  #   depends_on:
-  #     rabbitmq:
-  #       condition: service_healthy
-  #     gateway:
-  #       condition: service_started
-  #   environment:
-  #   - MOM_HOST=rabbitmq
-  #   - INPUT_QUEUES=q1_usd_to_minor_50
-  #   - OUTPUT_QUEUES=q1_results
-  #   - PYTHONUNBUFFERED=1
-  #   - NODE_PREFIX=q1_minor_than_50
-  #   - ID=3
-  #   - TOTAL_WORKERS=3
-  #   - FILTER_FIELD=Amount Paid
-  #   - FILTER_VALUE=50
-  #   - FILTER_OPERATOR=lt
-
-# Query 2: 
+    - 5672:5672
+    - 15672:15672
+  q5_filter_period_01:
+    build:
+      context: ./src
+      dockerfile: workers/filter/Dockerfile
+    container_name: q5_filter_period_01
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    environment:
+      MOM_HOST: rabbitmq
+      INPUT_QUEUES: q5_raw_data
+      OUTPUT_QUEUES: q5_period_to_format
+      NODE_PREFIX: q5_filter_period
+      ID: '1'
+      TOTAL_WORKERS: '4'
+      FILTER_FIELD: Timestamp
+      FILTER_VALUE: 2022/09/01, 2022/09/05
+      FILTER_OPERATOR: between
+  q5_filter_period_02:
+    build:
+      context: ./src
+      dockerfile: workers/filter/Dockerfile
+    container_name: q5_filter_period_02
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    environment:
+      MOM_HOST: rabbitmq
+      INPUT_QUEUES: q5_raw_data
+      OUTPUT_QUEUES: q5_period_to_format
+      NODE_PREFIX: q5_filter_period
+      ID: '2'
+      TOTAL_WORKERS: '4'
+      FILTER_FIELD: Timestamp
+      FILTER_VALUE: 2022/09/01, 2022/09/05
+      FILTER_OPERATOR: between
+  q5_filter_period_03:
+    build:
+      context: ./src
+      dockerfile: workers/filter/Dockerfile
+    container_name: q5_filter_period_03
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    environment:
+      MOM_HOST: rabbitmq
+      INPUT_QUEUES: q5_raw_data
+      OUTPUT_QUEUES: q5_period_to_format
+      NODE_PREFIX: q5_filter_period
+      ID: '3'
+      TOTAL_WORKERS: '4'
+      FILTER_FIELD: Timestamp
+      FILTER_VALUE: 2022/09/01, 2022/09/05
+      FILTER_OPERATOR: between
+  q5_filter_period_04:
+    build:
+      context: ./src
+      dockerfile: workers/filter/Dockerfile
+    container_name: q5_filter_period_04
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    environment:
+      MOM_HOST: rabbitmq
+      INPUT_QUEUES: q5_raw_data
+      OUTPUT_QUEUES: q5_period_to_format
+      NODE_PREFIX: q5_filter_period
+      ID: '4'
+      TOTAL_WORKERS: '4'
+      FILTER_FIELD: Timestamp
+      FILTER_VALUE: 2022/09/01, 2022/09/05
+      FILTER_OPERATOR: between
+  q5_filter_format_01:
+    build:
+      context: ./src
+      dockerfile: workers/filter/Dockerfile
+    container_name: q5_filter_format_01
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    environment:
+      MOM_HOST: rabbitmq
+      INPUT_QUEUES: q5_period_to_format
+      OUTPUT_QUEUES: q5_format_to_convert
+      NODE_PREFIX: q5_filter_format
+      ID: '1'
+      TOTAL_WORKERS: '2'
+      FILTER_FIELD: Payment Format
+      FILTER_VALUE: Wire, ACH
+      FILTER_OPERATOR: in
+  q5_filter_format_02:
+    build:
+      context: ./src
+      dockerfile: workers/filter/Dockerfile
+    container_name: q5_filter_format_02
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    environment:
+      MOM_HOST: rabbitmq
+      INPUT_QUEUES: q5_period_to_format
+      OUTPUT_QUEUES: q5_format_to_convert
+      NODE_PREFIX: q5_filter_format
+      ID: '2'
+      TOTAL_WORKERS: '2'
+      FILTER_FIELD: Payment Format
+      FILTER_VALUE: Wire, ACH
+      FILTER_OPERATOR: in
+  q5_converter_01:
+    build:
+      context: ./src
+      dockerfile: workers/converter/Dockerfile
+    container_name: q5_converter_01
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    environment:
+      MOM_HOST: rabbitmq
+      INPUT_QUEUES: q5_format_to_convert
+      OUTPUT_QUEUES: q5_filtered
+      NODE_PREFIX: q5_converter
+      ID: '1'
+      TOTAL_WORKERS: '2'
+      START_DATE: '2022-09-01'
+      END_DATE: '2022-09-05'
+  q5_converter_02:
+    build:
+      context: ./src
+      dockerfile: workers/converter/Dockerfile
+    container_name: q5_converter_02
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    environment:
+      MOM_HOST: rabbitmq
+      INPUT_QUEUES: q5_format_to_convert
+      OUTPUT_QUEUES: q5_filtered
+      NODE_PREFIX: q5_converter
+      ID: '2'
+      TOTAL_WORKERS: '2'
+      START_DATE: '2022-09-01'
+      END_DATE: '2022-09-05'
+  q5_counter_01:
+    build:
+      context: ./src
+      dockerfile: workers/counter/Dockerfile
+    container_name: q5_counter_01
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    environment:
+      MOM_HOST: rabbitmq
+      INPUT_QUEUES: q5_filtered
+      OUTPUT_QUEUES: q5_results
+      NODE_PREFIX: q5_counter
+      ID: '1'
+      TOTAL_WORKERS: '1'
+  q1_filter_usd_01:
+    build:
+      context: ./src
+      dockerfile: workers/filter/Dockerfile
+    container_name: q1_filter_usd_01
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    environment:
+      MOM_HOST: rabbitmq
+      INPUT_QUEUES: q1_raw_data
+      OUTPUT_QUEUES: q1_usd_to_minor_50
+      NODE_PREFIX: q1_filter_usd
+      ID: '1'
+      TOTAL_WORKERS: '2'
+      FILTER_FIELD: Payment Currency
+      FILTER_VALUE: US Dollar
+      FILTER_OPERATOR: eq
+  q1_filter_usd_02:
+    build:
+      context: ./src
+      dockerfile: workers/filter/Dockerfile
+    container_name: q1_filter_usd_02
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    environment:
+      MOM_HOST: rabbitmq
+      INPUT_QUEUES: q1_raw_data
+      OUTPUT_QUEUES: q1_usd_to_minor_50
+      NODE_PREFIX: q1_filter_usd
+      ID: '2'
+      TOTAL_WORKERS: '2'
+      FILTER_FIELD: Payment Currency
+      FILTER_VALUE: US Dollar
+      FILTER_OPERATOR: eq
+  q1_minor_than_50_01:
+    build:
+      context: ./src
+      dockerfile: workers/filter/Dockerfile
+    container_name: q1_minor_than_50_01
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    environment:
+      MOM_HOST: rabbitmq
+      INPUT_QUEUES: q1_usd_to_minor_50
+      OUTPUT_QUEUES: q1_results
+      NODE_PREFIX: q1_minor_than_50
+      ID: '1'
+      TOTAL_WORKERS: '3'
+      FILTER_FIELD: Amount Paid
+      FILTER_VALUE: '50'
+      FILTER_OPERATOR: lt
+  q1_minor_than_50_02:
+    build:
+      context: ./src
+      dockerfile: workers/filter/Dockerfile
+    container_name: q1_minor_than_50_02
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    environment:
+      MOM_HOST: rabbitmq
+      INPUT_QUEUES: q1_usd_to_minor_50
+      OUTPUT_QUEUES: q1_results
+      NODE_PREFIX: q1_minor_than_50
+      ID: '2'
+      TOTAL_WORKERS: '3'
+      FILTER_FIELD: Amount Paid
+      FILTER_VALUE: '50'
+      FILTER_OPERATOR: lt
+  q1_minor_than_50_03:
+    build:
+      context: ./src
+      dockerfile: workers/filter/Dockerfile
+    container_name: q1_minor_than_50_03
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    environment:
+      MOM_HOST: rabbitmq
+      INPUT_QUEUES: q1_usd_to_minor_50
+      OUTPUT_QUEUES: q1_results
+      NODE_PREFIX: q1_minor_than_50
+      ID: '3'
+      TOTAL_WORKERS: '3'
+      FILTER_FIELD: Amount Paid
+      FILTER_VALUE: '50'
+      FILTER_OPERATOR: lt
   q2_filter_usd_01:
     build:
       context: ./src
@@ -158,16 +321,14 @@ services:
         condition: service_started
     environment:
       MOM_HOST: rabbitmq
-      INPUT_QUEUES: 'q2_raw_data'
+      INPUT_QUEUES: q2_raw_data
       OUTPUT_QUEUES: '[{"queue_shard_prefix": "q2_shard_transactions", "total_workers": 2, "hash_field": "From Bank"}]'
-      PYTHONUNBUFFERED: '1'
       NODE_PREFIX: q2_filter_usd
-      ID: 1
-      TOTAL_WORKERS: 2
-      FILTER_FIELD: 'Payment Currency'
-      FILTER_VALUE: 'US Dollar'
-      FILTER_OPERATOR: 'eq'
-  
+      ID: '1'
+      TOTAL_WORKERS: '2'
+      FILTER_FIELD: Payment Currency
+      FILTER_VALUE: US Dollar
+      FILTER_OPERATOR: eq
   q2_filter_usd_02:
     build:
       context: ./src
@@ -180,16 +341,14 @@ services:
         condition: service_started
     environment:
       MOM_HOST: rabbitmq
-      INPUT_QUEUES: 'q2_raw_data'
+      INPUT_QUEUES: q2_raw_data
       OUTPUT_QUEUES: '[{"queue_shard_prefix": "q2_shard_transactions", "total_workers": 2, "hash_field": "From Bank"}]'
-      PYTHONUNBUFFERED: '1'
       NODE_PREFIX: q2_filter_usd
-      ID: 2
-      TOTAL_WORKERS: 2
-      FILTER_FIELD: 'Payment Currency'
-      FILTER_VALUE: 'US Dollar'
-      FILTER_OPERATOR: 'eq'
-
+      ID: '2'
+      TOTAL_WORKERS: '2'
+      FILTER_FIELD: Payment Currency
+      FILTER_VALUE: US Dollar
+      FILTER_OPERATOR: eq
   q2_agregador_shard_01:
     build:
       context: ./src
@@ -203,12 +362,10 @@ services:
     environment:
       MOM_HOST: rabbitmq
       INPUT_QUEUES: '["q2_shard_transactions_1", "q2_shard_banks_1"]'
-      OUTPUT_QUEUES: 'q2_results'
-      PYTHONUNBUFFERED: '1'
-      NODE_PREFIX: q2_agregador_bancario
-      ID: 1
-      TOTAL_WORKERS: 2
-
+      OUTPUT_QUEUES: q2_results
+      NODE_PREFIX: q2_agregador_shard
+      ID: '1'
+      TOTAL_WORKERS: '2'
   q2_agregador_shard_02:
     build:
       context: ./src
@@ -222,202 +379,7 @@ services:
     environment:
       MOM_HOST: rabbitmq
       INPUT_QUEUES: '["q2_shard_transactions_2", "q2_shard_banks_2"]'
-      OUTPUT_QUEUES: 'q2_results'
-      PYTHONUNBUFFERED: '1'
-      NODE_PREFIX: q2_agregador_bancario
-      ID: 2
-      TOTAL_WORKERS: 2
-
-# Query 5:
-  # q5_filter_period_01:
-  #   build:
-  #     context: ./src
-  #     dockerfile: workers/filter/Dockerfile
-  #   container_name: q5_filter_period_01
-  #   depends_on:
-  #     rabbitmq:
-  #       condition: service_healthy
-  #     gateway:
-  #       condition: service_started
-  #   environment:
-  #   - MOM_HOST=rabbitmq
-  #   - INPUT_QUEUES=q5_raw_data
-  #   - OUTPUT_QUEUES=q5_period_to_format
-  #   - PYTHONUNBUFFERED=1
-  #   - NODE_PREFIX=q5_filter_period
-  #   - ID=1
-  #   - TOTAL_WORKERS=4
-  #   - FILTER_FIELD=Timestamp
-  #   - FILTER_VALUE=2022/09/01, 2022/09/05
-  #   - FILTER_OPERATOR=between
-
-  # q5_filter_period_02:
-  #   build:
-  #     context: ./src
-  #     dockerfile: workers/filter/Dockerfile
-  #   container_name: q5_filter_period_02
-  #   depends_on:
-  #     rabbitmq:
-  #       condition: service_healthy
-  #     gateway:
-  #       condition: service_started
-  #   environment:
-  #   - MOM_HOST=rabbitmq
-  #   - INPUT_QUEUES=q5_raw_data
-  #   - OUTPUT_QUEUES=q5_period_to_format
-  #   - PYTHONUNBUFFERED=1
-  #   - NODE_PREFIX=q5_filter_period
-  #   - ID=2
-  #   - TOTAL_WORKERS=4
-  #   - FILTER_FIELD=Timestamp
-  #   - FILTER_VALUE=2022/09/01, 2022/09/05
-  #   - FILTER_OPERATOR=between
-
-  # q5_filter_period_03:
-  #   build:
-  #     context: ./src
-  #     dockerfile: workers/filter/Dockerfile
-  #   container_name: q5_filter_period_03
-  #   depends_on:
-  #     rabbitmq:
-  #       condition: service_healthy
-  #     gateway:
-  #       condition: service_started
-  #   environment:
-  #   - MOM_HOST=rabbitmq
-  #   - INPUT_QUEUES=q5_raw_data
-  #   - OUTPUT_QUEUES=q5_period_to_format
-  #   - PYTHONUNBUFFERED=1
-  #   - NODE_PREFIX=q5_filter_period
-  #   - ID=3
-  #   - TOTAL_WORKERS=4
-  #   - FILTER_FIELD=Timestamp
-  #   - FILTER_VALUE=2022/09/01, 2022/09/05
-  #   - FILTER_OPERATOR=between
-
-  # q5_filter_period_04:
-  #   build:
-  #     context: ./src
-  #     dockerfile: workers/filter/Dockerfile
-  #   container_name: q5_filter_period_04
-  #   depends_on:
-  #     rabbitmq:
-  #       condition: service_healthy
-  #     gateway:
-  #       condition: service_started
-  #   environment:
-  #   - MOM_HOST=rabbitmq
-  #   - INPUT_QUEUES=q5_raw_data
-  #   - OUTPUT_QUEUES=q5_period_to_format
-  #   - PYTHONUNBUFFERED=1
-  #   - NODE_PREFIX=q5_filter_period
-  #   - ID=4
-  #   - TOTAL_WORKERS=4
-  #   - FILTER_FIELD=Timestamp
-  #   - FILTER_VALUE=2022/09/01, 2022/09/05
-  #   - FILTER_OPERATOR=between
-
-  # q5_filter_format_01:
-  #   build:
-  #     context: ./src
-  #     dockerfile: workers/filter/Dockerfile
-  #   container_name: q5_filter_format_01
-  #   depends_on:
-  #     rabbitmq:
-  #       condition: service_healthy
-  #     gateway:
-  #       condition: service_started
-  #   environment:
-  #   - MOM_HOST=rabbitmq
-  #   - INPUT_QUEUES=q5_period_to_format
-  #   - OUTPUT_QUEUES=q5_format_to_convert
-  #   - PYTHONUNBUFFERED=1
-  #   - NODE_PREFIX=q5_filter_format
-  #   - ID=1
-  #   - TOTAL_WORKERS=2
-  #   - FILTER_FIELD=Payment Format
-  #   - FILTER_VALUE=Wire, ACH
-  #   - FILTER_OPERATOR=in
-
-  # q5_filter_format_02:
-  #   build:
-  #     context: ./src
-  #     dockerfile: workers/filter/Dockerfile
-  #   container_name: q5_filter_format_02
-  #   depends_on:
-  #     rabbitmq:
-  #       condition: service_healthy
-  #     gateway:
-  #       condition: service_started
-  #   environment:
-  #   - MOM_HOST=rabbitmq
-  #   - INPUT_QUEUES=q5_period_to_format
-  #   - OUTPUT_QUEUES=q5_format_to_convert
-  #   - PYTHONUNBUFFERED=1
-  #   - NODE_PREFIX=q5_filter_format
-  #   - ID=2
-  #   - TOTAL_WORKERS=2
-  #   - FILTER_FIELD=Payment Format
-  #   - FILTER_VALUE=Wire, ACH
-  #   - FILTER_OPERATOR=in
-
-  # q5_converter_01:
-  #   build:
-  #     context: ./src
-  #     dockerfile: workers/converter/Dockerfile
-  #   container_name: q5_converter_01
-  #   depends_on:
-  #     rabbitmq:
-  #       condition: service_healthy
-  #     gateway:
-  #       condition: service_started
-  #   environment:
-  #   - MOM_HOST=rabbitmq
-  #   - INPUT_QUEUES=q5_format_to_convert
-  #   - OUTPUT_QUEUES=q5_filtered
-  #   - PYTHONUNBUFFERED=1
-  #   - NODE_PREFIX=q5_converter
-  #   - ID=1
-  #   - TOTAL_WORKERS=2
-  #   - START_DATE=2022-09-01
-  #   - END_DATE=2022-09-05
-
-  # q5_converter_02:
-  #   build:
-  #     context: ./src
-  #     dockerfile: workers/converter/Dockerfile
-  #   container_name: q5_converter_02
-  #   depends_on:
-  #     rabbitmq:
-  #       condition: service_healthy
-  #     gateway:
-  #       condition: service_started
-  #   environment:
-  #   - MOM_HOST=rabbitmq
-  #   - INPUT_QUEUES=q5_format_to_convert
-  #   - OUTPUT_QUEUES=q5_filtered
-  #   - PYTHONUNBUFFERED=1
-  #   - NODE_PREFIX=q5_converter
-  #   - ID=2
-  #   - TOTAL_WORKERS=2
-  #   - START_DATE=2022-09-01
-  #   - END_DATE=2022-09-05
-
-  # q5_counter_01:
-  #   build:
-  #     context: ./src
-  #     dockerfile: workers/counter/Dockerfile
-  #   container_name: q5_counter_01
-  #   depends_on:
-  #     rabbitmq:
-  #       condition: service_healthy
-  #     gateway:
-  #       condition: service_started
-  #   environment:
-  #   - MOM_HOST=rabbitmq
-  #   - INPUT_QUEUES=q5_filtered
-  #   - OUTPUT_QUEUES=q5_results
-  #   - PYTHONUNBUFFERED=1
-  #   - NODE_PREFIX=q5_counter
-  #   - ID=1
-  #   - TOTAL_WORKERS=1
+      OUTPUT_QUEUES: q2_results
+      NODE_PREFIX: q2_agregador_shard
+      ID: '2'
+      TOTAL_WORKERS: '2'

@@ -1,0 +1,36 @@
+services:
+  gateway:
+    build:
+      context: ./src
+      dockerfile: gateway/Dockerfile
+    container_name: gateway
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+      - "5678:5678"
+    environment:
+      PYTHONUNBUFFERED: '1'
+      SERVER_HOST: gateway
+      SERVER_PORT: '5678'
+      MOM_HOST: rabbitmq
+      OUTPUTS_QUEUE: "" 
+      INPUTS_QUEUE: ""
+      HTTP_HOST: 0.0.0.0
+      HTTP_PORT: '8080'
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    environment:
+      RABBITMQ_LOG_LEVELS: error
+    healthcheck:
+      interval: 5s
+      retries: 10
+      start_period: 50s
+      test: rabbitmq-diagnostics check_port_connectivity
+      timeout: 3s
+    ports:
+      - "5672:5672"
+      - "15672:15672"

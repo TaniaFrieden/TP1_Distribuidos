@@ -1,0 +1,46 @@
+{
+  "workers": [
+    {
+      "type": "filter",
+      "prefix": "q5_filter_period",
+      "replicas": 4,
+      "input_queue": "q5_raw_data",
+      "output_queue": "q5_period_to_format",
+      "extra_env": {
+        "FILTER_FIELD": "Timestamp",
+        "FILTER_VALUE": "2022/09/01, 2022/09/05",
+        "FILTER_OPERATOR": "between"
+      }
+    },
+    {
+      "type": "filter",
+      "prefix": "q5_filter_format",
+      "replicas": 2,
+      "input_queue": "q5_period_to_format",
+      "output_queue": "q5_format_to_convert",
+      "extra_env": {
+        "FILTER_FIELD": "Payment Format",
+        "FILTER_VALUE": "Wire, ACH",
+        "FILTER_OPERATOR": "in"
+      }
+    },
+    {
+      "type": "converter",
+      "prefix": "q5_converter",
+      "replicas": 2,
+      "input_queue": "q5_format_to_convert",
+      "output_queue": "q5_filtered",
+      "extra_env": {
+        "START_DATE": "2022-09-01",
+        "END_DATE": "2022-09-05"
+      }
+    },
+    {
+      "type": "counter",
+      "prefix": "q5_counter",
+      "replicas": 1,
+      "input_queue": "q5_filtered",
+      "output_queue": "q5_results"
+    }
+  ]
+}

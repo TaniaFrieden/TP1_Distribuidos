@@ -137,8 +137,20 @@ start:
 down:
 	docker compose down
 
+.PHONY: generar
 generar:
-	$(PYTHON) ./generar_compose.py
+	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
+	if [ -z "$$ARGS" ]; then \
+		echo "Error: Debes especificar las queries a generar."; \
+		echo "Uso: make generar <numeros>"; \
+		echo "Ejemplo: make generar 1 2 5"; \
+		exit 1; \
+	else \
+		python generar_compose.py $$ARGS; \
+	fi
+
+%:
+	@:
 
 log:
 	@if [ -z "$(filter-out $@,$(MAKECMDGOALS))" ]; then \
