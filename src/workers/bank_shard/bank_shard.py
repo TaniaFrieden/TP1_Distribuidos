@@ -2,6 +2,7 @@ import logging
 import json
 import threading
 from base import BaseWorker
+from common.sharding import normalizar_valor_hash
 
 # puede ser que no este funciona porque es otra version
 
@@ -18,30 +19,18 @@ class AgregadorBancarioWorker(BaseWorker):
         logger.info("[AgregadorBancario] Worker inicializado y listo para doble escucha.")
 
     def procesar_payload(self, queue_name: str, client_id: str, payload: dict, mensaje_original: bytes, ack, nack):
-        # ---------------------------------------------------------
-        # NUEVO LOG: Muestra absolutamente todo lo que llega, tal cual
-        # ---------------------------------------------------------
         logger.info(f"[MENSAJE ENTRANTE] Cola: '{queue_name}' | Cliente: {client_id} | Payload: {payload}")
-        
-        # Si de verdad necesitas ver los bytes crudos literales antes de ser diccionario, podés descomentar esto:
-        # logger.info(f"[MENSAJE RAW] Cola: '{queue_name}' | Raw Bytes: {mensaje_original.decode('utf-8', errors='ignore')}")
-        
+
         try:
-            bank_id = payload.get("bank_id", payload.get("Bank ID", "N/A"))
-            
-
-            logger.debug(f"Intentando adquirir LOCK para procesar mensaje de la cola: {queue_name}")
             if "transactions" in queue_name:
-                bank_id = payload.get("From Bank", "N/A")
+                bank_id = normalizar_valor_hash(payload.get("From Bank", payload.get("from_bank", "N/A")))
             elif "banks" in queue_name:
-                bank_id = payload.get("Bank ID", payload.get("bank_id", "N/A"))
+                bank_id = normalizar_valor_hash(payload.get("Bank ID", payload.get("bank_id", "N/A")))
             else:
-                bank_id = "N/A"
-
-            logger.debug(f"Procesando para Cliente: {client_id} | Banco identificado: {bank_id}")
+                ack()
+                return
 
             with self.lock_estado:
-                # Inicializar estructuras jerárquicas con logs explícitos
                 if client_id not in self.estado_agregador:
                     logger.info(f"[CLIENTE NUEVO] Inicializando estructuras para client_id: {client_id}")
                     self.estado_agregador[client_id] = {}
@@ -50,14 +39,11 @@ class AgregadorBancarioWorker(BaseWorker):
                     self.estado_agregador[client_id][bank_id] = {
                         "bank_name": "Desconocido",
                         "max_amount": 0.0,
-                        "origin_account": "N/A"
+                        "has_transaction": False,
                     }
 
-                # --- RAMAL DE TRANSACCIONES ---
                 if "transactions" in queue_name:
                     amount_str = payload.get("Amount Received", payload.get("amount", "0"))
-                    logger.debug(f"Procesando transacción para Cliente {client_id} -> Banco {bank_id}: Monto bruto extraído: '{amount_str}'")
-                    account = payload.get("Account", "N/A")
                     try:
                         amount = float(amount_str)
                     except ValueError:
@@ -65,21 +51,15 @@ class AgregadorBancarioWorker(BaseWorker):
                         amount = 0.0
 
                     max_actual = self.estado_agregador[client_id][bank_id]["max_amount"]
+                    self.estado_agregador[client_id][bank_id]["has_transaction"] = True
                     if amount > max_actual:
                         logger.info(f"[NUEVO MÁXIMO] Cliente {client_id} -> Banco {bank_id}: Viejo: {max_actual} -> Nuevo: {amount}")
                         self.estado_agregador[client_id][bank_id]["max_amount"] = amount
-                        self.estado_agregador[client_id][bank_id]["origin_account"] = account
-                
-                # --- RAMAL DE BANCOS ---
                 elif "banks" in queue_name:
                     b_name = payload.get("Bank Name", payload.get("bank_name", "Desconocido"))
-                    account_number = payload.get("Account Number", payload.get("account_number", "N/A"))
-                    # logger.info(f"[INFO BANCO] Cliente {client_id} -> Banco {bank_id}: Nombre registrado: '{b_name}'")
-                    self.estado_agregador[client_id][bank_id]["bank_name"] = b_name
-                    if self.estado_agregador[client_id][bank_id].get("origin_account", "N/A") == "N/A":
-                        self.estado_agregador[client_id][bank_id]["origin_account"] = account_number
+                    if b_name and b_name != "Desconocido":
+                        self.estado_agregador[client_id][bank_id]["bank_name"] = b_name
 
-            # Confirmación explícita al Middleware
             ack()
 
         except Exception as e:
@@ -93,11 +73,22 @@ class AgregadorBancarioWorker(BaseWorker):
                 logger.info(f"[BARRERA CONTROL] Vaciando estado. Despachando {len(bancos_del_cliente)} registros de bancos consolidados.")
                 
                 for bank_id, datos in bancos_del_cliente.items():
+                    if not datos.get("has_transaction", False):
+                        logger.warning(f"[FILTRO] Descartando banco {bank_id} para cliente {client_id}: sin transacciones asociadas.")
+                        continue
+
+                    if datos["max_amount"] <= 0.0:
+                        logger.warning(f"[FILTRO] Descartando banco {bank_id} para cliente {client_id}: máximo acumulado en 0.0.")
+                        continue
+
+                    if datos["bank_name"] == "Desconocido":
+                        logger.warning(f"[FILTRO] Descartando banco {bank_id} para cliente {client_id}: Nombre desconocido (sin información de metadatos).")
+                        continue
+                    
                     payload_final = {
                         "client_id": client_id,
                         "Bank ID": bank_id,
                         "Bank Name": datos["bank_name"],
-                        "Account": datos.get("origin_account", "N/A"),
                         "Max Amount": datos["max_amount"]
                     }
                     mensaje_bytes = json.dumps(payload_final).encode('utf-8')

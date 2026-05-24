@@ -4,8 +4,16 @@ import logging
 # Configuración del logger para este módulo
 logger = logging.getLogger(__name__)
 
+
+def normalizar_valor_hash(valor):
+    if valor is None:
+        return "N/A"
+
+    valor_normalizado = str(valor).strip()
+    return valor_normalizado if valor_normalizado else "N/A"
+
 def obtener_id_shard(valor_hash: str, total_shards: int) -> int:
-    hash_hex = hashlib.md5(str(valor_hash).encode('utf-8')).hexdigest()
+    hash_hex = hashlib.md5(normalizar_valor_hash(valor_hash).encode('utf-8')).hexdigest()
     shard_id = (int(hash_hex, 16) % total_shards) + 1
     
     # Log del valor entrante y el shard asignado
