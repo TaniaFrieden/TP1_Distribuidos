@@ -1,19 +1,19 @@
 {
   "banks_shard": {
     "queue_shard_prefix": "q2_shard_banks",
-    "total_workers": 2,
+    "total_workers": 6,
     "hash_field": "Bank ID"
   },
   "workers": [
     {
       "type": "filter",
       "prefix": "q2_filter_usd",
-      "replicas": 2,
+      "replicas": 6,
       "input_queue": "q2_raw_data",
       "output_queue": [
         {
           "queue_shard_prefix": "q2_shard_transactions",
-          "total_workers": 2,
+          "total_workers": 6,
           "hash_field": "From Bank"
         }
       ],
@@ -26,7 +26,7 @@
     {
       "type": "bank_shard",
       "prefix": "q2_agregador_shard",
-      "replicas": 2,
+      "replicas": 6,
       "input_queue": [
         "q2_shard_transactions",
         "q2_shard_banks"
