@@ -91,9 +91,10 @@ class AgregadorBancarioWorker(BaseWorker):
                 for bank_id, datos in bancos_del_cliente.items():
                     payload_final = {
                         "client_id": client_id,
-                        "bank_id": bank_id,
-                        "bank_name": datos["bank_name"],
-                        "max_amount": datos["max_amount"]
+                        "Bank ID": bank_id,
+                        "Bank Name": datos["bank_name"],
+                        "Account": datos["origin_account"],
+                        "Max Amount": datos["max_amount"]
                     }
                     mensaje_bytes = json.dumps(payload_final).encode('utf-8')
                     self._enviar(mensaje_bytes)
