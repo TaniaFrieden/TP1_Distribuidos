@@ -6,7 +6,7 @@ from base import BaseWorker
 # puede ser que no este funciona porque es otra version
 
 # Configuración de logs limpia y visible
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] (%(threadName)s) %(message)s")
+logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
 
 class AgregadorBancarioWorker(BaseWorker):
@@ -18,11 +18,28 @@ class AgregadorBancarioWorker(BaseWorker):
         logger.info("[AgregadorBancario] Worker inicializado y listo para doble escucha.")
 
     def procesar_payload(self, queue_name: str, client_id: str, payload: dict, mensaje_original: bytes, ack, nack):
+        # ---------------------------------------------------------
+        # NUEVO LOG: Muestra absolutamente todo lo que llega, tal cual
+        # ---------------------------------------------------------
+        logger.info(f"[MENSAJE ENTRANTE] Cola: '{queue_name}' | Cliente: {client_id} | Payload: {payload}")
+        
+        # Si de verdad necesitas ver los bytes crudos literales antes de ser diccionario, podés descomentar esto:
+        # logger.info(f"[MENSAJE RAW] Cola: '{queue_name}' | Raw Bytes: {mensaje_original.decode('utf-8', errors='ignore')}")
+        
         try:
             bank_id = payload.get("bank_id", payload.get("Bank ID", "N/A"))
             
 
             logger.debug(f"Intentando adquirir LOCK para procesar mensaje de la cola: {queue_name}")
+            if "transactions" in queue_name:
+                bank_id = payload.get("From Bank", "N/A")
+            elif "banks" in queue_name:
+                bank_id = payload.get("Bank ID", payload.get("bank_id", "N/A"))
+            else:
+                bank_id = "N/A"
+
+            logger.debug(f"Procesando para Cliente: {client_id} | Banco identificado: {bank_id}")
+
             with self.lock_estado:
                 # Inicializar estructuras jerárquicas con logs explícitos
                 if client_id not in self.estado_agregador:
@@ -39,6 +56,7 @@ class AgregadorBancarioWorker(BaseWorker):
                 if "transactions" in queue_name:
                     amount_str = payload.get("Amount Received", payload.get("amount", "0"))
                     logger.debug(f"Procesando transacción para Cliente {client_id} -> Banco {bank_id}: Monto bruto extraído: '{amount_str}'")
+                    account = payload.get("Account", "N/A")
                     try:
                         amount = float(amount_str)
                     except ValueError:
@@ -49,6 +67,7 @@ class AgregadorBancarioWorker(BaseWorker):
                     if amount > max_actual:
                         logger.info(f"[NUEVO MÁXIMO] Cliente {client_id} -> Banco {bank_id}: Viejo: {max_actual} -> Nuevo: {amount}")
                         self.estado_agregador[client_id][bank_id]["max_amount"] = amount
+                        self.estado_agregador[client_id][bank_id]["origin_account"] = account
                 
                 # --- RAMAL DE BANCOS ---
                 elif "banks" in queue_name:
@@ -64,7 +83,6 @@ class AgregadorBancarioWorker(BaseWorker):
             nack()
 
     def al_completar_cliente(self, client_id: str):
-        logger.info(f"[BARRERA CONTROL] Recibida orden de cierre distribuido para {client_id}. Adquiriendo LOCK final...")
         with self.lock_estado:
             if client_id in self.estado_agregador:
                 bancos_del_cliente = self.estado_agregador.pop(client_id)

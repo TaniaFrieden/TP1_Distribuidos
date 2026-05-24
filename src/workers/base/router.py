@@ -42,21 +42,57 @@ class MessageRouter:
 
 
     def enviar(self, mensaje: bytes, payload: dict = None):
+        logger.info(f"[ROUTER DEBUG] Intentando enviar {len(mensaje)} bytes a {len(self.output_queues_direct)} colas directas.")
         try:
+            if mensaje is None:
+                return
+
+            # Parseo on-demand (seguro)
+            if payload is None:
+                try:
+                    payload = json.loads(mensaje.decode('utf-8'))
+                except:
+                    payload = {}
+            
+            # Protección: Asegurar que las listas existan antes de medir su len()
+            c_direct = self.output_queues_direct if self.output_queues_direct is not None else []
+            c_sharded = self.output_queues_sharded if self.output_queues_sharded is not None else []
+            
+            # Log seguro
+            logger.info(f"[ROUTER DEBUG] Enviando {len(mensaje)} bytes a {len(c_direct)} colas directas.")
+            
+          
+            # Parseo on-demand solo si es necesario para el sharding
+            if payload is None:
+                try:
+                    payload = json.loads(mensaje.decode('utf-8'))
+                except:
+                    payload = {}
+            
+            # 1. ENVIAR A COLAS SIMPLES (Una vez a cada una)
             for q in self.output_queues_direct:
                 q.send(mensaje)
-                
-            is_broadcast = payload is None
+            
+            # 2. ENVIAR A SHARDS (Una vez al shard calculado)
             for shard_meta in self.output_queues_sharded:
-                if is_broadcast:
+                # Comprobamos si es un EOF para saber si requiere broadcast
+                es_eof = payload.get("EOF", False)
+                
+                if es_eof:
+                    # El EOF sí debe llegar a TODOS para cerrar el pipeline
                     for q in shard_meta["queues"].values():
                         q.send(mensaje)
                 else:
+                    # Lógica de ruteo inteligente: solo 1 mensaje al destino correcto
                     valor_hash = payload.get(shard_meta["hash_field"], "default")
+                    logger.info(f"[DEBUG ROUETR] Campo buscado: '{shard_meta['hash_field']}' | Payload recibido: {payload}")
                     target_id = sharding.obtener_id_shard(valor_hash, shard_meta["total_workers"])
+                    
+                    # Accedemos directo al diccionario de colas del shard
                     shard_meta["queues"][target_id].send(mensaje)
+                    
         except Exception as e:
-            logger.error(f"[Router] Error enviando mensaje: {e}", exc_info=True)
+            logger.error(f"[Router] Error crítico en el ruteo: {e}", exc_info=True)
 
     def stop_consuming(self):
         for iq in self.input_queues.values(): iq.stop_consuming()

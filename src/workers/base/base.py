@@ -131,10 +131,15 @@ class BaseWorker(ABC):
         self.router.enviar(mensaje, payload)
 
     def _al_completar_sincronizacion_global(self, client_id: str, mensaje_original: bytes):
-        """Se ejecuta como callback del Coordinator cuando toda la barrera termina."""
-        logger.info(f"[{self.__class__.__name__}] Todos los compañeros confirmaron. Reenviando EOF al siguiente nivel para client_id={client_id}.")
+        logger.info(f"[{self.__class__.__name__}] Completando cliente={client_id}.")
         self.al_completar_cliente(client_id)
-        self._enviar(mensaje_original)
+        
+        # SOLO enviamos si tenemos un mensaje original (el EOF)
+        if mensaje_original is not None:
+            logger.info(f"[{self.__class__.__name__}] Reenviando EOF al siguiente nivel.")
+            self._enviar(mensaje_original)
+        else:
+            logger.info(f"[{self.__class__.__name__}] Limpieza finalizada (sin reenvío de EOF).")
 
 
     # ------------------------------------------------------------------

@@ -35,12 +35,12 @@ class GenericFilterWorker(BaseWorker):
 
     def procesar_payload(self, queue_name: str, client_id: str, payload: dict | str, mensaje_original: bytes, ack, nack):
         try:
+            logger.info(f'Transaccion recibida {payload}')
             if isinstance(payload, dict):
                 transaccion = payload
             else:
                 # Si viene como string o bytes, lo parseamos
                 transaccion = json.loads(payload)
-
             if transaccion.get("EOF"):
                 logger.info(f"[EOF] Reenviando señal de fin para cliente {client_id}.")
                 self._enviar(mensaje_original)
@@ -87,7 +87,7 @@ class GenericFilterWorker(BaseWorker):
                 # Evaluamos la regla
                 if self.operacion(valor_actual, valor_referencia):
                     #logger.info(f"[PASÓ] Cliente {client_id}: {valor_actual} (Enviado)")
-                    self._enviar(mensaje_original)
+                    self._enviar(mensaje_original, payload=transaccion)  # Reenviamos el mensaje original sin modificar
                 #else:
                     #logger.info(f"[FILTRADO] Cliente {client_id}: {valor_actual} (Descartado)")
 

@@ -123,6 +123,12 @@ class DistributedCoordinator:
                             # Dispara el callback al completar
                             logger.info(f"[Coordinator] Barrera completa para client_id={client_id}. Liberando EOF hacia la siguiente cola.")
                             self.on_sync_complete(client_id, msg_original)
+            if msg_type == "WORKER_FINISHED" and msg_dict.get("worker_id") == self.config.node_id:
+                # Esto garantiza que cada worker vacíe sus datos en cuanto termina
+                logger.info(f"[Coordinator] Ejecutando limpieza local para client_id={client_id}.")
+                # Pasamos None como mensaje_original porque este worker solo necesita vaciar,
+                # no necesariamente reenviar el mensaje original si no es el originator.
+                self.on_sync_complete(client_id, None)              
         except Exception as e:
             logger.error(f"[Coordinator] Error en control: {e}", exc_info=True)
         finally:

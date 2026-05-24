@@ -24,9 +24,11 @@ class BackendListener:
     def _procesar_respuesta(self, query_id, cola_nombre, body, ack, nack):
         if not self.state.servidor_corriendo:
             return nack()
+        
         try:
             transaccion = json.loads(body.decode("utf-8"))
             client_id = transaccion.pop("client_id", None)
+            logger.info(f"[RESULTADO FINAL RECIBIDO] -> {transaccion}")
             if not client_id:
                 ack()
                 return
