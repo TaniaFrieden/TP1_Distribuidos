@@ -9,6 +9,7 @@ from backend import BackendListener
 from client_handler import ClientHandler
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+logging.getLogger("pika").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 def main():

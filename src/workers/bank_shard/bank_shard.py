@@ -7,6 +7,7 @@ from base import BaseWorker
 
 # Configuración de logs limpia y visible
 logging.basicConfig(level=logging.INFO, format="%(message)s")
+logging.getLogger("pika").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 class AgregadorBancarioWorker(BaseWorker):
