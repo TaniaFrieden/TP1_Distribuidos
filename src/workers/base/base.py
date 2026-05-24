@@ -131,16 +131,14 @@ class BaseWorker(ABC):
         self.router.enviar(mensaje, payload)
 
     def _al_completar_sincronizacion_global(self, client_id: str, mensaje_original: bytes):
-        logger.info(f"[{self.__class__.__name__}] Completando cliente={client_id}.")
-        self.al_completar_cliente(client_id)
-        
-        # SOLO enviamos si tenemos un mensaje original (el EOF)
-        if mensaje_original is not None:
-            logger.info(f"[{self.__class__.__name__}] Reenviando EOF al siguiente nivel.")
-            self._enviar(mensaje_original)
+        if mensaje_original is None:
+            # Flush local — todos los workers
+            logger.info(f"[{self.__class__.__name__}] Flusheando datos para client_id={client_id}.")
+            self.al_completar_cliente(client_id)
         else:
-            logger.info(f"[{self.__class__.__name__}] Limpieza finalizada (sin reenvío de EOF).")
-
+            # Solo el originator llega acá — reenvía el EOF
+            logger.info(f"[{self.__class__.__name__}] Barrera completa, reenviando EOF para client_id={client_id}.")
+            self._enviar(mensaje_original)
 
     # ------------------------------------------------------------------
     # API Exclusiva para Subclases

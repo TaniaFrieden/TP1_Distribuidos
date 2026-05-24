@@ -94,13 +94,14 @@ class DistributedCoordinator:
             originator = msg_dict.get("originator")
 
             if msg_type == "EOF_RECEIVED":
-                logger.info(
-                    f"[Coordinator] EOF_RECEIVED recibido en worker {self.config.node_id} para client_id={client_id}. Esperando vuelos en cero."
-                )
+                logger.info(f"[Coordinator] EOF_RECEIVED en worker {self.config.node_id} para client_id={client_id}. Esperando vuelos.")
                 self._esperar_vuelo_cero(client_id)
-                logger.info(
-                    f"[Coordinator] Vuelos en cero para client_id={client_id} en worker {self.config.node_id}. Confirmando WORKER_FINISHED."
-                )
+                
+                # Flush ANTES de avisar que terminamos
+                logger.info(f"[Coordinator] Vuelos en cero para client_id={client_id}. Flusheando datos locales.")
+                self.on_sync_complete(client_id, None)
+                
+                logger.info(f"[Coordinator] Flush completo. Enviando WORKER_FINISHED.")
                 self._enviar_control({
                     "type": "WORKER_FINISHED",
                     "client_id": client_id,
@@ -113,22 +114,16 @@ class DistributedCoordinator:
                     if client_id in self._coordinaciones_eof:
                         self._coordinaciones_eof[client_id]["workers"].add(msg_dict.get("worker_id"))
                         logger.info(
-                            f"[Coordinator] WORKER_FINISHED recibido para client_id={client_id}. Confirmados: {len(self._coordinaciones_eof[client_id]['workers'])}/{self.config.total_workers}."
+                            f"[Coordinator] WORKER_FINISHED para client_id={client_id}. "
+                            f"Confirmados: {len(self._coordinaciones_eof[client_id]['workers'])}/{self.config.total_workers}."
                         )
                         
                         if len(self._coordinaciones_eof[client_id]["workers"]) >= self.config.total_workers:
                             msg_original = self._coordinaciones_eof[client_id]["mensaje_original"]
                             del self._coordinaciones_eof[client_id]
-                            
-                            # Dispara el callback al completar
-                            logger.info(f"[Coordinator] Barrera completa para client_id={client_id}. Liberando EOF hacia la siguiente cola.")
+                            logger.info(f"[Coordinator] Barrera completa para client_id={client_id}. Reenviando EOF.")
                             self.on_sync_complete(client_id, msg_original)
-            if msg_type == "WORKER_FINISHED" and msg_dict.get("worker_id") == self.config.node_id:
-                # Esto garantiza que cada worker vacíe sus datos en cuanto termina
-                logger.info(f"[Coordinator] Ejecutando limpieza local para client_id={client_id}.")
-                # Pasamos None como mensaje_original porque este worker solo necesita vaciar,
-                # no necesariamente reenviar el mensaje original si no es el originator.
-                self.on_sync_complete(client_id, None)              
+
         except Exception as e:
             logger.error(f"[Coordinator] Error en control: {e}", exc_info=True)
         finally:
