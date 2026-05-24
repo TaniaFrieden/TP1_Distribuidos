@@ -31,6 +31,7 @@ def main():
 
 def _configurar_logging():
     logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
+    logging.getLogger("pika").setLevel(logging.WARNING)
 
 def _conectar_socket():
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

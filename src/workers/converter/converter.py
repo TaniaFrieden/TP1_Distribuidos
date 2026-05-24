@@ -111,6 +111,7 @@ class CurrencyConverterWorker(BaseWorker):
 
 def main():
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+    logging.getLogger("pika").setLevel(logging.WARNING)
     CurrencyConverterWorker().iniciar()
 
 

@@ -18,6 +18,7 @@ class BaseWorker(ABC):
     """
     def __init__(self):
         logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+        logging.getLogger("pika").setLevel(logging.WARNING)
         self._cierre_solicitado = False
         self.condicion_pendiente = threading.Condition(threading.Lock())
 
