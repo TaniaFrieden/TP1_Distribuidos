@@ -10,5 +10,9 @@
   },
   "bank_shard": {
     "dockerfile": "workers/bank_shard/Dockerfile"
+  },
+  "format_shard": {
+  "dockerfile": "workers/format_shard/Dockerfile",
+  "default_env": {}
   }
 }

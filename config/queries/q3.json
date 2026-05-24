@@ -1,0 +1,63 @@
+{
+  "workers": [
+    {
+      "type": "filter",
+      "prefix": "q3_filter_usd",
+      "replicas": 4,
+      "input_queue": "q3_raw_data",
+      "output_queue": "q3_usd_filtered",
+      "extra_env": {
+        "FILTER_FIELD": "Payment Currency",
+        "FILTER_VALUE": "US Dollar",
+        "FILTER_OPERATOR": "eq"
+      }
+    },
+    {
+      "type": "filter",
+      "prefix": "q3_filter_fechas",
+      "replicas": 4,
+      "input_queue": "q3_usd_filtered",
+      "output_queue": [
+        {
+          "type": "conditional",
+          "condition_field": "Timestamp",
+          "cases": [
+            {
+              "operator": "between",
+              "value": "2022/09/01,2022/09/05",
+              "routing": {
+                "queue_shard_prefix": "q3_temprano",
+                "total_workers": 3,
+                "hash_field": "Payment Format"
+              }
+            },
+            {
+              "operator": "between",
+              "value": "2022/09/06,2022/09/15",
+              "routing": {
+                "queue_shard_prefix": "q3_tardio",
+                "total_workers": 3,
+                "hash_field": "Payment Format"
+              }
+            }
+          ]
+        }
+      ],
+      "extra_env": {
+        "FILTER_FIELD": "Timestamp",
+        "FILTER_VALUE": "2022/09/01,2022/09/15",
+        "FILTER_OPERATOR": "between"
+      }
+    },
+    {
+      "type": "format_shard",
+      "prefix": "q3_format_shard",
+      "replicas": 3,
+      "input_queue": [
+        "q3_temprano_{id}",
+        "q3_tardio_{id}"
+      ],
+      "output_queue": "q3_results"
+    }
+  ]
+}
