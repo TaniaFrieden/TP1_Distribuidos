@@ -1,6 +1,7 @@
 PYTHON := .venv/bin/python
 PIP := $(PYTHON) -m pip
 PYTEST := PYTHONPATH=src $(PYTHON) -m pytest
+START_VERBOSE := $(if $(filter !logs,$(MAKECMDGOALS)),0,1)
 
 # Variables del cliente
 TRANSACTIONS_FILE ?= datasets/transacciones_sample.csv
@@ -26,7 +27,8 @@ help:
 	@echo "  make test-worker-base  - corre solo el test de BaseWorker"
 	@echo "  make clean             - limpia caches, artefactos temporales y libera todos los puertos"
 	@echo "  make test-server       - inicia servidor de prueba"
-	@echo "  make start             - levanta docker-compose (RabbitMQ + servicios)"
+	@echo "  make start             - levanta docker-compose con logs en consola"
+	@echo "  make start !logs       - levanta docker-compose en segundo plano"
 	@echo "  make down              - detiene docker-compose"
 	@echo "  make docker-logs       - muestra logs de docker"
 	@echo ""
@@ -35,9 +37,9 @@ help:
 	@echo "  Terminal 2: make client"
 	@echo ""
 	@echo "Uso con docker:"
-	@echo "  1. make start           (levanta RabbitMQ y contenedores)"
-	@echo "  2. Espera a que esté listo"
-	@echo "  3. make docker-logs     (opcional: ver logs)"
+	@echo "  1. make start           (levanta RabbitMQ y contenedores con logs)"
+	@echo "  2. make start !logs     (opcional: no mostrar logs al arrancar)"
+	@echo "  3. make docker-logs     (opcional: ver logs luego)"
 	@echo "  4. Ctrl+C para detener"
 	@echo "  5. make down            (detiene servicios)"
 	@echo ""
@@ -94,6 +96,7 @@ clean:
 	rm -rf .pytest_cache
 	find . -type d -name '__pycache__' -prune -exec rm -rf {} +
 	rm -f /tmp/client_output.txt
+	rm -f logs/*.txt
 	rm -f output/*.csv
 
 free-ports:
@@ -132,7 +135,11 @@ gateway:
 	PYTHONPATH=src $(PYTHON) src/gateway/gateway.py
 
 start:
-	docker compose up --build
+	@if [ "$(START_VERBOSE)" = "1" ]; then \
+		docker compose up --build; \
+	else \
+		docker compose up -d --build; \
+	fi
 
 down:
 	docker compose down
