@@ -1,4 +1,5 @@
 
+import os
 import pika
 from functools import wraps
 from .middleware import (
@@ -33,8 +34,19 @@ def handle_pika_errors(action_name):
 
 class RabbitMQBase:
     def __init__(self, host):
+        port = int(os.getenv("MOM_PORT", "5672"))
+        user = os.getenv("MOM_USER", "guest")
+        password = os.getenv("MOM_PASSWORD", "guest")
+        virtual_host = os.getenv("MOM_VHOST", "/")
+
         self.connection = pika.BlockingConnection(
-           pika.ConnectionParameters(host=host, heartbeat=0)
+           pika.ConnectionParameters(
+               host=host,
+               port=port,
+               virtual_host=virtual_host,
+               credentials=pika.PlainCredentials(user, password),
+               heartbeat=0,
+           )
         )
         self.channel = self.connection.channel()
 

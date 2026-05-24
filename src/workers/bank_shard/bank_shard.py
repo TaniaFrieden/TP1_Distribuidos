@@ -3,12 +3,10 @@ import json
 import threading
 from base import BaseWorker
 from common.sharding import normalizar_valor_hash
+from common.logging_setup import setup_logging
 
 # puede ser que no este funciona porque es otra version
 
-# Configuración de logs limpia y visible
-logging.basicConfig(level=logging.INFO, format="%(message)s")
-logging.getLogger("pika").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 class AgregadorBancarioWorker(BaseWorker):
@@ -102,6 +100,7 @@ class AgregadorBancarioWorker(BaseWorker):
         logger.info("[AgregadorBancario] Solicitud de apagado recibida de las señales del sistema.")
 
 def __main__():
+    setup_logging("bank_shard")
     worker = AgregadorBancarioWorker()
     worker.iniciar()
 

@@ -4,6 +4,7 @@ import json
 import requests
 from datetime import date, timedelta
 from base import BaseWorker
+from common.logging_setup import setup_logging
 
 logger = logging.getLogger(__name__)
 
@@ -110,8 +111,7 @@ class CurrencyConverterWorker(BaseWorker):
 
 
 def main():
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
-    logging.getLogger("pika").setLevel(logging.WARNING)
+    setup_logging("converter")
     CurrencyConverterWorker().iniciar()
 
 

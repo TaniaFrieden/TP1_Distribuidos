@@ -3,6 +3,7 @@ import threading
 import logging
 import sys
 from common import message_protocol
+from common.logging_setup import setup_logging
 from config import SERVER_HOST, SERVER_PORT, TRANSACTIONS_FILE, ACCOUNTS_FILE
 from receiver import escuchar_respuesta
 from sender import enviar_archivo
@@ -10,7 +11,7 @@ from sender import enviar_archivo
 LOG_FORMAT = "%(levelname)s: %(message)s"
 
 def main():
-    _configurar_logging()
+    setup_logging("client")
     
     sock = _conectar_socket()
     if not sock:
@@ -28,10 +29,6 @@ def main():
 ## --------------------
 ## Funciones auxiliares
 ## --------------------
-
-def _configurar_logging():
-    logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
-    logging.getLogger("pika").setLevel(logging.WARNING)
 
 def _conectar_socket():
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

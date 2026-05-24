@@ -83,13 +83,18 @@ def generar_compose():
                 env = base_config.get('default_env', {}).copy()
                 env.update({
                     'MOM_HOST': 'rabbitmq',
+                    'MOM_PORT': '5672',
+                    'MOM_USER': 'distributed',
+                    'MOM_PASSWORD': 'distributed',
+                    'MOM_VHOST': '/',
                     'INPUT_QUEUES': _serializar_valor_env(
                         _expandir_input_queues(node['input_queue'], worker_id)
                     ),
                     'OUTPUT_QUEUES': _serializar_valor_env(node['output_queue']),
                     'NODE_PREFIX': prefix,
                     'ID': worker_id,
-                    'TOTAL_WORKERS': str(replicas)
+                    'TOTAL_WORKERS': str(replicas),
+                    'LOG_FILE': f'/app/logs/{worker_name}.txt'
                 })
                 env.update(node.get('extra_env', {}))
                 
@@ -101,6 +106,7 @@ def generar_compose():
                         'rabbitmq': {'condition': 'service_healthy'}, 
                         'gateway': {'condition': 'service_started'}
                     },
+                    'volumes': ['./logs:/app/logs'],
                     'environment': env
                 }
 
@@ -109,8 +115,22 @@ def generar_compose():
         env = compose_data['services']['gateway']['environment']
         env['OUTPUTS_QUEUE'] = ", ".join(output_queues)
         env['INPUTS_QUEUE'] = ", ".join(input_queues)
+        env['LOG_FILE'] = '/app/logs/gateway.txt'
+        env['MOM_PORT'] = '5672'
+        env['MOM_USER'] = 'distributed'
+        env['MOM_PASSWORD'] = 'distributed'
+        env['MOM_VHOST'] = '/'
         if bank_queue_config is not None:
             env['BANK_QUEUE'] = _serializar_valor_env(bank_queue_config)
+
+        compose_data['services']['gateway']['volumes'] = ['./logs:/app/logs']
+
+    if 'rabbitmq' in compose_data['services']:
+        compose_data['services']['rabbitmq'].setdefault('environment', {})
+        rabbit_env = compose_data['services']['rabbitmq']['environment']
+        rabbit_env['RABBITMQ_DEFAULT_USER'] = 'distributed'
+        rabbit_env['RABBITMQ_DEFAULT_PASS'] = 'distributed'
+        rabbit_env['RABBITMQ_DEFAULT_VHOST'] = '/'
 
     # 5. Guardar
     with open('docker-compose.yml', 'w') as f:
@@ -130,9 +150,5 @@ def generar_compose():
             print(f"Docker-compose generado. Gateway configurado con: {' '.join(qnames)}")
         else:
             print(f"Docker-compose generado. Gateway configurado con: {', '.join(output_queues)}")
-    # 5. Guardar
-    with open('docker-compose.yml', 'w') as f:
-        yaml.dump(compose_data, f, sort_keys=False, default_flow_style=False, width=1000)
-        
 if __name__ == '__main__':
     generar_compose()

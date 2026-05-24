@@ -7,12 +7,13 @@ from config import GatewayConfig
 from state import GatewayState
 from backend import BackendListener
 from client_handler import ClientHandler
+from common.logging_setup import setup_logging
 
-logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
-logging.getLogger("pika").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 def main():
+    setup_logging("gateway")
+
     config = GatewayConfig()
     state = GatewayState()
     backend_listener = BackendListener(config, state)

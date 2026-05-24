@@ -10,11 +10,18 @@ services:
     ports:
     - 8080:8080
     - 5678:5678
+    volumes:
+    - ./logs:/app/logs
     environment:
       PYTHONUNBUFFERED: '1'
+      LOG_FILE: /app/logs/gateway.txt
       SERVER_HOST: gateway
       SERVER_PORT: '5678'
       MOM_HOST: rabbitmq
+      MOM_PORT: '5672'
+      MOM_USER: distributed
+      MOM_PASSWORD: distributed
+      MOM_VHOST: /
       OUTPUTS_QUEUE: q2_raw_data
       INPUTS_QUEUE: q2_results
       HTTP_HOST: 0.0.0.0
@@ -25,6 +32,9 @@ services:
     container_name: rabbitmq
     environment:
       RABBITMQ_LOG_LEVELS: error
+      RABBITMQ_DEFAULT_USER: distributed
+      RABBITMQ_DEFAULT_PASS: distributed
+      RABBITMQ_DEFAULT_VHOST: /
     healthcheck:
       interval: 5s
       retries: 10
@@ -44,8 +54,15 @@ services:
         condition: service_healthy
       gateway:
         condition: service_started
+    volumes:
+    - ./logs:/app/logs
     environment:
       MOM_HOST: rabbitmq
+      MOM_PORT: '5672'
+      MOM_USER: distributed
+      MOM_PASSWORD: distributed
+      MOM_VHOST: /
+      LOG_FILE: /app/logs/q2_filter_usd_01.txt
       INPUT_QUEUES: q2_raw_data
       OUTPUT_QUEUES: '[{"queue_shard_prefix": "q2_shard_transactions", "total_workers": 2, "hash_field": "From Bank"}]'
       NODE_PREFIX: q2_filter_usd
@@ -64,8 +81,15 @@ services:
         condition: service_healthy
       gateway:
         condition: service_started
+    volumes:
+    - ./logs:/app/logs
     environment:
       MOM_HOST: rabbitmq
+      MOM_PORT: '5672'
+      MOM_USER: distributed
+      MOM_PASSWORD: distributed
+      MOM_VHOST: /
+      LOG_FILE: /app/logs/q2_agregador_shard_01.txt
       INPUT_QUEUES: '["q2_shard_transactions_1", "q2_shard_banks_1"]'
       OUTPUT_QUEUES: q2_results
       NODE_PREFIX: q2_agregador_shard
@@ -81,8 +105,15 @@ services:
         condition: service_healthy
       gateway:
         condition: service_started
+    volumes:
+    - ./logs:/app/logs
     environment:
       MOM_HOST: rabbitmq
+      MOM_PORT: '5672'
+      MOM_USER: distributed
+      MOM_PASSWORD: distributed
+      MOM_VHOST: /
+      LOG_FILE: /app/logs/q2_agregador_shard_02.txt
       INPUT_QUEUES: '["q2_shard_transactions_2", "q2_shard_banks_2"]'
       OUTPUT_QUEUES: q2_results
       NODE_PREFIX: q2_agregador_shard

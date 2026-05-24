@@ -1,7 +1,11 @@
 from asyncio import IncompleteReadError
 import json
+import logging
 
 from . import external_serializer
+
+
+logger = logging.getLogger(__name__)
 
 
 class MsgType:
@@ -43,8 +47,7 @@ def _recv_reporte(socket):
         # Intentamos decodificar
         reporte = raw_bytes.decode("utf-8")
     except UnicodeDecodeError:
-        # Si falla, imprimimos lo que realmente llegó
-        print(f"DEBUG CRÍTICO: Recibidos {reporte_size} bytes que no son UTF-8: {raw_bytes.hex()}")
+        logger.error("DEBUG CRÍTICO: Recibidos %s bytes que no son UTF-8: %s", reporte_size, raw_bytes.hex())
         raise
         
     return reporte

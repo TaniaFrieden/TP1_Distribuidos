@@ -4,9 +4,8 @@ import operator
 import json
 
 from base import BaseWorker
+from common.logging_setup import setup_logging
 
-logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
-logging.getLogger("pika").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 class GenericFilterWorker(BaseWorker):
@@ -108,6 +107,7 @@ class GenericFilterWorker(BaseWorker):
         logger.info("Filtro genérico apagado.")
 
 def __main__():
+    setup_logging("filter")
     worker = GenericFilterWorker()
     worker.iniciar()
 

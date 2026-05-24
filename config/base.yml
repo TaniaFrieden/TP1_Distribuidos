@@ -10,11 +10,18 @@ services:
     ports:
       - "8080:8080"
       - "5678:5678"
+    volumes:
+      - ./logs:/app/logs
     environment:
       PYTHONUNBUFFERED: '1'
+      LOG_FILE: /app/logs/gateway.txt
       SERVER_HOST: gateway
       SERVER_PORT: '5678'
       MOM_HOST: rabbitmq
+      MOM_PORT: '5672'
+      MOM_USER: distributed
+      MOM_PASSWORD: distributed
+      MOM_VHOST: /
       OUTPUTS_QUEUE: "" 
       INPUTS_QUEUE: ""
       HTTP_HOST: 0.0.0.0
@@ -25,6 +32,9 @@ services:
     container_name: rabbitmq
     environment:
       RABBITMQ_LOG_LEVELS: error
+      RABBITMQ_DEFAULT_USER: distributed
+      RABBITMQ_DEFAULT_PASS: distributed
+      RABBITMQ_DEFAULT_VHOST: /
     healthcheck:
       interval: 5s
       retries: 10

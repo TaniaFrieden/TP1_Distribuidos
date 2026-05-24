@@ -3,6 +3,7 @@ import os
 import json
 import threading
 from base import BaseWorker
+from common.logging_setup import setup_logging
 
 logger = logging.getLogger(__name__)
 
@@ -35,8 +36,7 @@ class CounterWorker(BaseWorker):
 
 
 def main():
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
-    logging.getLogger("pika").setLevel(logging.WARNING)
+    setup_logging("counter")
     CounterWorker().iniciar()
 
 
