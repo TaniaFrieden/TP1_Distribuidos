@@ -3,8 +3,8 @@ PIP := $(PYTHON) -m pip
 PYTEST := PYTHONPATH=src $(PYTHON) -m pytest
 
 # Variables del cliente
-TRANSACTIONS_FILE ?= datasets/transacciones_sample_pequeño.csv
-ACCOUNTS_FILE ?= datasets/accounts_sample_pequeño.csv
+TRANSACTIONS_FILE ?= datasets/transacciones_sample.csv
+ACCOUNTS_FILE ?= datasets/accounts_sample.csv
 OUTPUT_DIR ?= output
 SERVER_HOST ?= 127.0.0.1
 SERVER_PORT ?= 5678

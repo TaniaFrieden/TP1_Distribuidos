@@ -49,7 +49,8 @@ class AgregadorBancarioWorker(BaseWorker):
                 if bank_id not in self.estado_agregador[client_id]:
                     self.estado_agregador[client_id][bank_id] = {
                         "bank_name": "Desconocido",
-                        "max_amount": 0.0
+                        "max_amount": 0.0,
+                        "origin_account": "N/A"
                     }
 
                 # --- RAMAL DE TRANSACCIONES ---
@@ -72,8 +73,11 @@ class AgregadorBancarioWorker(BaseWorker):
                 # --- RAMAL DE BANCOS ---
                 elif "banks" in queue_name:
                     b_name = payload.get("Bank Name", payload.get("bank_name", "Desconocido"))
+                    account_number = payload.get("Account Number", payload.get("account_number", "N/A"))
                     # logger.info(f"[INFO BANCO] Cliente {client_id} -> Banco {bank_id}: Nombre registrado: '{b_name}'")
                     self.estado_agregador[client_id][bank_id]["bank_name"] = b_name
+                    if self.estado_agregador[client_id][bank_id].get("origin_account", "N/A") == "N/A":
+                        self.estado_agregador[client_id][bank_id]["origin_account"] = account_number
 
             # Confirmación explícita al Middleware
             ack()
@@ -93,7 +97,7 @@ class AgregadorBancarioWorker(BaseWorker):
                         "client_id": client_id,
                         "Bank ID": bank_id,
                         "Bank Name": datos["bank_name"],
-                        "Account": datos["origin_account"],
+                        "Account": datos.get("origin_account", "N/A"),
                         "Max Amount": datos["max_amount"]
                     }
                     mensaje_bytes = json.dumps(payload_final).encode('utf-8')
