@@ -282,11 +282,11 @@ services:
       ID: '1'
       TOTAL_WORKERS: '1'
       LOG_FILE: /app/logs/q5_counter_01.txt
-  q1_filter_usd_01:
+  filter_usd_01:
     build:
       context: ./src
       dockerfile: workers/filter/Dockerfile
-    container_name: q1_filter_usd_01
+    container_name: filter_usd_01
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -301,19 +301,19 @@ services:
       MOM_PASSWORD: distributed
       MOM_VHOST: /
       INPUT_QUEUES: q1_raw_data
-      OUTPUT_QUEUES: q1_usd_to_minor_50
-      NODE_PREFIX: q1_filter_usd
+      OUTPUT_QUEUES: '["q1_usd_to_minor_50", {"queue_shard_prefix": "q2_shard_transactions", "total_workers": 6, "hash_field": "From Bank"}]'
+      NODE_PREFIX: filter_usd
       ID: '1'
       TOTAL_WORKERS: '2'
-      LOG_FILE: /app/logs/q1_filter_usd_01.txt
+      LOG_FILE: /app/logs/filter_usd_01.txt
       FILTER_FIELD: Payment Currency
       FILTER_VALUE: US Dollar
       FILTER_OPERATOR: eq
-  q1_filter_usd_02:
+  filter_usd_02:
     build:
       context: ./src
       dockerfile: workers/filter/Dockerfile
-    container_name: q1_filter_usd_02
+    container_name: filter_usd_02
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -328,11 +328,11 @@ services:
       MOM_PASSWORD: distributed
       MOM_VHOST: /
       INPUT_QUEUES: q1_raw_data
-      OUTPUT_QUEUES: q1_usd_to_minor_50
-      NODE_PREFIX: q1_filter_usd
+      OUTPUT_QUEUES: '["q1_usd_to_minor_50", {"queue_shard_prefix": "q2_shard_transactions", "total_workers": 6, "hash_field": "From Bank"}]'
+      NODE_PREFIX: filter_usd
       ID: '2'
       TOTAL_WORKERS: '2'
-      LOG_FILE: /app/logs/q1_filter_usd_02.txt
+      LOG_FILE: /app/logs/filter_usd_02.txt
       FILTER_FIELD: Payment Currency
       FILTER_VALUE: US Dollar
       FILTER_OPERATOR: eq
@@ -417,168 +417,6 @@ services:
       FILTER_FIELD: Amount Paid
       FILTER_VALUE: '50'
       FILTER_OPERATOR: lt
-  q2_filter_usd_01:
-    build:
-      context: ./src
-      dockerfile: workers/filter/Dockerfile
-    container_name: q2_filter_usd_01
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      gateway:
-        condition: service_started
-    volumes:
-    - ./logs:/app/logs
-    environment:
-      MOM_HOST: rabbitmq
-      MOM_PORT: '5672'
-      MOM_USER: distributed
-      MOM_PASSWORD: distributed
-      MOM_VHOST: /
-      INPUT_QUEUES: q2_raw_data
-      OUTPUT_QUEUES: '[{"queue_shard_prefix": "q2_shard_transactions", "total_workers": 6, "hash_field": "From Bank"}]'
-      NODE_PREFIX: q2_filter_usd
-      ID: '1'
-      TOTAL_WORKERS: '6'
-      LOG_FILE: /app/logs/q2_filter_usd_01.txt
-      FILTER_FIELD: Payment Currency
-      FILTER_VALUE: US Dollar
-      FILTER_OPERATOR: eq
-  q2_filter_usd_02:
-    build:
-      context: ./src
-      dockerfile: workers/filter/Dockerfile
-    container_name: q2_filter_usd_02
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      gateway:
-        condition: service_started
-    volumes:
-    - ./logs:/app/logs
-    environment:
-      MOM_HOST: rabbitmq
-      MOM_PORT: '5672'
-      MOM_USER: distributed
-      MOM_PASSWORD: distributed
-      MOM_VHOST: /
-      INPUT_QUEUES: q2_raw_data
-      OUTPUT_QUEUES: '[{"queue_shard_prefix": "q2_shard_transactions", "total_workers": 6, "hash_field": "From Bank"}]'
-      NODE_PREFIX: q2_filter_usd
-      ID: '2'
-      TOTAL_WORKERS: '6'
-      LOG_FILE: /app/logs/q2_filter_usd_02.txt
-      FILTER_FIELD: Payment Currency
-      FILTER_VALUE: US Dollar
-      FILTER_OPERATOR: eq
-  q2_filter_usd_03:
-    build:
-      context: ./src
-      dockerfile: workers/filter/Dockerfile
-    container_name: q2_filter_usd_03
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      gateway:
-        condition: service_started
-    volumes:
-    - ./logs:/app/logs
-    environment:
-      MOM_HOST: rabbitmq
-      MOM_PORT: '5672'
-      MOM_USER: distributed
-      MOM_PASSWORD: distributed
-      MOM_VHOST: /
-      INPUT_QUEUES: q2_raw_data
-      OUTPUT_QUEUES: '[{"queue_shard_prefix": "q2_shard_transactions", "total_workers": 6, "hash_field": "From Bank"}]'
-      NODE_PREFIX: q2_filter_usd
-      ID: '3'
-      TOTAL_WORKERS: '6'
-      LOG_FILE: /app/logs/q2_filter_usd_03.txt
-      FILTER_FIELD: Payment Currency
-      FILTER_VALUE: US Dollar
-      FILTER_OPERATOR: eq
-  q2_filter_usd_04:
-    build:
-      context: ./src
-      dockerfile: workers/filter/Dockerfile
-    container_name: q2_filter_usd_04
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      gateway:
-        condition: service_started
-    volumes:
-    - ./logs:/app/logs
-    environment:
-      MOM_HOST: rabbitmq
-      MOM_PORT: '5672'
-      MOM_USER: distributed
-      MOM_PASSWORD: distributed
-      MOM_VHOST: /
-      INPUT_QUEUES: q2_raw_data
-      OUTPUT_QUEUES: '[{"queue_shard_prefix": "q2_shard_transactions", "total_workers": 6, "hash_field": "From Bank"}]'
-      NODE_PREFIX: q2_filter_usd
-      ID: '4'
-      TOTAL_WORKERS: '6'
-      LOG_FILE: /app/logs/q2_filter_usd_04.txt
-      FILTER_FIELD: Payment Currency
-      FILTER_VALUE: US Dollar
-      FILTER_OPERATOR: eq
-  q2_filter_usd_05:
-    build:
-      context: ./src
-      dockerfile: workers/filter/Dockerfile
-    container_name: q2_filter_usd_05
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      gateway:
-        condition: service_started
-    volumes:
-    - ./logs:/app/logs
-    environment:
-      MOM_HOST: rabbitmq
-      MOM_PORT: '5672'
-      MOM_USER: distributed
-      MOM_PASSWORD: distributed
-      MOM_VHOST: /
-      INPUT_QUEUES: q2_raw_data
-      OUTPUT_QUEUES: '[{"queue_shard_prefix": "q2_shard_transactions", "total_workers": 6, "hash_field": "From Bank"}]'
-      NODE_PREFIX: q2_filter_usd
-      ID: '5'
-      TOTAL_WORKERS: '6'
-      LOG_FILE: /app/logs/q2_filter_usd_05.txt
-      FILTER_FIELD: Payment Currency
-      FILTER_VALUE: US Dollar
-      FILTER_OPERATOR: eq
-  q2_filter_usd_06:
-    build:
-      context: ./src
-      dockerfile: workers/filter/Dockerfile
-    container_name: q2_filter_usd_06
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      gateway:
-        condition: service_started
-    volumes:
-    - ./logs:/app/logs
-    environment:
-      MOM_HOST: rabbitmq
-      MOM_PORT: '5672'
-      MOM_USER: distributed
-      MOM_PASSWORD: distributed
-      MOM_VHOST: /
-      INPUT_QUEUES: q2_raw_data
-      OUTPUT_QUEUES: '[{"queue_shard_prefix": "q2_shard_transactions", "total_workers": 6, "hash_field": "From Bank"}]'
-      NODE_PREFIX: q2_filter_usd
-      ID: '6'
-      TOTAL_WORKERS: '6'
-      LOG_FILE: /app/logs/q2_filter_usd_06.txt
-      FILTER_FIELD: Payment Currency
-      FILTER_VALUE: US Dollar
-      FILTER_OPERATOR: eq
   q2_agregador_shard_01:
     build:
       context: ./src

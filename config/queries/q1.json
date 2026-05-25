@@ -2,10 +2,17 @@
   "workers": [
     {
       "type": "filter",
-      "prefix": "q1_filter_usd",
+      "prefix": "filter_usd",
       "replicas": 2,
       "input_queue": "q1_raw_data",
-      "output_queue": "q1_usd_to_minor_50",
+      "output_queue": [
+        "q1_usd_to_minor_50",
+        {
+          "queue_shard_prefix": "q2_shard_transactions",
+          "total_workers": 6,
+          "hash_field": "From Bank"
+        }
+      ],
       "extra_env": {
         "FILTER_FIELD": "Payment Currency",
         "FILTER_VALUE": "US Dollar",

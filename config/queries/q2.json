@@ -6,24 +6,6 @@
   },
   "workers": [
     {
-      "type": "filter",
-      "prefix": "q2_filter_usd",
-      "replicas": 6,
-      "input_queue": "q2_raw_data",
-      "output_queue": [
-        {
-          "queue_shard_prefix": "q2_shard_transactions",
-          "total_workers": 6,
-          "hash_field": "From Bank"
-        }
-      ],
-      "extra_env": {
-        "FILTER_FIELD": "Payment Currency",
-        "FILTER_VALUE": "US Dollar",
-        "FILTER_OPERATOR": "eq"
-      }
-    },
-    {
       "type": "bank_shard",
       "prefix": "q2_agregador_shard",
       "replicas": 6,
