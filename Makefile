@@ -5,7 +5,7 @@ START_VERBOSE := $(if $(filter !logs,$(MAKECMDGOALS)),0,1)
 
 # Variables del cliente
 TRANSACTIONS_FILE ?= datasets/transacciones_sample.csv
-ACCOUNTS_FILE ?= datasets/accounts_sample.csv
+# ACCOUNTS_FILE ?= datasets/accounts_sample.csv
 OUTPUT_DIR ?= output
 SERVER_HOST ?= 127.0.0.1
 SERVER_PORT ?= 5678
@@ -153,7 +153,7 @@ generar:
 		echo "Ejemplo: make generar 1 2 5"; \
 		exit 1; \
 	else \
-		python generar_compose.py $$ARGS; \
+		python3 generar_compose.py $$ARGS; \
 	fi
 
 %:

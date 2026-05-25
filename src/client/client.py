@@ -52,16 +52,16 @@ def _iniciar_hilos(sock, lock):
         args=(TRANSACTIONS_FILE, message_protocol.external.MsgType.LOTE_TRANSACCIONES, sock, lock)
     )
 
-    hilo_bancos = threading.Thread(
-        target=enviar_archivo,
-        args=(ACCOUNTS_FILE, message_protocol.external.MsgType.LOTE_BANCOS, sock, lock)
-    )
+    # hilo_bancos = threading.Thread(
+    #     target=enviar_archivo,
+    #     args=(ACCOUNTS_FILE, message_protocol.external.MsgType.LOTE_BANCOS, sock, lock)
+    # )
 
     hilo_receptor.start()
     hilo_transacciones.start()
-    hilo_bancos.start()
+    # hilo_bancos.start()
 
-    return hilo_receptor, [hilo_transacciones, hilo_bancos]
+    return hilo_receptor, [hilo_transacciones]  # , hilo_bancos]
 
 def _esperar_envios(hilos_envio):
     for hilo in hilos_envio:

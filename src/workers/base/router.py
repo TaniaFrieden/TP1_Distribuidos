@@ -30,14 +30,17 @@ class MessageRouter:
             elif isinstance(item, dict):
                 prefix = item.get("queue_shard_prefix", item.get("shard_prefix"))
                 total = item.get("total_workers")
+                # Soporta hash_fields (lista) o hash_field (string único, compat. hacia atrás)
+                raw = item.get("hash_fields") or ([item.get("hash_field")] if item.get("hash_field") else [])
+                hash_fields = [f for f in raw if f]
                 shard_queues = {
-                    i: middleware.MessageMiddlewareQueueRabbitMQ(self.config.mom_host, f"{prefix}_{i}") 
+                    i: middleware.MessageMiddlewareQueueRabbitMQ(self.config.mom_host, f"{prefix}_{i}")
                     for i in range(1, total + 1)
                 }
                 self.output_queues_sharded.append({
                     "prefix": prefix,
                     "total_workers": total,
-                    "hash_field": item.get("hash_field"),
+                    "hash_fields": hash_fields,
                     "queues": shard_queues
                 })
 
@@ -84,9 +87,9 @@ class MessageRouter:
                     for q in shard_meta["queues"].values():
                         q.send(mensaje)
                 else:
-                    # Lógica de ruteo inteligente: solo 1 mensaje al destino correcto
-                    valor_hash = payload.get(shard_meta["hash_field"], "default")
-                    logger.info(f"[DEBUG ROUETR] Campo buscado: '{shard_meta['hash_field']}' | Payload recibido: {payload}")
+                    hash_fields = shard_meta.get("hash_fields", [])
+                    valor_hash = "|".join(str(payload.get(f, "")) for f in hash_fields) if hash_fields else "default"
+                    logger.info(f"[DEBUG ROUTER] hash_fields={hash_fields} | valor_hash={valor_hash}")
                     target_id = sharding.obtener_id_shard(valor_hash, shard_meta["total_workers"])
                     
                     # Accedemos directo al diccionario de colas del shard

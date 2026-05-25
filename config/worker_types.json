@@ -13,5 +13,11 @@
   },
   "bank_shard": {
     "dockerfile": "workers/bank_shard/Dockerfile"
+  },
+  "group_distinct_counter": {
+    "dockerfile": "workers/group_distinct_counter/Dockerfile"
+  },
+  "joiner_q4": {
+    "dockerfile": "workers/joiner_q4/Dockerfile"
   }
 }
