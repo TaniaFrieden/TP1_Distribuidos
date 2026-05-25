@@ -106,12 +106,16 @@ class MessageRouter:
                             q.send(mensaje)
                 else:
                     valor_campo = str(payload.get(cond_meta["condition_field"], ""))[:10]
+                    logger.info(f"[ROUTER CONDITIONAL] Evaluando campo '{cond_meta['condition_field']}': '{valor_campo}'")
                     for case in cond_meta["cases"]:
                         if self._evaluar_between(valor_campo, case["value"]):
                             valor_hash = payload.get(case["hash_field"], "default")
                             target_id = sharding.obtener_id_shard(valor_hash, case["total_workers"])
                             case["queues"][target_id].send(mensaje)
+                            logger.info(f"[ROUTER CONDITIONAL] Enviado a shard {target_id}")  # <- sin prefix
                             break
+                        else:
+                            logger.info(f"[ROUTER CONDITIONAL] '{valor_campo}' no matchea rango '{case['value']}'")
 
         except Exception as e:
             logger.error(f"[Router] Error crítico en el ruteo: {e}", exc_info=True)

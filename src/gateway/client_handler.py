@@ -33,14 +33,9 @@ class ClientHandler:
                 msg_type, payload = message_protocol.external.recv_msg(client_socket)
                 
                 if msg_type == message_protocol.external.MsgType.LOTE_TRANSACCIONES:
-                    # El payload ya viene como una lista de objetos JSON o el gateway 
-                    # simplemente los reenvía.
-                    for record_str in payload: # record_str es el string recibido
+                    for record_str in payload:
                         try:
-                            # 1. Convertir string a diccionario
                             record_dict = json.loads(record_str)
-                            
-                            # 2. Ahora sí podemos asignar (el diccionario sí permite esto)
                             record_dict["client_id"] = client_id
 
                             if "From Bank" in record_dict:
@@ -50,7 +45,6 @@ class ClientHandler:
                                 elif isinstance(from_bank_value, int):
                                     record_dict["From Bank"] = from_bank_value
                             
-                            # 3. Serializar de nuevo para la cola
                             msg_bytes = json.dumps(record_dict).encode("utf-8")
                             for q in colas_tx:
                                 q.send(msg_bytes)
@@ -63,7 +57,13 @@ class ClientHandler:
                             message_protocol.external.send_msg(client_socket, message_protocol.external.MsgType.ACK)
                             
                 elif msg_type == message_protocol.external.MsgType.LOTE_BANCOS:
-                    # Lo mismo aquí: el gateway solo busca la clave que le dijiste por ENV
+                    if not self.config.bank_queue_config:
+                        _, lock, _ = self.state.obtener_cliente(client_id)
+                        if lock:
+                            with lock:
+                                message_protocol.external.send_msg(client_socket, message_protocol.external.MsgType.ACK)
+                        continue
+
                     hash_field = self.config.bank_queue_config.get("hash_field", "Bank ID")
                     total_workers = self.config.bank_queue_config.get("total_workers", 1)
                     
@@ -74,7 +74,6 @@ class ClientHandler:
                             
                             bank_val = banco_dict.get(hash_field, "default")
                             shard_id = sharding.obtener_id_shard(bank_val, total_workers)
-
                             colas_bancos[shard_id].send(json.dumps(banco_dict).encode("utf-8"))
                         except json.JSONDecodeError:
                             logger.warning(f"Mensaje banco descartado: {record_str}")

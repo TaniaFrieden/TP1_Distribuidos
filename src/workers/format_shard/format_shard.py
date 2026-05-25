@@ -43,6 +43,9 @@ class FormatShardWorker(BaseWorker):
 
     def al_completar_cliente(self, client_id: str):
         with self.lock:
+            total_temprano = sum(s["count"] for s in self.promedios_por_formato.get(client_id, {}).values())
+            total_tardio = len(self.cache_tardio.get(client_id, []))
+            logger.info(f"[Q3] temprano={total_temprano} tardio={total_tardio}")
             promedios = {
                 formato: stats["suma"] / stats["count"]
                 for formato, stats in self.promedios_por_formato.get(client_id, {}).items()
@@ -69,7 +72,6 @@ class FormatShardWorker(BaseWorker):
         with self.lock:
             self.promedios_por_formato.pop(client_id, None)
             self.cache_tardio.pop(client_id, None)
-
     def al_cerrar(self):
         logger.info("[FormatShard] Apagado.")
 
