@@ -22,7 +22,7 @@
       "input_queue": "q1_pre_projection",
       "output_queue": "q1_usd_to_minor_50",
       "extra_env": {
-        "CAMPOS": "From Bank,Account,To Bank,Account.1,Payment Currency,Receiving Currency,Amount Received,Amount Paid",
+        "CAMPOS": "From Bank,Account,To Bank,Account.1,Amount Paid",
         "INT_FIELDS": "From Bank"
       }
     },

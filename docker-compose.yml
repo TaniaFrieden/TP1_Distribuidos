@@ -422,7 +422,7 @@ services:
       ID: '1'
       TOTAL_WORKERS: '2'
       LOG_FILE: /app/logs/q1_projection_01.txt
-      CAMPOS: From Bank,Account,To Bank,Account.1,Payment Currency,Receiving Currency,Amount Received,Amount Paid
+      CAMPOS: From Bank,Account,To Bank,Account.1,Amount Paid
       INT_FIELDS: From Bank
   q1_projection_02:
     build:
@@ -448,7 +448,7 @@ services:
       ID: '2'
       TOTAL_WORKERS: '2'
       LOG_FILE: /app/logs/q1_projection_02.txt
-      CAMPOS: From Bank,Account,To Bank,Account.1,Payment Currency,Receiving Currency,Amount Received,Amount Paid
+      CAMPOS: From Bank,Account,To Bank,Account.1,Amount Paid
       INT_FIELDS: From Bank
   q1_minor_than_50_01:
     build:
