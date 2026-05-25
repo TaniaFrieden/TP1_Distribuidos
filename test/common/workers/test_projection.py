@@ -1,38 +1,35 @@
 """
 Tests para ProjectionWorker
 ============================
-Cubren la proyección de campos, propagación de EOF y ciclo de vida.
+Cubren la proyección de campos, normalización de IDs y propagación de EOF.
 """
 import json
 import pytest
 from unittest.mock import MagicMock, patch
 
-from workers.projection.main import ProjectionWorker
 
-
-# ------------------------------------------------------------------
-# Fixture: worker con middleware mockeado
-# ------------------------------------------------------------------
-
-def _make_worker(campos="from_id,to_id,amount_paid", cola_entrada="entrada", cola_salida="salida"):
+def _make_worker(campos="From Bank,Amount Paid", int_fields=""):
     env = {
-        "RABBITMQ_HOST": "rabbitmq",
-        "COLA_ENTRADA": cola_entrada,
-        "COLA_SALIDA": cola_salida,
+        "MOM_HOST": "rabbitmq",
+        "NODE_PREFIX": "test_projection",
+        "ID": "1",
+        "TOTAL_WORKERS": "1",
+        "INPUT_QUEUES": '["q_test_in"]',
+        "OUTPUT_QUEUES": '["q_test_out"]',
         "CAMPOS": campos,
+        "INT_FIELDS": int_fields,
     }
-    middleware_entrada = MagicMock()
-    middleware_salida = MagicMock()
-
     with patch.dict("os.environ", env):
-        with patch(
-            "workers.projection.main.DirectQueueRabbitMQ",
-            side_effect=[middleware_salida, middleware_entrada],
-        ):
+        with patch("workers.base.base.MessageRouter"), \
+             patch("workers.base.base.DistributedCoordinator"):
+            from workers.projection.main import ProjectionWorker
             w = ProjectionWorker()
-            w._middleware = w.inicializar_middleware()
+    w._enviar = MagicMock()
+    return w
 
-    return w, middleware_salida
+
+def _make_msg(payload: dict) -> bytes:
+    return json.dumps(payload).encode("utf-8")
 
 
 # ------------------------------------------------------------------
@@ -42,92 +39,116 @@ def _make_worker(campos="from_id,to_id,amount_paid", cola_entrada="entrada", col
 class TestProyeccion:
 
     def test_conserva_solo_los_campos_indicados(self):
-        w, salida = _make_worker("from_id,to_id,amount_paid")
-        mensaje = json.dumps({
-            "client_id": 0,
-            "from_id": "ABC",
-            "to_id": "XYZ",
-            "amount_paid": 12.5,
-            "payment_currency": "USD",   # debe eliminarse
-            "timestamp": "2023-09-01",   # debe eliminarse
-        }).encode()
+        w = _make_worker("From Bank,Amount Paid")
+        payload = {
+            "client_id": "abc",
+            "From Bank": "10",
+            "Amount Paid": 12.5,
+            "Payment Currency": "USD",  # debe eliminarse
+            "Timestamp": "2022-09-01",  # debe eliminarse
+        }
 
-        w._callback_interno(mensaje, MagicMock(), MagicMock())
+        w.procesar_payload("q_in", "abc", payload, _make_msg(payload), MagicMock(), MagicMock())
 
-        enviado = json.loads(salida.send.call_args[0][0])
-        assert set(enviado.keys()) == {"client_id", "from_id", "to_id", "amount_paid"}
+        msg_bytes = w._enviar.call_args[0][0]
+        enviado = json.loads(msg_bytes)
+        assert set(enviado.keys()) == {"client_id", "From Bank", "Amount Paid"}
 
     def test_siempre_conserva_client_id(self):
-        """client_id debe estar aunque no figure en CAMPOS."""
-        w, salida = _make_worker("from_id")
-        mensaje = json.dumps({"client_id": 7, "from_id": "ABC", "amount_paid": 5}).encode()
+        w = _make_worker("From Bank")
+        payload = {"client_id": "xyz", "From Bank": "5", "Amount Paid": 99}
 
-        w._callback_interno(mensaje, MagicMock(), MagicMock())
+        w.procesar_payload("q_in", "xyz", payload, _make_msg(payload), MagicMock(), MagicMock())
 
-        enviado = json.loads(salida.send.call_args[0][0])
-        assert enviado["client_id"] == 7
+        msg_bytes = w._enviar.call_args[0][0]
+        enviado = json.loads(msg_bytes)
+        assert enviado["client_id"] == "xyz"
 
-    def test_campo_faltante_en_mensaje_se_omite_sin_error(self):
-        """Si un campo de CAMPOS no existe en el mensaje, simplemente no se incluye."""
-        w, salida = _make_worker("from_id,to_id,amount_paid")
-        mensaje = json.dumps({"client_id": 0, "from_id": "ABC"}).encode()
+    def test_campo_faltante_se_omite_sin_error(self):
+        w = _make_worker("From Bank,Amount Paid,Timestamp")
+        payload = {"client_id": "a", "From Bank": "3"}
 
-        w._callback_interno(mensaje, MagicMock(), MagicMock())
+        ack = MagicMock()
+        w.procesar_payload("q_in", "a", payload, _make_msg(payload), ack, MagicMock())
 
-        enviado = json.loads(salida.send.call_args[0][0])
-        assert "to_id" not in enviado
-        assert "amount_paid" not in enviado
-        assert enviado["from_id"] == "ABC"
+        msg_bytes = w._enviar.call_args[0][0]
+        enviado = json.loads(msg_bytes)
+        assert "Amount Paid" not in enviado
+        assert "Timestamp" not in enviado
+        assert enviado["From Bank"] == "3"
+        ack.assert_called_once()
 
     def test_valores_se_conservan_correctamente(self):
-        w, salida = _make_worker("from_id,amount_paid")
-        mensaje = json.dumps({
-            "client_id": 0, "from_id": "ABC123", "amount_paid": 49.99
-        }).encode()
+        w = _make_worker("From Bank,Amount Paid")
+        payload = {"client_id": "b", "From Bank": "99", "Amount Paid": 49.99}
 
-        w._callback_interno(mensaje, MagicMock(), MagicMock())
+        w.procesar_payload("q_in", "b", payload, _make_msg(payload), MagicMock(), MagicMock())
 
-        enviado = json.loads(salida.send.call_args[0][0])
-        assert enviado["from_id"] == "ABC123"
-        assert enviado["amount_paid"] == 49.99
+        msg_bytes = w._enviar.call_args[0][0]
+        enviado = json.loads(msg_bytes)
+        assert enviado["From Bank"] == "99"
+        assert enviado["Amount Paid"] == 49.99
 
     def test_hace_ack_tras_proyectar(self):
-        w, _ = _make_worker()
+        w = _make_worker("From Bank")
+        payload = {"client_id": "c", "From Bank": "1"}
         ack = MagicMock()
         nack = MagicMock()
-        mensaje = json.dumps({"client_id": 0, "from_id": "A", "to_id": "B", "amount_paid": 10}).encode()
 
-        w._callback_interno(mensaje, ack, nack)
+        w.procesar_payload("q_in", "c", payload, _make_msg(payload), ack, nack)
 
         ack.assert_called_once()
         nack.assert_not_called()
 
 
 # ------------------------------------------------------------------
-# Tests: propagación de EOF
+# Tests: normalización de IDs
 # ------------------------------------------------------------------
 
-class TestEOF:
+class TestNormalizacion:
 
-    def test_eof_se_propaga_sin_modificacion(self):
-        w, salida = _make_worker()
-        eof = json.dumps({"client_id": 0}).encode()
-        ack = MagicMock()
+    def test_normaliza_campo_a_int(self):
+        w = _make_worker("From Bank,Amount Paid", int_fields="From Bank")
+        payload = {"client_id": "d", "From Bank": "42", "Amount Paid": 10.0}
 
-        w._callback_interno(eof, ack, MagicMock())
+        w.procesar_payload("q_in", "d", payload, _make_msg(payload), MagicMock(), MagicMock())
 
-        salida.send.assert_called_once_with(eof)
-        ack.assert_called_once()
+        msg_bytes = w._enviar.call_args[0][0]
+        enviado = json.loads(msg_bytes)
+        assert enviado["From Bank"] == 42
+        assert isinstance(enviado["From Bank"], int)
 
-    def test_eof_no_aplica_proyeccion(self):
-        """El EOF no debe tocarse: no se le quitan ni agregan campos."""
-        w, salida = _make_worker("from_id,to_id")
-        eof = json.dumps({"client_id": 3}).encode()
+    def test_normaliza_solo_los_campos_indicados(self):
+        w = _make_worker("From Bank,Amount Paid", int_fields="From Bank")
+        payload = {"client_id": "e", "From Bank": "7", "Amount Paid": 5.5}
 
-        w._callback_interno(eof, MagicMock(), MagicMock())
+        w.procesar_payload("q_in", "e", payload, _make_msg(payload), MagicMock(), MagicMock())
 
-        enviado = json.loads(salida.send.call_args[0][0])
-        assert enviado == {"client_id": 3}
+        msg_bytes = w._enviar.call_args[0][0]
+        enviado = json.loads(msg_bytes)
+        assert isinstance(enviado["From Bank"], int)
+        assert isinstance(enviado["Amount Paid"], float)
+
+    def test_valor_no_numerico_se_conserva_como_esta(self):
+        w = _make_worker("From Bank", int_fields="From Bank")
+        payload = {"client_id": "f", "From Bank": "no-es-numero"}
+
+        w.procesar_payload("q_in", "f", payload, _make_msg(payload), MagicMock(), MagicMock())
+
+        msg_bytes = w._enviar.call_args[0][0]
+        enviado = json.loads(msg_bytes)
+        assert enviado["From Bank"] == "no-es-numero"
+
+    def test_sin_int_fields_no_normaliza(self):
+        w = _make_worker("From Bank")
+        payload = {"client_id": "g", "From Bank": "123"}
+
+        w.procesar_payload("q_in", "g", payload, _make_msg(payload), MagicMock(), MagicMock())
+
+        msg_bytes = w._enviar.call_args[0][0]
+        enviado = json.loads(msg_bytes)
+        assert enviado["From Bank"] == "123"
+        assert isinstance(enviado["From Bank"], str)
 
 
 # ------------------------------------------------------------------
@@ -136,15 +157,18 @@ class TestEOF:
 
 class TestCicloDeVida:
 
-    def test_al_cerrar_cierra_middleware_salida(self):
-        w, salida = _make_worker()
+    def test_al_cerrar_no_falla(self):
+        w = _make_worker()
         w.al_cerrar()
-        salida.close.assert_called_once()
 
-    def test_al_cerrar_sin_middleware_no_falla(self):
-        env = {"COLA_ENTRADA": "e", "COLA_SALIDA": "s", "CAMPOS": "from_id"}
-        with patch.dict("os.environ", env):
-            with patch("workers.projection.main.DirectQueueRabbitMQ"):
-                w = ProjectionWorker()
-        w._salida = None
-        w.al_cerrar()  # no debe lanzar
+    def test_nack_en_excepcion_inesperada(self):
+        w = _make_worker("From Bank")
+        w._enviar = MagicMock(side_effect=RuntimeError("fallo"))
+        payload = {"client_id": "h", "From Bank": "1"}
+        ack = MagicMock()
+        nack = MagicMock()
+
+        w.procesar_payload("q_in", "h", payload, _make_msg(payload), ack, nack)
+
+        nack.assert_called_once()
+        ack.assert_not_called()

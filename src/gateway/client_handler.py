@@ -43,13 +43,6 @@ class ClientHandler:
                             # 2. Ahora sí podemos asignar (el diccionario sí permite esto)
                             record_dict["client_id"] = client_id
 
-                            if "From Bank" in record_dict:
-                                from_bank_value = record_dict["From Bank"]
-                                if isinstance(from_bank_value, str) and from_bank_value.isdigit():
-                                    record_dict["From Bank"] = int(from_bank_value)
-                                elif isinstance(from_bank_value, int):
-                                    record_dict["From Bank"] = from_bank_value
-                            
                             # 3. Serializar de nuevo para la cola
                             msg_bytes = json.dumps(record_dict).encode("utf-8")
                             for q in colas_tx:

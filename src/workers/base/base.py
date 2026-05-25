@@ -4,10 +4,14 @@ import threading
 import json
 from abc import ABC, abstractmethod
 
-# Asumimos que los archivos están en la misma carpeta
-from config import WorkerConfig
-from router import MessageRouter
-from coordinator import DistributedCoordinator
+try:
+    from config import WorkerConfig          # Docker runtime (archivos copiados al root)
+    from router import MessageRouter
+    from coordinator import DistributedCoordinator
+except ImportError:
+    from workers.base.config import WorkerConfig   # entorno de tests
+    from workers.base.router import MessageRouter
+    from workers.base.coordinator import DistributedCoordinator
 
 logger = logging.getLogger(__name__)
 

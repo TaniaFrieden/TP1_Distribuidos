@@ -1,4 +1,7 @@
 {
+  "projection": {
+    "dockerfile": "workers/projection/Dockerfile"
+  },
   "filter": {
     "dockerfile": "workers/filter/Dockerfile"
   },
