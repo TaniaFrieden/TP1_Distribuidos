@@ -14,7 +14,8 @@ class DistributedCoordinator:
         
         self._coordinaciones_eof = {}
         self._eofs_locales_recibidos = {}
-        self._mensajes_en_vuelo = {} 
+        self._mensajes_en_vuelo = {}
+        self._clientes_flusheados = set()  # <- nuevo
         
         self._coordinacion_lock = threading.Lock()
         self._vuelo_lock = threading.Lock()
@@ -46,10 +47,10 @@ class DistributedCoordinator:
                 if self._mensajes_en_vuelo.get(client_id, 0) == 0:
                     break
             time.sleep(0.1)
+        time.sleep(0.5)
 
     # --- Tracking Local de EOFs ---
     def registrar_eof_local(self, client_id, queue_name, total_esperados) -> bool:
-        """Devuelve True si se recibieron todos los EOFs locales esperados."""
         with self._coordinacion_lock:
             if client_id not in self._eofs_locales_recibidos:
                 self._eofs_locales_recibidos[client_id] = set()
@@ -96,11 +97,18 @@ class DistributedCoordinator:
             if msg_type == "EOF_RECEIVED":
                 logger.info(f"[Coordinator] EOF_RECEIVED en worker {self.config.node_id} para client_id={client_id}. Esperando vuelos.")
                 self._esperar_vuelo_cero(client_id)
-                
-                # Flush ANTES de avisar que terminamos
-                logger.info(f"[Coordinator] Vuelos en cero para client_id={client_id}. Flusheando datos locales.")
-                self.on_sync_complete(client_id, None)
-                
+
+                with self._coordinacion_lock:
+                    ya_flusheado = client_id in self._clientes_flusheados
+                    if not ya_flusheado:
+                        self._clientes_flusheados.add(client_id)
+
+                if not ya_flusheado:
+                    logger.info(f"[Coordinator] Vuelos en cero para client_id={client_id}. Flusheando datos locales.")
+                    self.on_sync_complete(client_id, None)
+                else:
+                    logger.info(f"[Coordinator] Ya flusheado para client_id={client_id}. Skip.")
+
                 logger.info(f"[Coordinator] Flush completo. Enviando WORKER_FINISHED.")
                 self._enviar_control({
                     "type": "WORKER_FINISHED",
@@ -121,6 +129,7 @@ class DistributedCoordinator:
                         if len(self._coordinaciones_eof[client_id]["workers"]) >= self.config.total_workers:
                             msg_original = self._coordinaciones_eof[client_id]["mensaje_original"]
                             del self._coordinaciones_eof[client_id]
+                            self._clientes_flusheados.discard(client_id)  # <- limpiar
                             logger.info(f"[Coordinator] Barrera completa para client_id={client_id}. Reenviando EOF.")
                             self.on_sync_complete(client_id, msg_original)
 

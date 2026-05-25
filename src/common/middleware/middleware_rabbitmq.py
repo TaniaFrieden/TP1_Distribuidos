@@ -1,7 +1,7 @@
 import pika
 from .rabbitmq_base import RabbitMQBase, handle_pika_errors
 
-MAX_MESSAGES_PER_WORKER = 1
+MAX_MESSAGES_PER_WORKER = 150
 DIRECT_EXCHANGE_TYPE = 'direct'
 FANOUT_EXCHANGE_TYPE = 'fanout'
 
