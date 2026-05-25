@@ -26,7 +26,7 @@ services:
       INPUTS_QUEUE: q2_results, q1_results, q5_results
       HTTP_HOST: 0.0.0.0
       HTTP_PORT: '8080'
-      BANK_QUEUE: '{"queue_shard_prefix": "q2_shard_banks", "total_workers": 6, "hash_field": "Bank ID"}'
+      BANK_QUEUE: '{"queue_shard_prefix": "q2_raw_banks", "total_workers": 3, "hash_field": "Bank ID"}'
   rabbitmq:
     image: rabbitmq:3-management
     container_name: rabbitmq
@@ -44,6 +44,84 @@ services:
     ports:
     - 5672:5672
     - 15672:15672
+  q2_bank_projection_01:
+    build:
+      context: ./src
+      dockerfile: workers/projection/Dockerfile
+    container_name: q2_bank_projection_01
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    volumes:
+    - ./logs:/app/logs
+    environment:
+      MOM_HOST: rabbitmq
+      MOM_PORT: '5672'
+      MOM_USER: distributed
+      MOM_PASSWORD: distributed
+      MOM_VHOST: /
+      INPUT_QUEUES: q2_raw_banks_1
+      OUTPUT_QUEUES: '[{"queue_shard_prefix": "q2_shard_banks", "total_workers": 6, "hash_field": "Bank ID"}]'
+      NODE_PREFIX: q2_bank_projection
+      ID: '1'
+      TOTAL_WORKERS: '3'
+      LOG_FILE: /app/logs/q2_bank_projection_01.txt
+      CAMPOS: Bank ID,Bank Name,Account Number
+      INT_FIELDS: ''
+  q2_bank_projection_02:
+    build:
+      context: ./src
+      dockerfile: workers/projection/Dockerfile
+    container_name: q2_bank_projection_02
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    volumes:
+    - ./logs:/app/logs
+    environment:
+      MOM_HOST: rabbitmq
+      MOM_PORT: '5672'
+      MOM_USER: distributed
+      MOM_PASSWORD: distributed
+      MOM_VHOST: /
+      INPUT_QUEUES: q2_raw_banks_2
+      OUTPUT_QUEUES: '[{"queue_shard_prefix": "q2_shard_banks", "total_workers": 6, "hash_field": "Bank ID"}]'
+      NODE_PREFIX: q2_bank_projection
+      ID: '2'
+      TOTAL_WORKERS: '3'
+      LOG_FILE: /app/logs/q2_bank_projection_02.txt
+      CAMPOS: Bank ID,Bank Name,Account Number
+      INT_FIELDS: ''
+  q2_bank_projection_03:
+    build:
+      context: ./src
+      dockerfile: workers/projection/Dockerfile
+    container_name: q2_bank_projection_03
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    volumes:
+    - ./logs:/app/logs
+    environment:
+      MOM_HOST: rabbitmq
+      MOM_PORT: '5672'
+      MOM_USER: distributed
+      MOM_PASSWORD: distributed
+      MOM_VHOST: /
+      INPUT_QUEUES: q2_raw_banks_3
+      OUTPUT_QUEUES: '[{"queue_shard_prefix": "q2_shard_banks", "total_workers": 6, "hash_field": "Bank ID"}]'
+      NODE_PREFIX: q2_bank_projection
+      ID: '3'
+      TOTAL_WORKERS: '3'
+      LOG_FILE: /app/logs/q2_bank_projection_03.txt
+      CAMPOS: Bank ID,Bank Name,Account Number
+      INT_FIELDS: ''
   q2_projection_01:
     build:
       context: ./src
