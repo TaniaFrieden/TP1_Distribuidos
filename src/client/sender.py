@@ -17,26 +17,24 @@ def enviar_archivo(filepath, tipo_mensaje, sock, lock):
 ## Funciones auxiliares
 ## --------------------    
 def _leer_registros_dinamico(filepath):
-    registros_json = []
     with open(filepath, "r", encoding="utf-8") as f:
-        # Leemos la primera línea para obtener los headers dinámicamente
         linea_headers = f.readline().strip()
         if not linea_headers:
-            return []
-            
+            return
         headers = linea_headers.split(",")
-        
-        # Procesamos el resto de las líneas
         for linea in f:
             if linea.strip():
                 valores = linea.strip().split(",")
-                # Creamos el diccionario usando los headers leídos hace un instante
-                diccionario = dict(zip(headers, valores))
-                registros_json.append(json.dumps(diccionario))
-    return registros_json
+                yield json.dumps(dict(zip(headers, valores)))
 
 def _enviar_lotes(registros, tipo_mensaje, sock, lock):
-    for i in range(0, len(registros), LOTE_SIZE):
-        lote = registros[i:i + LOTE_SIZE]
+    lote = []
+    for registro in registros:
+        lote.append(registro)
+        if len(lote) >= LOTE_SIZE:
+            with lock:
+                message_protocol.external.send_msg(sock, tipo_mensaje, lote)
+            lote = []
+    if lote:
         with lock:
             message_protocol.external.send_msg(sock, tipo_mensaje, lote)
