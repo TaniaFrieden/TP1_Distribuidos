@@ -43,35 +43,35 @@ class FormatShardWorker(BaseWorker):
 
     def al_completar_cliente(self, client_id: str):
         with self.lock:
+            if client_id not in self.promedios_por_formato and client_id not in self.cache_tardio:
+                logger.warning(f"[FormatShard] al_completar_cliente sin datos para {client_id}")
+                return
+
             total_temprano = sum(s["count"] for s in self.promedios_por_formato.get(client_id, {}).values())
             total_tardio = len(self.cache_tardio.get(client_id, []))
             logger.info(f"[Q3] temprano={total_temprano} tardio={total_tardio}")
+
             promedios = {
                 formato: stats["suma"] / stats["count"]
-                for formato, stats in self.promedios_por_formato.get(client_id, {}).items()
+                for formato, stats in self.promedios_por_formato.pop(client_id, {}).items()
                 if stats["count"] > 0
             }
-            cache = self.cache_tardio.get(client_id, [])
+            cache = self.cache_tardio.pop(client_id, [])
 
-        for payload in cache:
-            formato = payload.get("Payment Format", "")
-            monto = float(payload.get("Amount Paid", 0))
-            promedio = promedios.get(formato)
+            for payload in cache:
+                formato = payload.get("Payment Format", "")
+                monto = float(payload.get("Amount Paid", 0))
+                promedio = promedios.get(formato)
+                if promedio is None:
+                    continue
+                if monto < promedio * 0.01:
+                    resultado = {
+                        "client_id": client_id,
+                        "From Account": payload.get("Account", ""),
+                        "Amount Paid": monto
+                    }
+                    self._enviar(json.dumps(resultado).encode('utf-8'))
 
-            if promedio is None:
-                continue
-
-            if monto < promedio * 0.01:
-                resultado = {
-                    "client_id": client_id,
-                    "From Account": payload.get("Account", ""),
-                    "Amount Paid": monto
-                }
-                self._enviar(json.dumps(resultado).encode('utf-8'))
-
-        with self.lock:
-            self.promedios_por_formato.pop(client_id, None)
-            self.cache_tardio.pop(client_id, None)
     def al_cerrar(self):
         logger.info("[FormatShard] Apagado.")
 
