@@ -6,7 +6,6 @@ import os
 
 CONFIG_BASE = 'config/base.yml'
 CONFIG_QUERIES = 'config/queries/*.json'
-# Asegurate que este archivo exista en la carpeta config
 WORKER_TYPES_FILE = 'config/worker_types.json' 
 
 
@@ -61,9 +60,8 @@ def generar_compose():
         with open(q_file, 'r') as f:
             data = json.load(f)
         
-        # Agregamos al gateway (skip_gateway_output = True para queries que usan filtro compartido)
-        if not data.get('skip_gateway_output', False):
-            output_queues.append(f"q{query_number}_raw_data")
+        # Agregamos al gateway
+        output_queues.append(f"q{query_number}_raw_data")
         input_queues.append(f"q{query_number}_results")
 
         if bank_queue_config is None:

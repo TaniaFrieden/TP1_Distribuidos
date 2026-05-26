@@ -2,12 +2,11 @@
   "workers": [
     {
       "type": "filter",
-      "prefix": "filter_usd",
+      "prefix": "01_filter_usd",
       "replicas": 2,
       "input_queue": "q1_raw_data",
       "output_queue": [
-        "q1_pre_projection",
-        "q2_pre_projection"
+        "q1_pre_projection"
       ],
       "extra_env": {
         "FILTER_FIELD": "Payment Currency",

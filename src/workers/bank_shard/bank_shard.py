@@ -101,8 +101,7 @@ class AgregadorBancarioWorker(BaseWorker):
                 logger.info(f"[BankShard] Ambas colas cerradas para {client_id}. Solicitando barrera de flush.")
                 estado["flush_iniciado"] = True
                 disparar_flush = True
-                # SOLUCIÓN: Solo el nodo 1 conserva el mensaje; los demás pasan None para no duplicar el EOF downstream
-                mensaje_barrera = estado["eof_mensaje"] if self.config.node_id == 1 else None
+                mensaje_barrera = estado["eof_mensaje"]
 
         if disparar_flush:
             self.coordinator.iniciar_barrera(client_id, mensaje_barrera)
