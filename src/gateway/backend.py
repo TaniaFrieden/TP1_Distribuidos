@@ -39,22 +39,19 @@ class BackendListener:
                 return
             
             es_eof = transaccion.pop("EOF", False) or transaccion.pop("eof", False)
-            transaccion["eof"] = es_eof
-            
-            payload = {
-                "query": query_id,
-                "resultado": transaccion
-            }
-            payload_str = json.dumps(payload)
-            
-            with lock:
-                message_protocol.external.send_msg(
-                    sock,
-                    message_protocol.external.MsgType.REPORTE,
-                    payload_str
-                )
             
             if es_eof:
+                payload = {
+                    "query": query_id,
+                    "resultado": {"eof": True}
+                }
+                payload_str = json.dumps(payload)
+                with lock:
+                    message_protocol.external.send_msg(
+                        sock,
+                        message_protocol.external.MsgType.REPORTE,
+                        payload_str
+                    )
                 logger.info(f"EOF enviado para {cola_nombre} a {client_id}")
                 eof_status.add(cola_nombre)
                 if len(eof_status) == self.config.num_queries:
@@ -65,6 +62,43 @@ class BackendListener:
                             message_protocol.external.MsgType.END_OF_RECODS
                         )
                     self.state.remover_cliente(client_id)
+                ack()
+                return
+
+            if "batches" in transaccion:
+                for batch in transaccion["batches"]:
+                    header = batch["header"]
+                    schema = header["schema"]
+                    records = batch["payload"]
+                    for record_values in records:
+                        record_dict = dict(zip(schema, record_values))
+                        record_dict["eof"] = False
+                        
+                        payload = {
+                            "query": query_id,
+                            "resultado": record_dict
+                        }
+                        payload_str = json.dumps(payload)
+                        with lock:
+                            message_protocol.external.send_msg(
+                                sock,
+                                message_protocol.external.MsgType.REPORTE,
+                                payload_str
+                            )
+            else:
+                transaccion["eof"] = False
+                payload = {
+                    "query": query_id,
+                    "resultado": transaccion
+                }
+                payload_str = json.dumps(payload)
+                
+                with lock:
+                    message_protocol.external.send_msg(
+                        sock,
+                        message_protocol.external.MsgType.REPORTE,
+                        payload_str
+                    )
             ack()
         except json.JSONDecodeError:
             logger.error("JSON invalido")

@@ -2,6 +2,7 @@ import socket
 import threading
 import logging
 import sys
+import uuid
 from common import message_protocol
 from common.logging_setup import setup_logging
 from config import SERVER_HOST, SERVER_PORT, TRANSACTIONS_FILE, ACCOUNTS_FILE
@@ -17,11 +18,14 @@ def main():
     if not sock:
         return 1
 
+    client_id = str(uuid.uuid4())
+    logging.info(f"Cliente iniciado con ID: {client_id}")
+
     socket_lock = threading.Lock()
-    hilo_receptor, hilos_envio = _iniciar_hilos(sock, socket_lock)
+    hilo_receptor, hilos_envio = _iniciar_hilos(sock, socket_lock, client_id)
     
     _esperar_envios(hilos_envio)
-    _enviar_fin_registros(sock, socket_lock)
+    _enviar_fin_registros(sock, socket_lock, client_id)
     _finalizar_conexion(hilo_receptor, sock)
     
     return 0
@@ -40,7 +44,7 @@ def _conectar_socket():
         logging.error(f"No se pudo conectar al servidor: {e}")
         return None
 
-def _iniciar_hilos(sock, lock):
+def _iniciar_hilos(sock, lock, client_id):
     hilo_receptor = threading.Thread(
         target=escuchar_respuesta,
         args=(sock,),
@@ -49,12 +53,12 @@ def _iniciar_hilos(sock, lock):
 
     hilo_transacciones = threading.Thread(
         target=enviar_archivo,
-        args=(TRANSACTIONS_FILE, message_protocol.external.MsgType.LOTE_TRANSACCIONES, sock, lock)
+        args=(TRANSACTIONS_FILE, message_protocol.external.MsgType.LOTE_TRANSACCIONES, sock, lock, client_id)
     )
 
     hilo_bancos = threading.Thread(
         target=enviar_archivo,
-        args=(ACCOUNTS_FILE, message_protocol.external.MsgType.LOTE_BANCOS, sock, lock)
+        args=(ACCOUNTS_FILE, message_protocol.external.MsgType.LOTE_BANCOS, sock, lock, client_id)
     )
 
     hilo_receptor.start()
@@ -67,11 +71,12 @@ def _esperar_envios(hilos_envio):
     for hilo in hilos_envio:
         hilo.join()
 
-def _enviar_fin_registros(sock, lock):
+def _enviar_fin_registros(sock, lock, client_id):
     with lock:
         message_protocol.external.send_msg(
             sock,
-            message_protocol.external.MsgType.END_OF_RECODS
+            message_protocol.external.MsgType.END_OF_RECODS,
+            client_id
         )
     logging.info("Señal global de END_OF_RECODS enviada.")
 

@@ -84,45 +84,128 @@ class MessageRouter:
             assert payload is not None
 
             es_eof = payload.get("EOF", False)
-
-            logger.info(f"[ROUTER DEBUG] Enviando {len(mensaje)} bytes a {len(self.output_queues_direct)} colas directas.")
+            client_id = payload.get("client_id")
 
             # 1. ENVIAR A COLAS SIMPLES
             for q in self.output_queues_direct:
                 q.send(mensaje)
 
-            # 2. ENVIAR A SHARDS
-            for shard_meta in self.output_queues_sharded:
-                if es_eof:
-                    for q in shard_meta["queues"].values():
-                        q.send(mensaje)
-                else:
-                    # Lógica de ruteo inteligente: solo 1 mensaje al destino correcto
+            # Check if this is a batch message
+            if "batches" in payload and not es_eof:
+                # 2. ENVIAR A SHARDS (BATCH)
+                for shard_meta in self.output_queues_sharded:
                     hash_fields = shard_meta.get("hash_fields", [])
                     hash_field = hash_fields[0] if hash_fields else shard_meta.get("hash_field")
-                    valor_hash = payload.get(hash_field, "default")
-                    logger.info(f"[DEBUG ROUETR] Campo buscado: '{hash_field}' | Payload recibido: {payload}")
-                    target_id = sharding.obtener_id_shard(valor_hash, shard_meta["total_workers"])
-                    shard_meta["queues"][target_id].send(mensaje)
-
-            # 3. ENVIAR A CONDICIONALES
-            for cond_meta in self.output_queues_conditional:
-                if es_eof:
-                    for case in cond_meta["cases"]:
-                        for q in case["queues"].values():
-                            q.send(mensaje)
-                else:
-                    valor_campo = str(payload.get(cond_meta["condition_field"], ""))[:10]
-                    logger.info(f"[ROUTER CONDITIONAL] Evaluando campo '{cond_meta['condition_field']}': '{valor_campo}'")
-                    for case in cond_meta["cases"]:
-                        if self._evaluar_between(valor_campo, case["value"]):
-                            valor_hash = payload.get(case["hash_field"], "default")
-                            target_id = sharding.obtener_id_shard(valor_hash, case["total_workers"])
-                            case["queues"][target_id].send(mensaje)
-                            logger.info(f"[ROUTER CONDITIONAL] Enviado a shard {target_id}")  # <- sin prefix
-                            break
+                    
+                    # Group records by target shard_id
+                    records_by_shard = {}
+                    original_schema = None
+                    for batch in payload["batches"]:
+                        header = batch["header"]
+                        original_schema = header["schema"]
+                        records = batch["payload"]
+                        
+                        if hash_field in original_schema:
+                            hash_idx = original_schema.index(hash_field)
                         else:
-                            logger.info(f"[ROUTER CONDITIONAL] '{valor_campo}' no matchea rango '{case['value']}'")
+                            hash_idx = None
+                            
+                        for record_values in records:
+                            val = record_values[hash_idx] if hash_idx is not None else "default"
+                            target_id = sharding.obtener_id_shard(val, shard_meta["total_workers"])
+                            if target_id not in records_by_shard:
+                                records_by_shard[target_id] = []
+                            records_by_shard[target_id].append(record_values)
+                            
+                    for shard_id, shard_records in records_by_shard.items():
+                        shard_payload = {
+                            "client_id": client_id,
+                            "batches": [
+                                {
+                                    "header": {
+                                        "schema": original_schema,
+                                        "client_id": client_id,
+                                        "count": len(shard_records)
+                                    },
+                                    "payload": shard_records
+                                }
+                            ]
+                        }
+                        shard_meta["queues"][shard_id].send(json.dumps(shard_payload).encode("utf-8"))
+
+                # 3. ENVIAR A CONDICIONALES (BATCH)
+                for cond_meta in self.output_queues_conditional:
+                    condition_field = cond_meta["condition_field"]
+                    
+                    # Group records by target queue (case index, shard_id)
+                    records_by_queue = {}  # queue_object -> (original_schema, list_of_records)
+                    
+                    for batch in payload["batches"]:
+                        header = batch["header"]
+                        original_schema = header["schema"]
+                        records = batch["payload"]
+                        
+                        cond_idx = original_schema.index(condition_field) if condition_field in original_schema else None
+                        
+                        for record_values in records:
+                            valor_campo = str(record_values[cond_idx])[:10] if cond_idx is not None else ""
+                            # Find matching case
+                            for case in cond_meta["cases"]:
+                                if self._evaluar_between(valor_campo, case["value"]):
+                                    hash_field = case["hash_field"]
+                                    hash_idx = original_schema.index(hash_field) if hash_field in original_schema else None
+                                    valor_hash = record_values[hash_idx] if hash_idx is not None else "default"
+                                    target_id = sharding.obtener_id_shard(valor_hash, case["total_workers"])
+                                    target_queue = case["queues"][target_id]
+                                    
+                                    if target_queue not in records_by_queue:
+                                        records_by_queue[target_queue] = (original_schema, [])
+                                    records_by_queue[target_queue][1].append(record_values)
+                                    break
+                                    
+                    for target_queue, (schema, q_records) in records_by_queue.items():
+                        q_payload = {
+                            "client_id": client_id,
+                            "batches": [
+                                {
+                                    "header": {
+                                        "schema": schema,
+                                        "client_id": client_id,
+                                        "count": len(q_records)
+                                    },
+                                    "payload": q_records
+                                }
+                            ]
+                        }
+                        target_queue.send(json.dumps(q_payload).encode("utf-8"))
+                        
+            else:
+                # 2. ENVIAR A SHARDS (SINGLE RECORD OR EOF)
+                for shard_meta in self.output_queues_sharded:
+                    if es_eof:
+                        for q in shard_meta["queues"].values():
+                            q.send(mensaje)
+                    else:
+                        hash_fields = shard_meta.get("hash_fields", [])
+                        hash_field = hash_fields[0] if hash_fields else shard_meta.get("hash_field")
+                        valor_hash = payload.get(hash_field, "default")
+                        target_id = sharding.obtener_id_shard(valor_hash, shard_meta["total_workers"])
+                        shard_meta["queues"][target_id].send(mensaje)
+
+                # 3. ENVIAR A CONDICIONALES (SINGLE RECORD OR EOF)
+                for cond_meta in self.output_queues_conditional:
+                    if es_eof:
+                        for case in cond_meta["cases"]:
+                            for q in case["queues"].values():
+                                q.send(mensaje)
+                    else:
+                        valor_campo = str(payload.get(cond_meta["condition_field"], ""))[:10]
+                        for case in cond_meta["cases"]:
+                            if self._evaluar_between(valor_campo, case["value"]):
+                                valor_hash = payload.get(case["hash_field"], "default")
+                                target_id = sharding.obtener_id_shard(valor_hash, case["total_workers"])
+                                case["queues"][target_id].send(mensaje)
+                                break
 
         except Exception as e:
             logger.error(f"[Router] Error crítico en el ruteo: {e}", exc_info=True)

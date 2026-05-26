@@ -25,19 +25,67 @@ class ProjectionWorker(BaseWorker):
 
     def procesar_payload(self, queue_name: str, client_id: str, payload: dict, mensaje_original: bytes, ack, nack):
         try:
-            proyectado = {"client_id": payload.get("client_id", client_id)}
-            for campo in self.campos:
-                if campo in payload:
-                    valor = payload[campo]
-                    if campo in self.int_fields:
-                        try:
-                            valor = int(valor)
-                        except (ValueError, TypeError):
-                            pass
-                    proyectado[campo] = valor
+            if payload.get("EOF"):
+                self._enviar(mensaje_original)
+                ack()
+                return
 
-            msg_bytes = json.dumps(proyectado).encode("utf-8")
-            self._enviar(msg_bytes, payload=proyectado)
+            if "batches" in payload:
+                projected_batches = []
+                for batch in payload["batches"]:
+                    header = batch["header"]
+                    schema = header["schema"]
+                    records = batch["payload"]
+                    
+                    # Target schema columns that exist in the original schema
+                    new_schema = [col for col in self.campos if col in schema]
+                    col_indices = {col: i for i, col in enumerate(schema)}
+                    
+                    projected_records = []
+                    for record_values in records:
+                        new_record_values = []
+                        for col in new_schema:
+                            val = record_values[col_indices[col]]
+                            if col in self.int_fields:
+                                try:
+                                    val = int(val)
+                                except (ValueError, TypeError):
+                                    pass
+                            new_record_values.append(val)
+                        projected_records.append(new_record_values)
+                    
+                    if projected_records:
+                        projected_batches.append({
+                            "header": {
+                                "schema": new_schema,
+                                "client_id": header.get("client_id", client_id),
+                                "count": len(projected_records)
+                            },
+                            "payload": projected_records
+                        })
+                
+                if projected_batches:
+                    output_payload = {
+                        "client_id": client_id,
+                        "batches": projected_batches
+                    }
+                    msg_bytes = json.dumps(output_payload).encode("utf-8")
+                    self._enviar(msg_bytes, payload=output_payload)
+            else:
+                # Fallback para formato de registro unico anterior
+                proyectado = {"client_id": payload.get("client_id", client_id)}
+                for campo in self.campos:
+                    if campo in payload:
+                        valor = payload[campo]
+                        if campo in self.int_fields:
+                            try:
+                                valor = int(valor)
+                            except (ValueError, TypeError):
+                                pass
+                        proyectado[campo] = valor
+
+                msg_bytes = json.dumps(proyectado).encode("utf-8")
+                self._enviar(msg_bytes, payload=proyectado)
             ack()
         except Exception as e:
             logger.error(f"Error proyectando payload: {e}", exc_info=True)

@@ -52,41 +52,44 @@ def _recv_reporte(socket):
         
     return reporte
 
-def _send_lote(socket, lote):
-    """Envía un lote de registros como strings de texto plano.
-       El MsgType ya se envió en la función send_msg.
+def _send_lote(socket, headers, client_id, lote):
+    """Envía un lote de registros con un encabezado (schema, client_id, count)
+       y un payload que consiste en un arreglo de arreglos de valores.
     """
-    msg = external_serializer.serialize_uint32(len(lote))
-    
-    for record in lote:
-        record_bytes = str(record).encode("utf-8")
-        msg += external_serializer.serialize_uint32(len(record_bytes))
-        msg += record_bytes
-    
+    batch = {
+        "header": {
+            "schema": headers,
+            "client_id": client_id,
+            "count": len(lote)
+        },
+        "payload": lote
+    }
+    batch_bytes = json.dumps(batch).encode("utf-8")
+    msg = external_serializer.serialize_uint32(len(batch_bytes)) + batch_bytes
     socket.sendall(msg)
 
 
 def _recv_lote(socket):
-    """Recibe un lote de registros como strings de texto plano."""
-    lote_size = external_serializer.deserialize_uint32(
+    """Recibe un lote de registros con un encabezado y payload en formato compacto."""
+    batch_size = external_serializer.deserialize_uint32(
         _recv_sized(socket, external_serializer.UINT32_SIZE)
     )
-    lote = []
-    for _ in range(lote_size):
-        record_size = external_serializer.deserialize_uint32(
-            _recv_sized(socket, external_serializer.UINT32_SIZE)
-        )
-        record_bytes = _recv_sized(socket, record_size)
-        
-        record = record_bytes.decode("utf-8")
-        lote.append(record)
-        
-    return lote
+    batch_bytes = _recv_sized(socket, batch_size)
+    return json.loads(batch_bytes.decode("utf-8"))
+
+
+def _recv_end_of_records(socket):
+    size = external_serializer.deserialize_uint32(
+        _recv_sized(socket, external_serializer.UINT32_SIZE)
+    )
+    if size == 0:
+        return None
+    return _recv_sized(socket, size).decode("utf-8")
 
 
 RECV_MSG_HANDLERS = {
     MsgType.ACK: _recv_empty,
-    MsgType.END_OF_RECODS: _recv_empty,
+    MsgType.END_OF_RECODS: _recv_end_of_records,
     MsgType.REPORTE: _recv_reporte,
     MsgType.LOTE_TRANSACCIONES: _recv_lote,
     MsgType.LOTE_BANCOS: _recv_lote
@@ -105,8 +108,13 @@ def _send_ack(socket):
     socket.sendall(external_serializer.serialize_uint32(MsgType.ACK))
 
 
-def _send_end_of_records(socket):
-    socket.sendall(external_serializer.serialize_uint32(MsgType.END_OF_RECODS))
+def _send_end_of_records(socket, client_id=None):
+    if client_id is not None:
+        client_id_bytes = client_id.encode("utf-8")
+        msg = external_serializer.serialize_uint32(len(client_id_bytes)) + client_id_bytes
+    else:
+        msg = external_serializer.serialize_uint32(0)
+    socket.sendall(msg)
 
 
 def _send_reporte(socket, reporte):
