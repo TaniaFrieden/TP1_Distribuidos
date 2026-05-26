@@ -21,48 +21,107 @@ class AgregadorBancarioWorker(BaseWorker):
         logger.debug(f"[MENSAJE ENTRANTE] Cola: '{queue_name}' | Cliente: {client_id}")
 
         try:
-            # 1. Extraemos y normalizamos el Bank ID dependiendo del origen
-            if "transactions" in queue_name:
-                bank_id = normalizar_valor_hash(payload.get("From Bank"))
-            elif "banks" in queue_name:
-                bank_id = normalizar_valor_hash(payload.get("Bank ID"))
+            if "batches" in payload:
+                with self.lock_estado:
+                    # 1. Inicialización segura del estado del cliente
+                    if client_id not in self.estado_agregador:
+                        logger.info(f"[CLIENTE NUEVO] Inicializando estado para {client_id}")
+                        self.estado_agregador[client_id] = {}
+
+                    for batch in payload["batches"]:
+                        header = batch["header"]
+                        schema = header["schema"]
+                        records = batch["payload"]
+
+                        if "transactions" in queue_name:
+                            from_bank_idx = schema.index("From Bank") if "From Bank" in schema else None
+                            amount_paid_idx = schema.index("Amount Paid") if "Amount Paid" in schema else None
+                            amount_received_idx = schema.index("Amount Received") if "Amount Received" in schema else None
+                            account_idx = schema.index("Account") if "Account" in schema else None
+
+                            for record_values in records:
+                                bank_val = record_values[from_bank_idx] if from_bank_idx is not None else None
+                                bank_id = normalizar_valor_hash(bank_val)
+                                if not bank_id:
+                                    continue
+
+                                if bank_id not in self.estado_agregador[client_id]:
+                                    self.estado_agregador[client_id][bank_id] = {
+                                        "bank_name": "Desconocido",
+                                        "max_amount": 0.0,
+                                        "account": "Desconocida"
+                                    }
+
+                                monto_str = "0"
+                                if amount_paid_idx is not None:
+                                    monto_str = record_values[amount_paid_idx]
+                                elif amount_received_idx is not None:
+                                    monto_str = record_values[amount_received_idx]
+                                monto = float(monto_str)
+
+                                if monto > self.estado_agregador[client_id][bank_id]["max_amount"]:
+                                    self.estado_agregador[client_id][bank_id]["max_amount"] = monto
+                                    if account_idx is not None:
+                                        self.estado_agregador[client_id][bank_id]["account"] = record_values[account_idx]
+
+                        elif "banks" in queue_name:
+                            bank_id_idx = schema.index("Bank ID") if "Bank ID" in schema else None
+                            bank_name_idx = schema.index("Bank Name") if "Bank Name" in schema else None
+                            account_number_idx = schema.index("Account Number") if "Account Number" in schema else None
+
+                            for record_values in records:
+                                bank_val = record_values[bank_id_idx] if bank_id_idx is not None else None
+                                bank_id = normalizar_valor_hash(bank_val)
+                                if not bank_id:
+                                    continue
+
+                                if bank_id not in self.estado_agregador[client_id]:
+                                    self.estado_agregador[client_id][bank_id] = {
+                                        "bank_name": "Desconocido",
+                                        "max_amount": 0.0,
+                                        "account": "Desconocida"
+                                    }
+
+                                if bank_name_idx is not None:
+                                    self.estado_agregador[client_id][bank_id]["bank_name"] = record_values[bank_name_idx]
+                                if account_number_idx is not None and self.estado_agregador[client_id][bank_id]["account"] == "Desconocida":
+                                    self.estado_agregador[client_id][bank_id]["account"] = record_values[account_number_idx]
             else:
-                ack()
-                return
+                # 1. Extraemos y normalizamos el Bank ID dependiendo del origen (Fallback)
+                if "transactions" in queue_name:
+                    bank_id = normalizar_valor_hash(payload.get("From Bank"))
+                elif "banks" in queue_name:
+                    bank_id = normalizar_valor_hash(payload.get("Bank ID"))
+                else:
+                    ack()
+                    return
 
-            with self.lock_estado:
-                # 2. Inicialización segura del estado del cliente y del banco
-                if client_id not in self.estado_agregador:
-                    logger.info(f"[CLIENTE NUEVO] Inicializando estado para {client_id}")
-                    self.estado_agregador[client_id] = {}
-                
-                if bank_id not in self.estado_agregador[client_id]:
-                    self.estado_agregador[client_id][bank_id] = {
-                        "bank_name": "Desconocido",
-                        "max_amount": 0.0,
-                        "account": "Desconocida"
-                    }
-
-                # 3. Lógica de actualización según la cola de origen
-                if "banks" in queue_name:
-                    # Metadatos del Banco
-                    self.estado_agregador[client_id][bank_id]["bank_name"] = payload.get("Bank Name", "Desconocido")
+                with self.lock_estado:
+                    # 2. Inicialización segura del estado del cliente y del banco
+                    if client_id not in self.estado_agregador:
+                        logger.info(f"[CLIENTE NUEVO] Inicializando estado para {client_id}")
+                        self.estado_agregador[client_id] = {}
                     
-                    # Guardamos la cuenta del banco como fallback por si no llega ninguna transacción
-                    if self.estado_agregador[client_id][bank_id]["account"] == "Desconocida":
-                        self.estado_agregador[client_id][bank_id]["account"] = payload.get("Account Number", "Desconocida")
+                    if bank_id not in self.estado_agregador[client_id]:
+                        self.estado_agregador[client_id][bank_id] = {
+                            "bank_name": "Desconocido",
+                            "max_amount": 0.0,
+                            "account": "Desconocida"
+                        }
 
-                elif "transactions" in queue_name:
-                    # Datos de la Transacción
-                    monto_str = payload.get("Amount Paid", payload.get("Amount Received", "0"))
-                    monto = float(monto_str)
-                    
-                    # Si encontramos un nuevo máximo, actualizamos el monto Y guardamos la cuenta responsable
-                    if monto > self.estado_agregador[client_id][bank_id]["max_amount"]:
-                        self.estado_agregador[client_id][bank_id]["max_amount"] = monto
-                        self.estado_agregador[client_id][bank_id]["account"] = payload.get("Account", "Desconocida")
+                    # 3. Lógica de actualización según la cola de origen
+                    if "banks" in queue_name:
+                        self.estado_agregador[client_id][bank_id]["bank_name"] = payload.get("Bank Name", "Desconocido")
+                        if self.estado_agregador[client_id][bank_id]["account"] == "Desconocida":
+                            self.estado_agregador[client_id][bank_id]["account"] = payload.get("Account Number", "Desconocida")
 
-            # Confirmamos a RabbitMQ que procesamos el mensaje con éxito
+                    elif "transactions" in queue_name:
+                        monto_str = payload.get("Amount Paid", payload.get("Amount Received", "0"))
+                        monto = float(monto_str)
+                        if monto > self.estado_agregador[client_id][bank_id]["max_amount"]:
+                            self.estado_agregador[client_id][bank_id]["max_amount"] = monto
+                            self.estado_agregador[client_id][bank_id]["account"] = payload.get("Account", "Desconocida")
+
             ack()
 
         except ValueError as e:
@@ -107,31 +166,38 @@ class AgregadorBancarioWorker(BaseWorker):
             self.coordinator.iniciar_barrera(client_id, mensaje_barrera)
 
         return True
+
     def al_completar_cliente(self, client_id: str):
         """Callback ejecutado cuando la barrera de EOFs local y global se completó."""
         with self.lock_estado:
             if client_id in self.estado_agregador:
+                records = []
                 for bank_id, datos in self.estado_agregador[client_id].items():
-                    
                     # Criterios de descarte
                     if datos["max_amount"] <= 0.0:
                         continue
-
                     if datos["bank_name"] == "Desconocido":
                         logger.warning(f"[FILTRO] Descartando banco {bank_id} para cliente {client_id}: Nombre desconocido.")
                         continue
                     
-                    # Formato JSON final solicitado
-                    payload_final = {
+                    records.append([bank_id, datos["bank_name"], datos["account"], datos["max_amount"]])
+
+                if records:
+                    batch_payload = {
                         "client_id": client_id,
-                        "Bank ID": bank_id,
-                        "Bank Name": datos["bank_name"],
-                        "Account": datos["account"],
-                        "Max Amount": datos["max_amount"]
+                        "batches": [
+                            {
+                                "header": {
+                                    "schema": ["Bank ID", "Bank Name", "Account", "Max Amount"],
+                                    "client_id": client_id,
+                                    "count": len(records)
+                                },
+                                "payload": records
+                            }
+                        ]
                     }
-                    
-                    mensaje_bytes = json.dumps(payload_final).encode('utf-8')
-                    self._enviar(mensaje_bytes)
+                    mensaje_bytes = json.dumps(batch_payload).encode('utf-8')
+                    self._enviar(mensaje_bytes, payload=batch_payload)
 
                 logger.info(f"[BARRERA CONTROL] Envío finalizado con éxito para cliente {client_id}.")
                 

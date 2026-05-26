@@ -81,21 +81,72 @@ class CurrencyConverterWorker(BaseWorker):
     def procesar_payload(self, queue_name: str, client_id: str, payload: dict | str, mensaje_original: bytes, ack, nack):
         try:
             t = payload if isinstance(payload, dict) else json.loads(payload)
-            iso = CURRENCY_MAP.get(t.get("Receiving Currency", ""))
-            if not iso:
-                ack()
-                return
+            
+            if "batches" in t:
+                filtered_batches = []
+                for batch in t["batches"]:
+                    header = batch["header"]
+                    schema = header["schema"]
+                    records = batch["payload"]
+                    
+                    rec_curr_idx = schema.index("Receiving Currency") if "Receiving Currency" in schema else None
+                    timestamp_idx = schema.index("Timestamp") if "Timestamp" in schema else None
+                    amt_rec_idx = schema.index("Amount Received") if "Amount Received" in schema else None
+                    
+                    filtered_records = []
+                    for record_values in records:
+                        try:
+                            curr_val = record_values[rec_curr_idx] if rec_curr_idx is not None else ""
+                            iso = CURRENCY_MAP.get(curr_val)
+                            if not iso:
+                                continue
+                            
+                            ts_val = record_values[timestamp_idx] if timestamp_idx is not None else ""
+                            fecha = ts_val.split(" ")[0].replace("/", "-")
+                            
+                            amt_val = record_values[amt_rec_idx] if amt_rec_idx is not None else 0
+                            monto = float(amt_val)
+                            
+                            amount_usd = self._convertir_a_usd(monto, iso, fecha)
+                            if amount_usd is not None and amount_usd < 1.0:
+                                filtered_records.append(record_values)
+                        except (ValueError, KeyError, IndexError):
+                            continue
+                            
+                    if filtered_records:
+                        filtered_batches.append({
+                            "header": {
+                                "schema": schema,
+                                "client_id": header.get("client_id", client_id),
+                                "count": len(filtered_records)
+                            },
+                            "payload": filtered_records
+                        })
+                        
+                if filtered_batches:
+                    output_payload = {
+                        "client_id": client_id,
+                        "batches": filtered_batches
+                    }
+                    msg_bytes = json.dumps(output_payload).encode("utf-8")
+                    self._enviar(msg_bytes, payload=output_payload)
+            else:
+                # Fallback para formato anterior
+                iso = CURRENCY_MAP.get(t.get("Receiving Currency", ""))
+                if not iso:
+                    ack()
+                    return
 
-            fecha = t.get("Timestamp", "").split(" ")[0].replace("/", "-")
-            monto = float(t.get("Amount Received", 0))
-            amount_usd = self._convertir_a_usd(monto, iso, fecha)
+                fecha = t.get("Timestamp", "").split(" ")[0].replace("/", "-")
+                monto = float(t.get("Amount Received", 0))
+                amount_usd = self._convertir_a_usd(monto, iso, fecha)
 
-            if amount_usd is None:
-                ack()
-                return
+                if amount_usd is None:
+                    ack()
+                    return
 
-            if amount_usd < 1.0:
-                self._enviar(mensaje_original)
+                if amount_usd < 1.0:
+                    self._enviar(mensaje_original)
 
             ack()
 

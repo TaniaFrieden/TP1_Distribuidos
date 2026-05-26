@@ -30,20 +30,47 @@ class FormatShardWorker(BaseWorker):
 
     def procesar_payload(self, queue_name: str, client_id: str, payload: dict, mensaje_original: bytes, ack, nack):
         try:
-            with self.lock:
-                estado = self._get_estado(client_id)
-                
-                if "temprano" in queue_name:
-                    formato = payload.get("Payment Format", "")
-                    monto = float(payload.get("Amount Paid", 0))
+            if "batches" in payload:
+                with self.lock:
+                    estado = self._get_estado(client_id)
+                    for batch in payload["batches"]:
+                        header = batch["header"]
+                        schema = header["schema"]
+                        records = batch["payload"]
+                        
+                        if "temprano" in queue_name:
+                            formato_idx = schema.index("Payment Format") if "Payment Format" in schema else None
+                            monto_idx = schema.index("Amount Paid") if "Amount Paid" in schema else None
+                            
+                            for record_values in records:
+                                formato = record_values[formato_idx] if formato_idx is not None else ""
+                                monto = float(record_values[monto_idx] if monto_idx is not None else 0)
+                                
+                                if formato not in estado["datos_temprano"]:
+                                    estado["datos_temprano"][formato] = {"suma": 0.0, "count": 0}
+                                estado["datos_temprano"][formato]["suma"] += monto
+                                estado["datos_temprano"][formato]["count"] += 1
+                        elif "tardio" in queue_name:
+                            # Almacenamos tuplas (schema, record_values) en la cache
+                            for record_values in records:
+                                estado["cache_tardio"].append((schema, record_values))
+            else:
+                with self.lock:
+                    estado = self._get_estado(client_id)
                     
-                    if formato not in estado["datos_temprano"]:
-                        estado["datos_temprano"][formato] = {"suma": 0.0, "count": 0}
-                    estado["datos_temprano"][formato]["suma"] += monto
-                    estado["datos_temprano"][formato]["count"] += 1
-                    
-                elif "tardio" in queue_name:
-                    estado["cache_tardio"].append(payload)
+                    if "temprano" in queue_name:
+                        formato = payload.get("Payment Format", "")
+                        monto = float(payload.get("Amount Paid", 0))
+                        
+                        if formato not in estado["datos_temprano"]:
+                            estado["datos_temprano"][formato] = {"suma": 0.0, "count": 0}
+                        estado["datos_temprano"][formato]["suma"] += monto
+                        estado["datos_temprano"][formato]["count"] += 1
+                        
+                    elif "tardio" in queue_name:
+                        schema = list(payload.keys())
+                        record_values = list(payload.values())
+                        estado["cache_tardio"].append((schema, record_values))
 
             ack()
 
@@ -96,21 +123,40 @@ class FormatShardWorker(BaseWorker):
 
     def _procesar_cache_tardio(self, client_id: str, estado: dict):
         promedios = estado["promedios"]
-        for payload in estado["cache_tardio"]:
-            formato = payload.get("Payment Format", "")
-            monto = float(payload.get("Amount Paid", 0))
+        
+        # Agrupamos las salidas en un único lote final
+        records = []
+        for schema, record_values in estado["cache_tardio"]:
+            formato_idx = schema.index("Payment Format") if "Payment Format" in schema else None
+            monto_idx = schema.index("Amount Paid") if "Amount Paid" in schema else None
+            account_idx = schema.index("Account") if "Account" in schema else None
+            
+            formato = record_values[formato_idx] if formato_idx is not None else ""
+            monto = float(record_values[monto_idx] if monto_idx is not None else 0)
             promedio = promedios.get(formato)
             
             if promedio is None:
                 continue
                 
             if monto < promedio * 0.01:
-                resultado = {
-                    "client_id": client_id,
-                    "From Account": payload.get("Account", ""),
-                    "Amount Paid": monto
-                }
-                self._enviar(json.dumps(resultado).encode('utf-8'))
+                account = record_values[account_idx] if account_idx is not None else ""
+                records.append([account, monto])
+                
+        if records:
+            output_payload = {
+                "client_id": client_id,
+                "batches": [
+                    {
+                        "header": {
+                            "schema": ["From Account", "Amount Paid"],
+                            "client_id": client_id,
+                            "count": len(records)
+                        },
+                        "payload": records
+                    }
+                ]
+            }
+            self._enviar(json.dumps(output_payload).encode('utf-8'), payload=output_payload)
         
         # Vaciamos la memoria inmediatamente después de procesar
         estado["cache_tardio"].clear()

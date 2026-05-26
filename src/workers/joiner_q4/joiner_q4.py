@@ -29,18 +29,57 @@ class JoinerQ4Worker(BaseWorker):
         self._lock = threading.Lock()
 
     def procesar_payload(self, queue_name: str, client_id: str, payload: dict,
-                         mensaje_original: bytes, ack, nack):
+                          mensaje_original: bytes, ack, nack):
         try:
-            if "scatter" in queue_name:
-                b_key = f"{payload['to_bank']}|{payload['to_account']}"
-                a_info = (payload["from_bank"], payload["from_account"])
+            if "batches" in payload:
                 with self._lock:
-                    self._scatter.setdefault(client_id, {}).setdefault(b_key, []).append(a_info)
+                    for batch in payload["batches"]:
+                        header = batch["header"]
+                        schema = header["schema"]
+                        records = batch["payload"]
+                        
+                        if "scatter" in queue_name:
+                            to_bank_idx = schema.index("to_bank") if "to_bank" in schema else None
+                            to_account_idx = schema.index("to_account") if "to_account" in schema else None
+                            from_bank_idx = schema.index("from_bank") if "from_bank" in schema else None
+                            from_account_idx = schema.index("from_account") if "from_account" in schema else None
+                            
+                            for record_values in records:
+                                to_bank = record_values[to_bank_idx] if to_bank_idx is not None else ""
+                                to_account = record_values[to_account_idx] if to_account_idx is not None else ""
+                                from_bank = record_values[from_bank_idx] if from_bank_idx is not None else ""
+                                from_account = record_values[from_account_idx] if from_account_idx is not None else ""
+                                
+                                b_key = f"{to_bank}|{to_account}"
+                                a_info = (from_bank, from_account)
+                                self._scatter.setdefault(client_id, {}).setdefault(b_key, []).append(a_info)
+                        else:
+                            from_bank_idx = schema.index("From Bank") if "From Bank" in schema else None
+                            account_idx = schema.index("Account") if "Account" in schema else None
+                            to_bank_idx = schema.index("To Bank") if "To Bank" in schema else None
+                            to_account_idx = schema.index("Account.1") if "Account.1" in schema else None
+                            
+                            for record_values in records:
+                                from_bank = record_values[from_bank_idx] if from_bank_idx is not None else ""
+                                account = record_values[account_idx] if account_idx is not None else ""
+                                to_bank = record_values[to_bank_idx] if to_bank_idx is not None else ""
+                                to_account = record_values[to_account_idx] if to_account_idx is not None else ""
+                                
+                                b_key = f"{from_bank}|{account}"
+                                c_info = (to_bank, to_account)
+                                self._txns.setdefault(client_id, {}).setdefault(b_key, set()).add(c_info)
             else:
-                b_key = f"{payload.get('From Bank', '')}|{payload.get('Account', '')}"
-                c_info = (payload.get("To Bank", ""), payload.get("Account.1", ""))
-                with self._lock:
-                    self._txns.setdefault(client_id, {}).setdefault(b_key, set()).add(c_info)
+                # Fallback para formato anterior
+                if "scatter" in queue_name:
+                    b_key = f"{payload['to_bank']}|{payload['to_account']}"
+                    a_info = (payload["from_bank"], payload["from_account"])
+                    with self._lock:
+                        self._scatter.setdefault(client_id, {}).setdefault(b_key, []).append(a_info)
+                else:
+                    b_key = f"{payload.get('From Bank', '')}|{payload.get('Account', '')}"
+                    c_info = (payload.get("To Bank", ""), payload.get("Account.1", ""))
+                    with self._lock:
+                        self._txns.setdefault(client_id, {}).setdefault(b_key, set()).add(c_info)
             ack()
         except Exception as e:
             logger.error(f"Error procesando payload: {e}", exc_info=True)
@@ -51,6 +90,7 @@ class JoinerQ4Worker(BaseWorker):
             scatter = self._scatter.pop(client_id, {})
             txns    = self._txns.pop(client_id, {})
 
+        records = []
         for b_key, a_list in scatter.items():
             if b_key not in txns:
                 continue
@@ -65,16 +105,23 @@ class JoinerQ4Worker(BaseWorker):
                     if (a_bank, a_account) == (c_bank, c_account):
                         continue
 
-                    path = {
-                        "client_id": client_id,
-                        "a_bank":    a_bank,
-                        "a_account": a_account,
-                        "b_bank":    b_bank,
-                        "b_account": b_account,
-                        "c_bank":    c_bank,
-                        "c_account": c_account,
+                    records.append([a_bank, a_account, b_bank, b_account, c_bank, c_account])
+
+        if records:
+            output_payload = {
+                "client_id": client_id,
+                "batches": [
+                    {
+                        "header": {
+                            "schema": ["a_bank", "a_account", "b_bank", "b_account", "c_bank", "c_account"],
+                            "client_id": client_id,
+                            "count": len(records)
+                        },
+                        "payload": records
                     }
-                    self._enviar(json.dumps(path).encode("utf-8"), payload=path)
+                ]
+            }
+            self._enviar(json.dumps(output_payload).encode("utf-8"), payload=output_payload)
 
         logger.info(f"[JoinerQ4] Flush completo para client_id={client_id}.")
 

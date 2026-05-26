@@ -59,12 +59,27 @@ class GroupDistinctCounterWorker(BaseWorker):
     def procesar_payload(self, queue_name: str, client_id: str, payload: dict,
                          mensaje_original: bytes, ack, nack):
         try:
-            gkey = self._make_key(payload, self.group_fields)
-            vkey = self._make_key(payload, self.value_fields)
-
-            with self._lock:
-                self._grupos.setdefault(client_id, {}).setdefault(gkey, set()).add(vkey)
-
+            if "batches" in payload:
+                with self._lock:
+                    for batch in payload["batches"]:
+                        header = batch["header"]
+                        schema = header["schema"]
+                        records = batch["payload"]
+                        
+                        group_indices = [schema.index(f) if f in schema else None for f in self.group_fields]
+                        value_indices = [schema.index(f) if f in schema else None for f in self.value_fields]
+                        
+                        for record_values in records:
+                            gkey = tuple(str(record_values[idx]) if idx is not None else "" for idx in group_indices)
+                            vkey = tuple(str(record_values[idx]) if idx is not None else "" for idx in value_indices)
+                            
+                            self._grupos.setdefault(client_id, {}).setdefault(gkey, set()).add(vkey)
+            else:
+                # Fallback para formato anterior
+                gkey = self._make_key(payload, self.group_fields)
+                vkey = self._make_key(payload, self.value_fields)
+                with self._lock:
+                    self._grupos.setdefault(client_id, {}).setdefault(gkey, set()).add(vkey)
             ack()
         except Exception as e:
             logger.error(f"Error procesando payload: {e}", exc_info=True)
@@ -74,24 +89,36 @@ class GroupDistinctCounterWorker(BaseWorker):
         with self._lock:
             grupos = self._grupos.pop(client_id, {})
 
-        for gkey, vset in grupos.items():
-            if len(vset) != self.expected:
-                continue
-
-            if self.emit_mode == "explode":
+        records = []
+        if self.emit_mode == "explode":
+            schema = self.group_out + self.value_out
+            for gkey, vset in grupos.items():
+                if len(vset) != self.expected:
+                    continue
                 for vkey in vset:
-                    msg = {"client_id": client_id}
-                    for name, val in zip(self.group_out, gkey):
-                        msg[name] = val
-                    for name, val in zip(self.value_out, vkey):
-                        msg[name] = val
-                    self._enviar(json.dumps(msg).encode("utf-8"), payload=msg)
-            else:
-                msg = {"client_id": client_id}
-                for name, val in zip(self.group_out, gkey):
-                    msg[name] = val
-                msg[self.count_field] = self.expected
-                self._enviar(json.dumps(msg).encode("utf-8"))
+                    records.append(list(gkey) + list(vkey))
+        else:
+            schema = self.group_out + [self.count_field]
+            for gkey, vset in grupos.items():
+                if len(vset) != self.expected:
+                    continue
+                records.append(list(gkey) + [self.expected])
+
+        if records:
+            output_payload = {
+                "client_id": client_id,
+                "batches": [
+                    {
+                        "header": {
+                            "schema": schema,
+                            "client_id": client_id,
+                            "count": len(records)
+                        },
+                        "payload": records
+                    }
+                ]
+            }
+            self._enviar(json.dumps(output_payload).encode("utf-8"), payload=output_payload)
 
         logger.info(f"[GroupDistinctCounter] Flush completo para client_id={client_id}.")
 
