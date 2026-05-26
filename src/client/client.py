@@ -3,6 +3,8 @@ import socket
 import threading
 import logging
 import sys
+import time
+import uuid
 from common import message_protocol
 from common.logging_setup import setup_logging
 from config import SERVER_HOST, SERVER_PORT, TRANSACTIONS_FILE, ACCOUNTS_FILE
@@ -18,22 +20,14 @@ def main():
     if not sock:
         return 1
 
-    shutdown_event = threading.Event()
+    client_id = str(uuid.uuid4())
+    logging.info(f"Cliente iniciado con ID: {client_id}")
 
-    def _handle_shutdown(signum, _):
-        logging.info(f"Señal {signum} recibida. Cerrando cliente...")
-        shutdown_event.set()
-        try:
-            sock.shutdown(socket.SHUT_RDWR)
-        except Exception:
-            pass
-
-    signal.signal(signal.SIGTERM, _handle_shutdown)
-    signal.signal(signal.SIGINT, _handle_shutdown)
-
+    start_time = time.monotonic()
     socket_lock = threading.Lock()
-    hilo_receptor, hilos_envio = _iniciar_hilos(sock, socket_lock, shutdown_event)
-
+    shutdown_event = threading.Event()
+    hilo_receptor, hilos_envio = _iniciar_hilos(sock, socket_lock, client_id, start_time, shutdown_event)
+    
     _esperar_envios(hilos_envio)
 
     if not shutdown_event.is_set():
@@ -57,10 +51,10 @@ def _conectar_socket():
         logging.error(f"No se pudo conectar al servidor: {e}")
         return None
 
-def _iniciar_hilos(sock, lock, shutdown_event):
+def _iniciar_hilos(sock, lock, client_id, start_time, shutdown_event):
     hilo_receptor = threading.Thread(
         target=escuchar_respuesta,
-        args=(sock,),
+        args=(sock, start_time),
         daemon=True
     )
 

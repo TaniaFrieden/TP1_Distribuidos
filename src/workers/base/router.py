@@ -1,5 +1,6 @@
 import json
 import logging
+import threading
 from common import middleware, sharding
 
 logger = logging.getLogger(__name__)
@@ -12,6 +13,7 @@ class MessageRouter:
         self.output_queues_direct = []
         self.output_queues_sharded = []
         self.output_queues_conditional = []
+        self._send_lock = threading.Lock()
         self._setup_queues()
 
     def _setup_queues(self):
@@ -72,6 +74,10 @@ class MessageRouter:
                     })
 
     def enviar(self, mensaje: bytes, payload: dict | None = None):
+        with self._send_lock:
+            self._enviar_locked(mensaje, payload)
+
+    def _enviar_locked(self, mensaje: bytes, payload: dict | None = None):
         try:
             if mensaje is None:
                 return

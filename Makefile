@@ -10,6 +10,7 @@ OUTPUT_DIR ?= output
 SERVER_HOST ?= 127.0.0.1
 SERVER_PORT ?= 5678
 BATCH_SIZE ?= 10000
+SCALE ?= 2
 
 
 # Variables del gateway
@@ -17,7 +18,7 @@ MOM_HOST ?= localhost
 INPUT_QUEUE ?= input_queue
 OUTPUT_QUEUE ?= output_queue
 
-.PHONY: help venv install test test-worker-base clean free-ports client test-server gateway start down docker-logs
+.PHONY: help venv install test test-worker-base clean free-ports client run-clients test-server gateway start down docker-logs
 
 help:
 	@echo "Targets disponibles:"
@@ -32,16 +33,17 @@ help:
 	@echo "  make down              - detiene docker-compose"
 	@echo "  make docker-logs       - muestra logs de docker"
 	@echo ""
-	@echo "Uso local (sin docker):"
+	@echo "Uso local con N clientes (sin docker):"
 	@echo "  Terminal 1: make gateway"
-	@echo "  Terminal 2: make client"
+	@echo "  Terminal 2: make client OUTPUT_DIR=output/c1"
+	@echo "  Terminal 3: make client OUTPUT_DIR=output/c2"
+	@echo "  Terminal N: make client OUTPUT_DIR=output/cN"
 	@echo ""
-	@echo "Uso con docker:"
-	@echo "  1. make start           (levanta RabbitMQ y contenedores con logs)"
-	@echo "  2. make start !logs     (opcional: no mostrar logs al arrancar)"
-	@echo "  3. make docker-logs     (opcional: ver logs luego)"
-	@echo "  4. Ctrl+C para detener"
-	@echo "  5. make down            (detiene servicios)"
+	@echo "Uso con docker (N clientes en contenedores):"
+	@echo "  1. make start                   (levanta gateway + workers)"
+	@echo "  2. make run-clients             (lanza 2 clientes por defecto)"
+	@echo "  2. make run-clients SCALE=N     (lanza N clientes)"
+	@echo "  Cada cliente escribe a output/<hostname>/"
 	@echo ""
 	@echo "Variables del cliente (override con: make client TRANSACTIONS_FILE=...):"
 	@echo "  TRANSACTIONS_FILE=$(TRANSACTIONS_FILE)"
@@ -50,6 +52,7 @@ help:
 	@echo "  SERVER_HOST=$(SERVER_HOST)"
 	@echo "  SERVER_PORT=$(SERVER_PORT)"
 	@echo "  BATCH_SIZE=$(BATCH_SIZE)"
+	@echo "  SCALE=$(SCALE)  (solo para run-clients)"
 	@echo ""
 	@echo "Variables del gateway:"
 	@echo "  MOM_HOST=$(MOM_HOST)"
@@ -98,6 +101,7 @@ clean:
 	rm -f /tmp/client_output.txt
 	rm -f logs/*.txt
 	rm -f output/*.csv
+	rm -rf output/*/
 
 free-ports:
 	@echo "=== Liberando puerto $(SERVER_PORT) (Gateway) ==="
@@ -124,6 +128,9 @@ client:
 	SERVER_PORT=$(SERVER_PORT) \
 	BATCH_SIZE=$(BATCH_SIZE) \
 	PYTHONPATH=src $(PYTHON) src/client/client.py
+
+run-clients:
+	docker compose --profile clients up --build --scale client=$(SCALE)
 
 gateway:
 	@if command -v fuser >/dev/null 2>&1; then fuser -k $(SERVER_PORT)/tcp >/dev/null 2>&1 || true; fi
