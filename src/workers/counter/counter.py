@@ -31,6 +31,11 @@ class CounterWorker(BaseWorker):
         self._enviar(resultado)
         logger.info(f"Q5 count emitido para {client_id}: {count} transacciones.")
 
+    def al_desconectar_cliente(self, client_id: str):
+        with self._conteos_lock:
+            self._conteos.pop(client_id, None)
+        logger.info(f"Counter: estado descartado para {client_id}.")
+
     def al_cerrar(self):
         logger.info("Counter apagado.")
 

@@ -1,3 +1,4 @@
+import signal
 import socket
 import threading
 import logging
@@ -12,18 +13,34 @@ LOG_FORMAT = "%(levelname)s: %(message)s"
 
 def main():
     setup_logging("client")
-    
+
     sock = _conectar_socket()
     if not sock:
         return 1
 
+    shutdown_event = threading.Event()
+
+    def _handle_shutdown(signum, _):
+        logging.info(f"Señal {signum} recibida. Cerrando cliente...")
+        shutdown_event.set()
+        try:
+            sock.shutdown(socket.SHUT_RDWR)
+        except Exception:
+            pass
+
+    signal.signal(signal.SIGTERM, _handle_shutdown)
+    signal.signal(signal.SIGINT, _handle_shutdown)
+
     socket_lock = threading.Lock()
-    hilo_receptor, hilos_envio = _iniciar_hilos(sock, socket_lock)
-    
+    hilo_receptor, hilos_envio = _iniciar_hilos(sock, socket_lock, shutdown_event)
+
     _esperar_envios(hilos_envio)
-    _enviar_fin_registros(sock, socket_lock)
+
+    if not shutdown_event.is_set():
+        _enviar_fin_registros(sock, socket_lock)
+
     _finalizar_conexion(hilo_receptor, sock)
-    
+
     return 0
 
 ## --------------------
@@ -40,7 +57,7 @@ def _conectar_socket():
         logging.error(f"No se pudo conectar al servidor: {e}")
         return None
 
-def _iniciar_hilos(sock, lock):
+def _iniciar_hilos(sock, lock, shutdown_event):
     hilo_receptor = threading.Thread(
         target=escuchar_respuesta,
         args=(sock,),
@@ -49,12 +66,12 @@ def _iniciar_hilos(sock, lock):
 
     hilo_transacciones = threading.Thread(
         target=enviar_archivo,
-        args=(TRANSACTIONS_FILE, message_protocol.external.MsgType.LOTE_TRANSACCIONES, sock, lock)
+        args=(TRANSACTIONS_FILE, message_protocol.external.MsgType.LOTE_TRANSACCIONES, sock, lock, shutdown_event)
     )
 
     hilo_bancos = threading.Thread(
         target=enviar_archivo,
-        args=(ACCOUNTS_FILE, message_protocol.external.MsgType.LOTE_BANCOS, sock, lock)
+        args=(ACCOUNTS_FILE, message_protocol.external.MsgType.LOTE_BANCOS, sock, lock, shutdown_event)
     )
 
     hilo_receptor.start()
@@ -77,7 +94,10 @@ def _enviar_fin_registros(sock, lock):
 
 def _finalizar_conexion(hilo_receptor, sock):
     hilo_receptor.join()
-    sock.close()
+    try:
+        sock.close()
+    except Exception:
+        pass
     logging.info("Proceso terminado.")
 
 if __name__ == "__main__":

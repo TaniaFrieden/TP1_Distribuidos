@@ -28,10 +28,11 @@ class ClientHandler:
             for i in range(1, total_workers + 1):
                 colas_bancos[i] = middleware.MessageMiddlewareQueueRabbitMQ(self.config.mom_host, f"{prefix}_{i}")
         
+        eof_enviado = False
         try:
             while True:
                 msg_type, payload = message_protocol.external.recv_msg(client_socket)
-                
+
                 if msg_type == message_protocol.external.MsgType.LOTE_TRANSACCIONES:
                     for record_str in payload:
                         try:
@@ -44,18 +45,18 @@ class ClientHandler:
                                     record_dict["From Bank"] = int(from_bank_value)
                                 elif isinstance(from_bank_value, int):
                                     record_dict["From Bank"] = from_bank_value
-                            
+
                             msg_bytes = json.dumps(record_dict).encode("utf-8")
                             for q in colas_tx:
                                 q.send(msg_bytes)
                         except json.JSONDecodeError:
                             logger.warning(f"Mensaje descartado por formato JSON inválido: {record_str}")
-                    
+
                     _, lock, _ = self.state.obtener_cliente(client_id)
                     if lock:
                         with lock:
                             message_protocol.external.send_msg(client_socket, message_protocol.external.MsgType.ACK)
-                            
+
                 elif msg_type == message_protocol.external.MsgType.LOTE_BANCOS:
                     if not self.config.bank_queue_config:
                         _, lock, _ = self.state.obtener_cliente(client_id)
@@ -66,29 +67,30 @@ class ClientHandler:
 
                     hash_field = self.config.bank_queue_config.get("hash_field", "Bank ID")
                     total_workers = self.config.bank_queue_config.get("total_workers", 1)
-                    
+
                     for record_str in payload:
                         try:
                             banco_dict = json.loads(record_str)
                             banco_dict["client_id"] = client_id
-                            
+
                             bank_val = banco_dict.get(hash_field, "default")
                             shard_id = sharding.obtener_id_shard(bank_val, total_workers)
                             colas_bancos[shard_id].send(json.dumps(banco_dict).encode("utf-8"))
                         except json.JSONDecodeError:
                             logger.warning(f"Mensaje banco descartado: {record_str}")
-                    
+
                     _, lock, _ = self.state.obtener_cliente(client_id)
                     if lock:
                         with lock:
                             message_protocol.external.send_msg(client_socket, message_protocol.external.MsgType.ACK)
-                            
+
                 elif msg_type == message_protocol.external.MsgType.END_OF_RECODS:
                     eof_msg = json.dumps({"client_id": client_id, "EOF": True}).encode("utf-8")
                     for q in colas_tx:
                         q.send(eof_msg)
                     for q in colas_bancos.values():
                         q.send(eof_msg)
+                    eof_enviado = True
                     logger.info(f"EOF enviado para {client_id}")
                     break
         except socket.error:
@@ -96,7 +98,24 @@ class ClientHandler:
         except Exception as e:
             logger.error(f"Error con cliente {client_id}: {e}", exc_info=True)
         finally:
+            if not eof_enviado:
+                self._enviar_disconnect(client_id, colas_tx, colas_bancos)
+                self.state.remover_cliente(client_id)
             for q in colas_tx:
                 q.close()
             for q in colas_bancos.values():
                 q.close()
+
+    def _enviar_disconnect(self, client_id, colas_tx, colas_bancos):
+        disconnect_msg = json.dumps({"client_id": client_id, "CLIENT_DISCONNECT": True}).encode("utf-8")
+        logger.info(f"Enviando CLIENT_DISCONNECT para {client_id}")
+        for q in colas_tx:
+            try:
+                q.send(disconnect_msg)
+            except Exception as e:
+                logger.warning(f"No se pudo enviar CLIENT_DISCONNECT a cola tx: {e}")
+        for q in colas_bancos.values():
+            try:
+                q.send(disconnect_msg)
+            except Exception as e:
+                logger.warning(f"No se pudo enviar CLIENT_DISCONNECT a cola bancos: {e}")
