@@ -1,15 +1,33 @@
 {
+  "skip_gateway_output": true,
   "banks_shard": {
-    "queue_shard_prefix": "q2_shard_banks",
-    "total_workers": 6,
+    "queue_shard_prefix": "q2_raw_banks",
+    "total_workers": 3,
     "hash_field": "Bank ID"
   },
   "workers": [
     {
-      "type": "filter",
-      "prefix": "q2_filter_usd",
+      "type": "projection",
+      "prefix": "q2_bank_projection",
+      "replicas": 3,
+      "input_queue": "q2_raw_banks_{id}",
+      "output_queue": [
+        {
+          "queue_shard_prefix": "q2_shard_banks",
+          "total_workers": 6,
+          "hash_field": "Bank ID"
+        }
+      ],
+      "extra_env": {
+        "CAMPOS": "Bank ID,Bank Name,Account Number",
+        "INT_FIELDS": ""
+      }
+    },
+    {
+      "type": "projection",
+      "prefix": "q2_projection",
       "replicas": 6,
-      "input_queue": "q2_raw_data",
+      "input_queue": "q2_pre_projection",
       "output_queue": [
         {
           "queue_shard_prefix": "q2_shard_transactions",
@@ -18,9 +36,8 @@
         }
       ],
       "extra_env": {
-        "FILTER_FIELD": "Payment Currency",
-        "FILTER_VALUE": "US Dollar",
-        "FILTER_OPERATOR": "eq"
+        "CAMPOS": "From Bank,Account,Payment Currency,Receiving Currency,Amount Received,Amount Paid",
+        "INT_FIELDS": "From Bank"
       }
     },
     {

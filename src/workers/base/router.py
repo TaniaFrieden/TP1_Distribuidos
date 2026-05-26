@@ -67,6 +67,21 @@ class MessageRouter:
                         "hash_field": item.get("hash_field"),
                         "queues": shard_queues
                     })
+                prefix = item.get("queue_shard_prefix", item.get("shard_prefix"))
+                total = item.get("total_workers")
+                # Soporta hash_fields (lista) o hash_field (string único, compat. hacia atrás)
+                raw = item.get("hash_fields") or ([item.get("hash_field")] if item.get("hash_field") else [])
+                hash_fields = [f for f in raw if f]
+                shard_queues = {
+                    i: middleware.MessageMiddlewareQueueRabbitMQ(self.config.mom_host, f"{prefix}_{i}")
+                    for i in range(1, total + 1)
+                }
+                self.output_queues_sharded.append({
+                    "prefix": prefix,
+                    "total_workers": total,
+                    "hash_fields": hash_fields,
+                    "queues": shard_queues
+                })
 
     def enviar(self, mensaje: bytes, payload: dict = None):
         try:
@@ -93,8 +108,9 @@ class MessageRouter:
                     for q in shard_meta["queues"].values():
                         q.send(mensaje)
                 else:
+                    # Lógica de ruteo inteligente: solo 1 mensaje al destino correcto
                     valor_hash = payload.get(shard_meta["hash_field"], "default")
-                    logger.info(f"[DEBUG ROUTER] Campo buscado: '{shard_meta['hash_field']}' | Payload recibido: {payload}")
+                    logger.info(f"[DEBUG ROUETR] Campo buscado: '{shard_meta['hash_field']}' | Payload recibido: {payload}")
                     target_id = sharding.obtener_id_shard(valor_hash, shard_meta["total_workers"])
                     shard_meta["queues"][target_id].send(mensaje)
 

@@ -1,4 +1,7 @@
 {
+  "projection": {
+    "dockerfile": "workers/projection/Dockerfile"
+  },
   "filter": {
     "dockerfile": "workers/filter/Dockerfile"
   },
@@ -12,7 +15,13 @@
     "dockerfile": "workers/bank_shard/Dockerfile"
   },
   "format_shard": {
-  "dockerfile": "workers/format_shard/Dockerfile",
-  "default_env": {}
+    "dockerfile": "workers/format_shard/Dockerfile",
+    "default_env": {}
+  },
+  "group_distinct_counter": {
+    "dockerfile": "workers/group_distinct_counter/Dockerfile"
+  },
+  "joiner_q4": {
+    "dockerfile": "workers/joiner_q4/Dockerfile"
   }
 }

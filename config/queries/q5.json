@@ -1,10 +1,20 @@
 {
   "workers": [
     {
+      "type": "projection",
+      "prefix": "q5_projection",
+      "replicas": 4,
+      "input_queue": "q5_raw_data",
+      "output_queue": "q5_projected_data",
+      "extra_env": {
+        "CAMPOS": "Timestamp,Payment Currency,Receiving Currency,Payment Format,Amount Received"
+      }
+    },
+    {
       "type": "filter",
       "prefix": "q5_filter_period",
       "replicas": 4,
-      "input_queue": "q5_raw_data",
+      "input_queue": "q5_projected_data",
       "output_queue": "q5_period_to_format",
       "extra_env": {
         "FILTER_FIELD": "Timestamp",

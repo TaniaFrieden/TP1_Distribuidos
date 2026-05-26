@@ -2,14 +2,29 @@
   "workers": [
     {
       "type": "filter",
-      "prefix": "q1_filter_usd",
+      "prefix": "filter_usd",
       "replicas": 2,
       "input_queue": "q1_raw_data",
-      "output_queue": "q1_usd_to_minor_50",
+      "output_queue": [
+        "q1_pre_projection",
+        "q2_pre_projection",
+        "q4_pre_projection"
+      ],
       "extra_env": {
         "FILTER_FIELD": "Payment Currency",
         "FILTER_VALUE": "US Dollar",
         "FILTER_OPERATOR": "eq"
+      }
+    },
+    {
+      "type": "projection",
+      "prefix": "q1_projection",
+      "replicas": 2,
+      "input_queue": "q1_pre_projection",
+      "output_queue": "q1_usd_to_minor_50",
+      "extra_env": {
+        "CAMPOS": "From Bank,Account,To Bank,Account.1,Amount Paid",
+        "INT_FIELDS": "From Bank"
       }
     },
     {
