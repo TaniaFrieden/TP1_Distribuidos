@@ -1,11 +1,24 @@
 {
-  "skip_gateway_output": true,
   "banks_shard": {
     "queue_shard_prefix": "q2_raw_banks",
     "total_workers": 3,
     "hash_field": "Bank ID"
   },
   "workers": [
+    {
+      "type": "filter",
+      "prefix": "q2_filter_usd",
+      "replicas": 2,
+      "input_queue": "q2_raw_data",
+      "output_queue": [
+        "q2_pre_projection"
+      ],
+      "extra_env": {
+        "FILTER_FIELD": "Payment Currency",
+        "FILTER_VALUE": "US Dollar",
+        "FILTER_OPERATOR": "eq"
+      }
+    },
     {
       "type": "projection",
       "prefix": "q2_bank_projection",
