@@ -25,7 +25,8 @@ def main():
 
     start_time = time.monotonic()
     socket_lock = threading.Lock()
-    hilo_receptor, hilos_envio = _iniciar_hilos(sock, socket_lock, client_id, start_time)
+    shutdown_event = threading.Event()
+    hilo_receptor, hilos_envio = _iniciar_hilos(sock, socket_lock, client_id, start_time, shutdown_event)
     
     _esperar_envios(hilos_envio)
 
@@ -50,7 +51,7 @@ def _conectar_socket():
         logging.error(f"No se pudo conectar al servidor: {e}")
         return None
 
-def _iniciar_hilos(sock, lock, client_id, start_time):
+def _iniciar_hilos(sock, lock, client_id, start_time, shutdown_event):
     hilo_receptor = threading.Thread(
         target=escuchar_respuesta,
         args=(sock, start_time),
