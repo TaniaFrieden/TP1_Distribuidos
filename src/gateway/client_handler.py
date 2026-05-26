@@ -36,6 +36,19 @@ class ClientHandler:
                     schema = header["schema"]
                     records = payload["payload"]
 
+                    # Renombrar columnas duplicadas en la cabecera (ej: Account -> Account.1)
+                    clean_schema = []
+                    counts = {}
+                    for col in schema:
+                        if col in counts:
+                            counts[col] += 1
+                            clean_schema.append(f"{col}.{counts[col]}")
+                        else:
+                            counts[col] = 0
+                            clean_schema.append(col)
+                    schema = clean_schema
+                    header["schema"] = clean_schema
+
                     if client_id is None:
                         client_id = msg_client_id
                         self.state.registrar_cliente(client_id, client_socket)
@@ -75,6 +88,19 @@ class ClientHandler:
                     msg_client_id = header["client_id"]
                     schema = header["schema"]
                     records = payload["payload"]
+
+                    # Renombrar columnas duplicadas en la cabecera
+                    clean_schema = []
+                    counts = {}
+                    for col in schema:
+                        if col in counts:
+                            counts[col] += 1
+                            clean_schema.append(f"{col}.{counts[col]}")
+                        else:
+                            counts[col] = 0
+                            clean_schema.append(col)
+                    schema = clean_schema
+                    header["schema"] = clean_schema
 
                     if client_id is None:
                         client_id = msg_client_id

@@ -1,6 +1,7 @@
 import os
 import json
 import logging
+import time
 from common import message_protocol
 from config import OUTPUT_DIR
 
@@ -15,6 +16,7 @@ def escuchar_respuesta(sock):
     # Ahora archivos y cabeceras comienzan vacíos
     archivos_salida = {}
     cabeceras_escritas = {}
+    tiempos_inicio = {}
     
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     
@@ -27,7 +29,7 @@ def escuchar_respuesta(sock):
                 break
             
             if msg_type == message_protocol.external.MsgType.REPORTE:
-                _procesar_resultado(payload, archivos_salida, cabeceras_escritas)
+                _procesar_resultado(payload, archivos_salida, cabeceras_escritas, tiempos_inicio)
             
             elif msg_type == message_protocol.external.MsgType.END_OF_RECODS:
                 break
@@ -36,7 +38,7 @@ def escuchar_respuesta(sock):
         for f in archivos_salida.values():
             f.close()
 
-def _procesar_resultado(payload, archivos, cabeceras):
+def _procesar_resultado(payload, archivos, cabeceras, tiempos_inicio):
     try:
         data = json.loads(payload) if isinstance(payload, str) else payload
     except json.JSONDecodeError:
@@ -47,6 +49,10 @@ def _procesar_resultado(payload, archivos, cabeceras):
     
     if q_id is None:
         return
+
+    if q_id not in tiempos_inicio:
+        tiempos_inicio[q_id] = time.perf_counter()
+        logging.info(f"[QUERY {q_id}] Inicio de recepción de resultados.")
 
     # Lógica dinámica: Crear archivo si es la primera vez que vemos este q_id
     if q_id not in archivos:
@@ -62,6 +68,11 @@ def _procesar_resultado(payload, archivos, cabeceras):
 
     if es_mensaje_final:
         _cerrar_archivo(q_id, archivos)
+        inicio_query = tiempos_inicio.pop(q_id, None)
+        if inicio_query is not None:
+            logging.info(f"[QUERY {q_id}] Finalizada en {time.perf_counter() - inicio_query:.3f} s")
+        else:
+            logging.info(f"[QUERY {q_id}] EOF recibido sin inicio registrado")
 
 ## --- Funciones auxiliares mantenidas ---
 def _es_eof(resultado):
@@ -69,7 +80,14 @@ def _es_eof(resultado):
 
 def _escribir_cabecera(q_id, resultado, archivos, cabeceras):
     if not cabeceras[q_id]:
-        claves = [str(k) for k in resultado.keys() if k != KEY_EOF]
+        claves = []
+        for k in resultado.keys():
+            if k == KEY_EOF:
+                continue
+            if k == "Account.1":
+                claves.append("Account")
+            else:
+                claves.append(str(k))
         archivos[q_id].write(",".join(claves) + "\n")
         cabeceras[q_id] = True
 

@@ -3,6 +3,7 @@ import threading
 import logging
 import sys
 import uuid
+import time
 from common import message_protocol
 from common.logging_setup import setup_logging
 from config import SERVER_HOST, SERVER_PORT, TRANSACTIONS_FILE, ACCOUNTS_FILE
@@ -13,6 +14,7 @@ LOG_FORMAT = "%(levelname)s: %(message)s"
 
 def main():
     setup_logging("client")
+    inicio_cliente = time.perf_counter()
     
     sock = _conectar_socket()
     if not sock:
@@ -27,6 +29,7 @@ def main():
     _esperar_envios(hilos_envio)
     _enviar_fin_registros(sock, socket_lock, client_id)
     _finalizar_conexion(hilo_receptor, sock)
+    logging.info(f"Cliente finalizado en {time.perf_counter() - inicio_cliente:.3f} s")
     
     return 0
 

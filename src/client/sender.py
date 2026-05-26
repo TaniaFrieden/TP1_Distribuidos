@@ -22,7 +22,17 @@ def _leer_registros_dinamico(filepath):
         linea_headers = f.readline().strip()
         if not linea_headers:
             return None, []
-        headers = linea_headers.split(",")
+        raw_headers = linea_headers.split(",")
+        
+        headers = []
+        counts = {}
+        for col in raw_headers:
+            if col in counts:
+                counts[col] += 1
+                headers.append(f"{col}.{counts[col]}")
+            else:
+                counts[col] = 0
+                headers.append(col)
         
     def iterar_filas():
         with open(filepath, "r", encoding="utf-8") as f:
