@@ -61,7 +61,7 @@ def _iniciar_hilos(sock, lock):
     hilo_transacciones.start()
     hilo_bancos.start()
 
-    return hilo_receptor, [hilo_transacciones]  # , hilo_bancos]
+    return hilo_receptor, [hilo_transacciones, hilo_bancos]
 
 def _esperar_envios(hilos_envio):
     for hilo in hilos_envio:

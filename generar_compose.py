@@ -6,7 +6,6 @@ import os
 
 CONFIG_BASE = 'config/base.yml'
 CONFIG_QUERIES = 'config/queries/*.json'
-# Asegurate que este archivo exista en la carpeta config
 WORKER_TYPES_FILE = 'config/worker_types.json' 
 
 
