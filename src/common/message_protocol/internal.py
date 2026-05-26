@@ -50,3 +50,11 @@ def make_data(record: dict) -> bytes:
 
 def get_client_id(payload: dict) -> int:
     return int(payload["client_id"])
+
+
+def make_client_disconnect(client_id: str) -> bytes:
+    return serialize({"client_id": client_id, "CLIENT_DISCONNECT": True})
+
+
+def is_client_disconnect(payload: dict) -> bool:
+    return isinstance(payload, dict) and payload.get("CLIENT_DISCONNECT") is True

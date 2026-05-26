@@ -83,7 +83,7 @@ class MessageRouter:
                     payload = {}
             assert payload is not None
 
-            es_eof = payload.get("EOF", False)
+            es_eof = payload.get("EOF", False) or payload.get("CLIENT_DISCONNECT", False)
 
             logger.info(f"[ROUTER DEBUG] Enviando {len(mensaje)} bytes a {len(self.output_queues_direct)} colas directas.")
 

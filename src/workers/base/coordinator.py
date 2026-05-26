@@ -64,6 +64,15 @@ class DistributedCoordinator:
             if client_id in self._eofs_locales_recibidos:
                 del self._eofs_locales_recibidos[client_id]
 
+    def limpiar_cliente(self, client_id: str):
+        with self._coordinacion_lock:
+            self._coordinaciones_eof.pop(client_id, None)
+            self._originadores_reconocidos.pop(client_id, None)
+            self._eofs_locales_recibidos.pop(client_id, None)
+            self._clientes_flusheados.discard(client_id)
+        with self._vuelo_lock:
+            self._mensajes_en_vuelo.pop(client_id, None)
+
     # --- Barrera Distribuida ---
     def iniciar_barrera(self, client_id: str, mensaje_original: bytes):
         with self._coordinacion_lock:

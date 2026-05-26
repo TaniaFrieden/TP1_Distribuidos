@@ -95,6 +95,11 @@ class GroupDistinctCounterWorker(BaseWorker):
 
         logger.info(f"[GroupDistinctCounter] Flush completo para client_id={client_id}.")
 
+    def al_desconectar_cliente(self, client_id: str):
+        with self._lock:
+            self._grupos.pop(client_id, None)
+        logger.info(f"[GroupDistinctCounter] Estado descartado para {client_id}.")
+
     def al_cerrar(self):
         logger.info("[GroupDistinctCounter] Apagado.")
 

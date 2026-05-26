@@ -53,7 +53,7 @@ class BackendListener:
                     message_protocol.external.MsgType.REPORTE,
                     payload_str
                 )
-            
+
             if es_eof:
                 logger.info(f"EOF enviado para {cola_nombre} a {client_id}")
                 eof_status.add(cola_nombre)
@@ -68,6 +68,10 @@ class BackendListener:
             ack()
         except json.JSONDecodeError:
             logger.error("JSON invalido")
+            ack()
+        except (BrokenPipeError, ConnectionResetError, OSError) as e:
+            logger.warning(f"Cliente {client_id} desconectado, descartando resultado: {e}")
+            self.state.remover_cliente(client_id)
             ack()
         except Exception as e:
             logger.error(f"Error procesando respuesta: {e}", exc_info=True)
