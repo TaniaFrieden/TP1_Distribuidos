@@ -12,8 +12,10 @@ class AgregadorBancarioWorker(BaseWorker):
         super().__init__()
         # Estructura: { "client_id": { "bank_id": {"bank_name": str, "max_amount": float, "account": str} } }
         self.estado_agregador = {}
+        # Estructura para el control de EOFs en dos fases: { "client_id": {...} }
+        self.estado_eof = {}
         self.lock_estado = threading.Lock()
-        logger.info("[AgregadorBancario] Worker inicializado y listo para doble escucha.")
+        logger.info("[AgregadorBancario] Worker inicializado con coordinación estricta de dos fases.")
 
     def procesar_payload(self, queue_name: str, client_id: str, payload: dict, mensaje_original: bytes, ack, nack):
         logger.debug(f"[MENSAJE ENTRANTE] Cola: '{queue_name}' | Cliente: {client_id}")
@@ -70,7 +72,44 @@ class AgregadorBancarioWorker(BaseWorker):
             logger.error(f"Error procesando mensaje: {e}", exc_info=True)
             nack()
 
+    def interceptar_eof(self, queue_name: str, client_id: str, payload: dict, mensaje_original: bytes) -> bool:
+        disparar_flush = False
+        mensaje_barrera = None
+
+        with self.lock_estado:
+            if client_id not in self.estado_eof:
+                self.estado_eof[client_id] = {
+                    "transacciones_cerrado": False,
+                    "bancos_cerrado": False,
+                    "eof_mensaje": None,
+                    "flush_iniciado": False
+                }
+
+            estado = self.estado_eof[client_id]
+
+            if not estado["eof_mensaje"]:
+                estado["eof_mensaje"] = mensaje_original
+
+            if "transactions" in queue_name:
+                logger.info(f"[BankShard] EOF Transacciones recibido para {client_id}.")
+                estado["transacciones_cerrado"] = True
+            elif "banks" in queue_name:
+                logger.info(f"[BankShard] EOF Bancos recibido para {client_id}.")
+                estado["bancos_cerrado"] = True
+
+            if estado["transacciones_cerrado"] and estado["bancos_cerrado"] and not estado["flush_iniciado"]:
+                logger.info(f"[BankShard] Ambas colas cerradas para {client_id}. Solicitando barrera de flush.")
+                estado["flush_iniciado"] = True
+                disparar_flush = True
+                # SOLUCIÓN: Solo el nodo 1 conserva el mensaje; los demás pasan None para no duplicar el EOF downstream
+                mensaje_barrera = estado["eof_mensaje"] if self.config.node_id == 1 else None
+
+        if disparar_flush:
+            self.coordinator.iniciar_barrera(client_id, mensaje_barrera)
+
+        return True
     def al_completar_cliente(self, client_id: str):
+        """Callback ejecutado cuando la barrera de EOFs local y global se completó."""
         with self.lock_estado:
             if client_id in self.estado_agregador:
                 for bank_id, datos in self.estado_agregador[client_id].items():
@@ -101,6 +140,10 @@ class AgregadorBancarioWorker(BaseWorker):
                 del self.estado_agregador[client_id]
             else:
                 logger.warning(f"[BARRERA CONTROL] Se disparó al_completar_cliente para {client_id} sin datos locales registrados.")
+            
+            # Limpiamos también el estado de control de los EOFs
+            if client_id in self.estado_eof:
+                del self.estado_eof[client_id]
 
     def al_cerrar(self):
         logger.info("[AgregadorBancario] Solicitud de apagado recibida de las señales del sistema.")

@@ -22,10 +22,11 @@ services:
       MOM_USER: distributed
       MOM_PASSWORD: distributed
       MOM_VHOST: /
-      OUTPUTS_QUEUE: q3_raw_data
-      INPUTS_QUEUE: q3_results
+      OUTPUTS_QUEUE: q3_raw_data, q2_raw_data
+      INPUTS_QUEUE: q3_results, q2_results
       HTTP_HOST: 0.0.0.0
       HTTP_PORT: '8080'
+      BANK_QUEUE: '{"queue_shard_prefix": "q2_shard_banks", "total_workers": 6, "hash_field": "Bank ID"}'
   rabbitmq:
     image: rabbitmq:3-management
     container_name: rabbitmq
@@ -170,7 +171,7 @@ services:
       MOM_PASSWORD: distributed
       MOM_VHOST: /
       INPUT_QUEUES: q3_usd_filtered
-      OUTPUT_QUEUES: '[{"type": "conditional", "condition_field": "Timestamp", "cases": [{"operator": "between", "value": "2022/09/01,2022/09/05", "routing": {"queue_shard_prefix": "q3_temprano", "total_workers": 3, "hash_field": "Payment Format"}}, {"operator": "between", "value": "2022/09/06,2022/09/15", "routing": {"queue_shard_prefix": "q3_tardio", "total_workers": 3, "hash_field": "Payment Format"}}]}]'
+      OUTPUT_QUEUES: '[{"type": "conditional", "condition_field": "Timestamp", "cases": [{"operator": "between", "value": "2022/09/01,2022/09/05", "routing": {"queue_shard_prefix": "q3_temprano", "total_workers": 2, "hash_field": "Payment Format"}}, {"operator": "between", "value": "2022/09/06,2022/09/15", "routing": {"queue_shard_prefix": "q3_tardio", "total_workers": 2, "hash_field": "Payment Format"}}]}]'
       NODE_PREFIX: q3_filter_fechas
       ID: '1'
       TOTAL_WORKERS: '4'
@@ -197,7 +198,7 @@ services:
       MOM_PASSWORD: distributed
       MOM_VHOST: /
       INPUT_QUEUES: q3_usd_filtered
-      OUTPUT_QUEUES: '[{"type": "conditional", "condition_field": "Timestamp", "cases": [{"operator": "between", "value": "2022/09/01,2022/09/05", "routing": {"queue_shard_prefix": "q3_temprano", "total_workers": 3, "hash_field": "Payment Format"}}, {"operator": "between", "value": "2022/09/06,2022/09/15", "routing": {"queue_shard_prefix": "q3_tardio", "total_workers": 3, "hash_field": "Payment Format"}}]}]'
+      OUTPUT_QUEUES: '[{"type": "conditional", "condition_field": "Timestamp", "cases": [{"operator": "between", "value": "2022/09/01,2022/09/05", "routing": {"queue_shard_prefix": "q3_temprano", "total_workers": 2, "hash_field": "Payment Format"}}, {"operator": "between", "value": "2022/09/06,2022/09/15", "routing": {"queue_shard_prefix": "q3_tardio", "total_workers": 2, "hash_field": "Payment Format"}}]}]'
       NODE_PREFIX: q3_filter_fechas
       ID: '2'
       TOTAL_WORKERS: '4'
@@ -224,7 +225,7 @@ services:
       MOM_PASSWORD: distributed
       MOM_VHOST: /
       INPUT_QUEUES: q3_usd_filtered
-      OUTPUT_QUEUES: '[{"type": "conditional", "condition_field": "Timestamp", "cases": [{"operator": "between", "value": "2022/09/01,2022/09/05", "routing": {"queue_shard_prefix": "q3_temprano", "total_workers": 3, "hash_field": "Payment Format"}}, {"operator": "between", "value": "2022/09/06,2022/09/15", "routing": {"queue_shard_prefix": "q3_tardio", "total_workers": 3, "hash_field": "Payment Format"}}]}]'
+      OUTPUT_QUEUES: '[{"type": "conditional", "condition_field": "Timestamp", "cases": [{"operator": "between", "value": "2022/09/01,2022/09/05", "routing": {"queue_shard_prefix": "q3_temprano", "total_workers": 2, "hash_field": "Payment Format"}}, {"operator": "between", "value": "2022/09/06,2022/09/15", "routing": {"queue_shard_prefix": "q3_tardio", "total_workers": 2, "hash_field": "Payment Format"}}]}]'
       NODE_PREFIX: q3_filter_fechas
       ID: '3'
       TOTAL_WORKERS: '4'
@@ -251,7 +252,7 @@ services:
       MOM_PASSWORD: distributed
       MOM_VHOST: /
       INPUT_QUEUES: q3_usd_filtered
-      OUTPUT_QUEUES: '[{"type": "conditional", "condition_field": "Timestamp", "cases": [{"operator": "between", "value": "2022/09/01,2022/09/05", "routing": {"queue_shard_prefix": "q3_temprano", "total_workers": 3, "hash_field": "Payment Format"}}, {"operator": "between", "value": "2022/09/06,2022/09/15", "routing": {"queue_shard_prefix": "q3_tardio", "total_workers": 3, "hash_field": "Payment Format"}}]}]'
+      OUTPUT_QUEUES: '[{"type": "conditional", "condition_field": "Timestamp", "cases": [{"operator": "between", "value": "2022/09/01,2022/09/05", "routing": {"queue_shard_prefix": "q3_temprano", "total_workers": 2, "hash_field": "Payment Format"}}, {"operator": "between", "value": "2022/09/06,2022/09/15", "routing": {"queue_shard_prefix": "q3_tardio", "total_workers": 2, "hash_field": "Payment Format"}}]}]'
       NODE_PREFIX: q3_filter_fechas
       ID: '4'
       TOTAL_WORKERS: '4'
@@ -281,7 +282,7 @@ services:
       OUTPUT_QUEUES: q3_results
       NODE_PREFIX: q3_format_shard
       ID: '1'
-      TOTAL_WORKERS: '3'
+      TOTAL_WORKERS: '2'
       LOG_FILE: /app/logs/q3_format_shard_01.txt
   q3_format_shard_02:
     build:
@@ -305,13 +306,13 @@ services:
       OUTPUT_QUEUES: q3_results
       NODE_PREFIX: q3_format_shard
       ID: '2'
-      TOTAL_WORKERS: '3'
+      TOTAL_WORKERS: '2'
       LOG_FILE: /app/logs/q3_format_shard_02.txt
-  q3_format_shard_03:
+  q2_filter_usd_01:
     build:
       context: ./src
-      dockerfile: workers/format_shard/Dockerfile
-    container_name: q3_format_shard_03
+      dockerfile: workers/filter/Dockerfile
+    container_name: q2_filter_usd_01
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -325,9 +326,291 @@ services:
       MOM_USER: distributed
       MOM_PASSWORD: distributed
       MOM_VHOST: /
-      INPUT_QUEUES: '["q3_temprano_3", "q3_tardio_3"]'
-      OUTPUT_QUEUES: q3_results
-      NODE_PREFIX: q3_format_shard
+      INPUT_QUEUES: q2_raw_data
+      OUTPUT_QUEUES: '[{"queue_shard_prefix": "q2_shard_transactions", "total_workers": 6, "hash_field": "From Bank"}]'
+      NODE_PREFIX: q2_filter_usd
+      ID: '1'
+      TOTAL_WORKERS: '6'
+      LOG_FILE: /app/logs/q2_filter_usd_01.txt
+      FILTER_FIELD: Payment Currency
+      FILTER_VALUE: US Dollar
+      FILTER_OPERATOR: eq
+  q2_filter_usd_02:
+    build:
+      context: ./src
+      dockerfile: workers/filter/Dockerfile
+    container_name: q2_filter_usd_02
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    volumes:
+    - ./logs:/app/logs
+    environment:
+      MOM_HOST: rabbitmq
+      MOM_PORT: '5672'
+      MOM_USER: distributed
+      MOM_PASSWORD: distributed
+      MOM_VHOST: /
+      INPUT_QUEUES: q2_raw_data
+      OUTPUT_QUEUES: '[{"queue_shard_prefix": "q2_shard_transactions", "total_workers": 6, "hash_field": "From Bank"}]'
+      NODE_PREFIX: q2_filter_usd
+      ID: '2'
+      TOTAL_WORKERS: '6'
+      LOG_FILE: /app/logs/q2_filter_usd_02.txt
+      FILTER_FIELD: Payment Currency
+      FILTER_VALUE: US Dollar
+      FILTER_OPERATOR: eq
+  q2_filter_usd_03:
+    build:
+      context: ./src
+      dockerfile: workers/filter/Dockerfile
+    container_name: q2_filter_usd_03
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    volumes:
+    - ./logs:/app/logs
+    environment:
+      MOM_HOST: rabbitmq
+      MOM_PORT: '5672'
+      MOM_USER: distributed
+      MOM_PASSWORD: distributed
+      MOM_VHOST: /
+      INPUT_QUEUES: q2_raw_data
+      OUTPUT_QUEUES: '[{"queue_shard_prefix": "q2_shard_transactions", "total_workers": 6, "hash_field": "From Bank"}]'
+      NODE_PREFIX: q2_filter_usd
       ID: '3'
-      TOTAL_WORKERS: '3'
-      LOG_FILE: /app/logs/q3_format_shard_03.txt
+      TOTAL_WORKERS: '6'
+      LOG_FILE: /app/logs/q2_filter_usd_03.txt
+      FILTER_FIELD: Payment Currency
+      FILTER_VALUE: US Dollar
+      FILTER_OPERATOR: eq
+  q2_filter_usd_04:
+    build:
+      context: ./src
+      dockerfile: workers/filter/Dockerfile
+    container_name: q2_filter_usd_04
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    volumes:
+    - ./logs:/app/logs
+    environment:
+      MOM_HOST: rabbitmq
+      MOM_PORT: '5672'
+      MOM_USER: distributed
+      MOM_PASSWORD: distributed
+      MOM_VHOST: /
+      INPUT_QUEUES: q2_raw_data
+      OUTPUT_QUEUES: '[{"queue_shard_prefix": "q2_shard_transactions", "total_workers": 6, "hash_field": "From Bank"}]'
+      NODE_PREFIX: q2_filter_usd
+      ID: '4'
+      TOTAL_WORKERS: '6'
+      LOG_FILE: /app/logs/q2_filter_usd_04.txt
+      FILTER_FIELD: Payment Currency
+      FILTER_VALUE: US Dollar
+      FILTER_OPERATOR: eq
+  q2_filter_usd_05:
+    build:
+      context: ./src
+      dockerfile: workers/filter/Dockerfile
+    container_name: q2_filter_usd_05
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    volumes:
+    - ./logs:/app/logs
+    environment:
+      MOM_HOST: rabbitmq
+      MOM_PORT: '5672'
+      MOM_USER: distributed
+      MOM_PASSWORD: distributed
+      MOM_VHOST: /
+      INPUT_QUEUES: q2_raw_data
+      OUTPUT_QUEUES: '[{"queue_shard_prefix": "q2_shard_transactions", "total_workers": 6, "hash_field": "From Bank"}]'
+      NODE_PREFIX: q2_filter_usd
+      ID: '5'
+      TOTAL_WORKERS: '6'
+      LOG_FILE: /app/logs/q2_filter_usd_05.txt
+      FILTER_FIELD: Payment Currency
+      FILTER_VALUE: US Dollar
+      FILTER_OPERATOR: eq
+  q2_filter_usd_06:
+    build:
+      context: ./src
+      dockerfile: workers/filter/Dockerfile
+    container_name: q2_filter_usd_06
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    volumes:
+    - ./logs:/app/logs
+    environment:
+      MOM_HOST: rabbitmq
+      MOM_PORT: '5672'
+      MOM_USER: distributed
+      MOM_PASSWORD: distributed
+      MOM_VHOST: /
+      INPUT_QUEUES: q2_raw_data
+      OUTPUT_QUEUES: '[{"queue_shard_prefix": "q2_shard_transactions", "total_workers": 6, "hash_field": "From Bank"}]'
+      NODE_PREFIX: q2_filter_usd
+      ID: '6'
+      TOTAL_WORKERS: '6'
+      LOG_FILE: /app/logs/q2_filter_usd_06.txt
+      FILTER_FIELD: Payment Currency
+      FILTER_VALUE: US Dollar
+      FILTER_OPERATOR: eq
+  q2_agregador_shard_01:
+    build:
+      context: ./src
+      dockerfile: workers/bank_shard/Dockerfile
+    container_name: q2_agregador_shard_01
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    volumes:
+    - ./logs:/app/logs
+    environment:
+      MOM_HOST: rabbitmq
+      MOM_PORT: '5672'
+      MOM_USER: distributed
+      MOM_PASSWORD: distributed
+      MOM_VHOST: /
+      INPUT_QUEUES: '["q2_shard_transactions_1", "q2_shard_banks_1"]'
+      OUTPUT_QUEUES: q2_results
+      NODE_PREFIX: q2_agregador_shard
+      ID: '1'
+      TOTAL_WORKERS: '6'
+      LOG_FILE: /app/logs/q2_agregador_shard_01.txt
+  q2_agregador_shard_02:
+    build:
+      context: ./src
+      dockerfile: workers/bank_shard/Dockerfile
+    container_name: q2_agregador_shard_02
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    volumes:
+    - ./logs:/app/logs
+    environment:
+      MOM_HOST: rabbitmq
+      MOM_PORT: '5672'
+      MOM_USER: distributed
+      MOM_PASSWORD: distributed
+      MOM_VHOST: /
+      INPUT_QUEUES: '["q2_shard_transactions_2", "q2_shard_banks_2"]'
+      OUTPUT_QUEUES: q2_results
+      NODE_PREFIX: q2_agregador_shard
+      ID: '2'
+      TOTAL_WORKERS: '6'
+      LOG_FILE: /app/logs/q2_agregador_shard_02.txt
+  q2_agregador_shard_03:
+    build:
+      context: ./src
+      dockerfile: workers/bank_shard/Dockerfile
+    container_name: q2_agregador_shard_03
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    volumes:
+    - ./logs:/app/logs
+    environment:
+      MOM_HOST: rabbitmq
+      MOM_PORT: '5672'
+      MOM_USER: distributed
+      MOM_PASSWORD: distributed
+      MOM_VHOST: /
+      INPUT_QUEUES: '["q2_shard_transactions_3", "q2_shard_banks_3"]'
+      OUTPUT_QUEUES: q2_results
+      NODE_PREFIX: q2_agregador_shard
+      ID: '3'
+      TOTAL_WORKERS: '6'
+      LOG_FILE: /app/logs/q2_agregador_shard_03.txt
+  q2_agregador_shard_04:
+    build:
+      context: ./src
+      dockerfile: workers/bank_shard/Dockerfile
+    container_name: q2_agregador_shard_04
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    volumes:
+    - ./logs:/app/logs
+    environment:
+      MOM_HOST: rabbitmq
+      MOM_PORT: '5672'
+      MOM_USER: distributed
+      MOM_PASSWORD: distributed
+      MOM_VHOST: /
+      INPUT_QUEUES: '["q2_shard_transactions_4", "q2_shard_banks_4"]'
+      OUTPUT_QUEUES: q2_results
+      NODE_PREFIX: q2_agregador_shard
+      ID: '4'
+      TOTAL_WORKERS: '6'
+      LOG_FILE: /app/logs/q2_agregador_shard_04.txt
+  q2_agregador_shard_05:
+    build:
+      context: ./src
+      dockerfile: workers/bank_shard/Dockerfile
+    container_name: q2_agregador_shard_05
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    volumes:
+    - ./logs:/app/logs
+    environment:
+      MOM_HOST: rabbitmq
+      MOM_PORT: '5672'
+      MOM_USER: distributed
+      MOM_PASSWORD: distributed
+      MOM_VHOST: /
+      INPUT_QUEUES: '["q2_shard_transactions_5", "q2_shard_banks_5"]'
+      OUTPUT_QUEUES: q2_results
+      NODE_PREFIX: q2_agregador_shard
+      ID: '5'
+      TOTAL_WORKERS: '6'
+      LOG_FILE: /app/logs/q2_agregador_shard_05.txt
+  q2_agregador_shard_06:
+    build:
+      context: ./src
+      dockerfile: workers/bank_shard/Dockerfile
+    container_name: q2_agregador_shard_06
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    volumes:
+    - ./logs:/app/logs
+    environment:
+      MOM_HOST: rabbitmq
+      MOM_PORT: '5672'
+      MOM_USER: distributed
+      MOM_PASSWORD: distributed
+      MOM_VHOST: /
+      INPUT_QUEUES: '["q2_shard_transactions_6", "q2_shard_banks_6"]'
+      OUTPUT_QUEUES: q2_results
+      NODE_PREFIX: q2_agregador_shard
+      ID: '6'
+      TOTAL_WORKERS: '6'
+      LOG_FILE: /app/logs/q2_agregador_shard_06.txt
