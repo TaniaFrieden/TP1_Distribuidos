@@ -23,10 +23,10 @@ class GatewayState:
             )
 
     def remover_cliente(self, client_id):
-                with self.state_lock:
-                    self.clientes_conectados.pop(client_id, None)
-                    self.clientes_locks.pop(client_id, None)
-                    self.clientes_eof_status.pop(client_id, None)
+        with self.state_lock:
+            self.clientes_conectados.pop(client_id, None)
+            self.clientes_locks.pop(client_id, None)
+            self.clientes_eof_status.pop(client_id, None)
 
     def detener_servidor(self):
         self.servidor_corriendo = False

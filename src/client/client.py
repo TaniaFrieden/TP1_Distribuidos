@@ -3,6 +3,7 @@ import socket
 import threading
 import logging
 import sys
+import time
 from common import message_protocol
 from common.logging_setup import setup_logging
 from config import SERVER_HOST, SERVER_PORT, TRANSACTIONS_FILE, ACCOUNTS_FILE
@@ -31,8 +32,9 @@ def main():
     signal.signal(signal.SIGTERM, _handle_shutdown)
     signal.signal(signal.SIGINT, _handle_shutdown)
 
+    start_time = time.monotonic()
     socket_lock = threading.Lock()
-    hilo_receptor, hilos_envio = _iniciar_hilos(sock, socket_lock, shutdown_event)
+    hilo_receptor, hilos_envio = _iniciar_hilos(sock, socket_lock, shutdown_event, start_time)
 
     _esperar_envios(hilos_envio)
 
@@ -57,10 +59,10 @@ def _conectar_socket():
         logging.error(f"No se pudo conectar al servidor: {e}")
         return None
 
-def _iniciar_hilos(sock, lock, shutdown_event):
+def _iniciar_hilos(sock, lock, shutdown_event, start_time):
     hilo_receptor = threading.Thread(
         target=escuchar_respuesta,
-        args=(sock,),
+        args=(sock, start_time),
         daemon=True
     )
 

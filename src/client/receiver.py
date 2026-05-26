@@ -1,6 +1,7 @@
 import os
 import json
 import logging
+import time
 from common import message_protocol
 from config import OUTPUT_DIR
 
@@ -10,33 +11,36 @@ KEY_EOF = 'eof'
 
 OUTPUT_FILE_NAME = "output_{q_id}.csv"
 
-def escuchar_respuesta(sock):
+def escuchar_respuesta(sock, start_time=None):
     logging.info("Hilo receptor activo: Esperando reportes...")
-    # Ahora archivos y cabeceras comienzan vacíos
+    if start_time is None:
+        start_time = time.monotonic()
     archivos_salida = {}
     cabeceras_escritas = {}
-    
+
     os.makedirs(OUTPUT_DIR, exist_ok=True)
-    
+
     try:
-        while True: # Cambiado a True, el corte se maneja cuando ya no hay archivos activos o EOF global
+        while True:
             try:
                 msg_type, payload = message_protocol.external.recv_msg(sock)
             except Exception as e:
                 logging.error(f"Error de red recibiendo mensaje: {e}")
                 break
-            
+
             if msg_type == message_protocol.external.MsgType.REPORTE:
-                _procesar_resultado(payload, archivos_salida, cabeceras_escritas)
-            
+                _procesar_resultado(payload, archivos_salida, cabeceras_escritas, start_time)
+
             elif msg_type == message_protocol.external.MsgType.END_OF_RECODS:
+                elapsed = time.monotonic() - start_time
+                logging.info(f"[TIMER] Todas las queries completadas en {elapsed:.2f}s")
                 break
-                
+
     finally:
         for f in archivos_salida.values():
             f.close()
 
-def _procesar_resultado(payload, archivos, cabeceras):
+def _procesar_resultado(payload, archivos, cabeceras, start_time):
     try:
         data = json.loads(payload) if isinstance(payload, str) else payload
     except json.JSONDecodeError:
@@ -44,11 +48,10 @@ def _procesar_resultado(payload, archivos, cabeceras):
 
     q_id = data.get(KEY_QUERY)
     resultado = data.get(KEY_RESULT)
-    
+
     if q_id is None:
         return
 
-    # Lógica dinámica: Crear archivo si es la primera vez que vemos este q_id
     if q_id not in archivos:
         path = os.path.join(OUTPUT_DIR, OUTPUT_FILE_NAME.format(q_id=q_id))
         archivos[q_id] = open(path, "w", encoding="utf-8")
@@ -61,6 +64,8 @@ def _procesar_resultado(payload, archivos, cabeceras):
         _escribir_datos(q_id, resultado, archivos)
 
     if es_mensaje_final:
+        elapsed = time.monotonic() - start_time
+        logging.info(f"[TIMER] Query {q_id} completada en {elapsed:.2f}s")
         _cerrar_archivo(q_id, archivos)
 
 ## --- Funciones auxiliares mantenidas ---
