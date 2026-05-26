@@ -24,7 +24,6 @@ class BaseWorker(ABC):
         self._cierre_solicitado = False
         self.condicion_pendiente = threading.Condition(threading.Lock())
 
-        # Instanciamos los componentes (Composición)
         self.config = WorkerConfig()
         self.router = MessageRouter(self.config)
         self.coordinator = DistributedCoordinator(
@@ -96,9 +95,12 @@ class BaseWorker(ABC):
                 return ack()
 
             if mensaje_json.get("EOF"):
+                # Novedad: Permitir que la subclase intercepte y maneje el EOF por cola
+                if self.interceptar_eof(queue_name, client_id, mensaje_json, mensaje):
+                    return ack()
+
+                # Flujo por defecto si la subclase no intercepta (ej. para Q2)
                 logger.info(f"[{self.__class__.__name__}] EOF interceptado en la cola {queue_name}. Esperando a {len(self.router.input_queues)} colas locales.")
-                
-                # Le preguntamos al coordinador si ya completamos los EOF locales
                 termino_local = self.coordinator.registrar_eof_local(
                     client_id, queue_name, len(self.router.input_queues)
                 )
@@ -146,6 +148,13 @@ class BaseWorker(ABC):
     # ------------------------------------------------------------------
     # API Exclusiva para Subclases
     # ------------------------------------------------------------------
+
+    def interceptar_eof(self, queue_name: str, client_id: str, payload: dict, mensaje_original: bytes) -> bool:
+        """
+        Permite a las subclases manejar su propia lógica de EOF por cola.
+        Si retorna True, la clase base no ejecutará el flujo de coordinación de EOF genérico.
+        """
+        return False
 
     @abstractmethod
     def procesar_payload(self, queue_name: str, client_id: str, payload: dict, mensaje_original: bytes, ack, nack):
