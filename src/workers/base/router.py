@@ -71,6 +71,35 @@ class MessageRouter:
                         "queues": shard_queues
                     })
 
+    def _canonical_hash_part(self, value):
+        """
+        Normaliza identificadores numéricos para evitar que "00394" y "394"
+        terminen en shards distintos. Los valores alfanuméricos se preservan.
+        """
+        if value is None:
+            return "N/A"
+
+        text = str(value).strip()
+        if not text:
+            return "N/A"
+        if text.isdigit():
+            return text.lstrip("0") or "0"
+        return text
+
+    def _build_hash_value_from_record(self, schema, record_values, hash_fields):
+        parts = []
+        for field in hash_fields:
+            if field in schema:
+                idx = schema.index(field)
+                parts.append(self._canonical_hash_part(record_values[idx]))
+            else:
+                parts.append("N/A")
+        return "|".join(parts) if parts else "default"
+
+    def _build_hash_value_from_payload(self, payload, hash_fields):
+        parts = [self._canonical_hash_part(payload.get(field)) for field in hash_fields]
+        return "|".join(parts) if parts else "default"
+
     def enviar(self, mensaje: bytes, payload: dict | None = None):
         try:
             if mensaje is None:
@@ -95,7 +124,6 @@ class MessageRouter:
                 # 2. ENVIAR A SHARDS (BATCH)
                 for shard_meta in self.output_queues_sharded:
                     hash_fields = shard_meta.get("hash_fields", [])
-                    hash_field = hash_fields[0] if hash_fields else shard_meta.get("hash_field")
                     
                     # Group records by target shard_id
                     records_by_shard = {}
@@ -104,15 +132,14 @@ class MessageRouter:
                         header = batch["header"]
                         original_schema = header["schema"]
                         records = batch["payload"]
-                        
-                        if hash_field in original_schema:
-                            hash_idx = original_schema.index(hash_field)
-                        else:
-                            hash_idx = None
-                            
+
                         for record_values in records:
-                            val = record_values[hash_idx] if hash_idx is not None else "default"
-                            target_id = sharding.obtener_id_shard(val, shard_meta["total_workers"])
+                            hash_value = self._build_hash_value_from_record(
+                                original_schema, record_values, hash_fields
+                            )
+                            target_id = sharding.obtener_id_shard(
+                                hash_value, shard_meta["total_workers"]
+                            )
                             if target_id not in records_by_shard:
                                 records_by_shard[target_id] = []
                             records_by_shard[target_id].append(record_values)
@@ -187,8 +214,7 @@ class MessageRouter:
                             q.send(mensaje)
                     else:
                         hash_fields = shard_meta.get("hash_fields", [])
-                        hash_field = hash_fields[0] if hash_fields else shard_meta.get("hash_field")
-                        valor_hash = payload.get(hash_field, "default")
+                        valor_hash = self._build_hash_value_from_payload(payload, hash_fields)
                         target_id = sharding.obtener_id_shard(valor_hash, shard_meta["total_workers"])
                         shard_meta["queues"][target_id].send(mensaje)
 

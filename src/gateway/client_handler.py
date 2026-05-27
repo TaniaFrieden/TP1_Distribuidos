@@ -54,16 +54,6 @@ class ClientHandler:
                         self.state.registrar_cliente(client_id, client_socket)
                         logger.info(f"Cliente {client_id} conectado")
 
-                    # Convert "From Bank" in-place if present
-                    if "From Bank" in schema:
-                        idx = schema.index("From Bank")
-                        for record_values in records:
-                            val = record_values[idx]
-                            if isinstance(val, str) and val.isdigit():
-                                record_values[idx] = int(val)
-                            elif isinstance(val, int):
-                                record_values[idx] = val
-
                     # Construct internal batch message
                     internal_msg = {
                         "client_id": client_id,
