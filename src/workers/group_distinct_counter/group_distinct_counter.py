@@ -89,6 +89,11 @@ class GroupDistinctCounterWorker(BaseWorker):
         with self._lock:
             grupos = self._grupos.pop(client_id, {})
 
+        logger.info(f"[GroupDistinctCounter] grupos totales: {len(grupos)}")
+        top = sorted(grupos.items(), key=lambda x: len(x[1]), reverse=True)[:5]
+        for gkey, vset in top:
+            logger.info(f"[GroupDistinctCounter] grupo {gkey}: {len(vset)} B's distintos")
+
         records = []
         if self.emit_mode == "explode":
             schema = self.group_out + self.value_out
@@ -121,7 +126,7 @@ class GroupDistinctCounterWorker(BaseWorker):
             self._enviar(json.dumps(output_payload).encode("utf-8"), payload=output_payload)
 
         logger.info(f"[GroupDistinctCounter] Flush completo para client_id={client_id}.")
-
+    
     def al_cerrar(self):
         logger.info("[GroupDistinctCounter] Apagado.")
 
