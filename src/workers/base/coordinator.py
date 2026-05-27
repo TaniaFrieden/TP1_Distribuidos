@@ -16,8 +16,16 @@ class DistributedCoordinator:
         self._eofs_locales_recibidos = {}
         self._mensajes_en_vuelo = {}
         self._clientes_flusheados = set()  
-        # NUEVO: Trackea quién es el originador oficial para evitar duplicados
         self._originadores_reconocidos = {}  
+        self._local_eof_completed = set()
+        
+        if config.total_workers > 1:
+            self._tiene_cola_sharded = any(
+                q.endswith(f"_{config.node_id}") or f"_{config.node_id}_" in q or f"_{config.node_id}" in q
+                for q in config.input_queues
+            )
+        else:
+            self._tiene_cola_sharded = True
         
         self._coordinacion_lock = threading.Lock()
         self._vuelo_lock = threading.Lock()
@@ -44,12 +52,21 @@ class DistributedCoordinator:
                     del self._mensajes_en_vuelo[client_id]
 
     def _esperar_vuelo_cero(self, client_id):
+        confirmado_cero_desde = None
         while True:
             with self._vuelo_lock:
-                if self._mensajes_en_vuelo.get(client_id, 0) == 0:
+                vuelo = self._mensajes_en_vuelo.get(client_id, 0)
+            
+            if vuelo == 0:
+                if confirmado_cero_desde is None:
+                    confirmado_cero_desde = time.perf_counter()
+                elif time.perf_counter() - confirmado_cero_desde >= 1.0:
+                    # El contador de vuelos ha permanecido en cero durante 1.0 segundo de forma continua
                     break
-            time.sleep(0.1)
-        time.sleep(0.5)
+            else:
+                confirmado_cero_desde = None
+                
+            time.sleep(0.05)
 
     # --- Tracking Local de EOFs ---
     def registrar_eof_local(self, client_id, queue_name, total_esperados) -> bool:
@@ -64,28 +81,64 @@ class DistributedCoordinator:
             if client_id in self._eofs_locales_recibidos:
                 del self._eofs_locales_recibidos[client_id]
 
+    # --- Ejecutar Flush y Notificar ---
+    def _ejecutar_flush_y_notificar(self, client_id: str, originator: str):
+        logger.info(f"[Coordinator] EOF local y de control recibidos para {client_id}. Esperando vuelos a cero antes de flush.")
+        self._esperar_vuelo_cero(client_id)
+
+        with self._coordinacion_lock:
+            ya_flusheado = client_id in self._clientes_flusheados
+            if not ya_flusheado:
+                self._clientes_flusheados.add(client_id)
+
+        if not ya_flusheado:
+            logger.info(f"[Coordinator] Vuelos en cero para client_id={client_id}. Flusheando datos locales.")
+            self.on_sync_complete(client_id, None)
+        else:
+            logger.info(f"[Coordinator] Ya flusheado para client_id={client_id}. Skip.")
+
+        logger.info(f"[Coordinator] Flush completo. Enviando WORKER_FINISHED a originator {originator}.")
+        self._enviar_control({
+            "type": "WORKER_FINISHED",
+            "client_id": client_id,
+            "originator": originator,
+            "worker_id": self.config.node_id
+        })
+
     # --- Barrera Distribuida ---
     def iniciar_barrera(self, client_id: str, mensaje_original: bytes):
+        ejecutar_flush_inmediato = False
+        originator_para_flush = None
+        
         with self._coordinacion_lock:
-            # Si ya reconocimos a un originador (incluso a nosotros mismos), no iniciamos otra vez
-            if client_id in self._originadores_reconocidos:
-                logger.debug(f"[Coordinator] Barrera ya iniciada para {client_id}. Ignorando intento duplicado local.")
-                return
+            self._local_eof_completed.add(client_id)
+            originator = self._originadores_reconocidos.get(client_id)
             
-            self._originadores_reconocidos[client_id] = self.config.node_id
-            self._coordinaciones_eof[client_id] = {
-                "workers": set(),
-                "mensaje_original": mensaje_original
-            }
-            
-        logger.info(
-            f"[Coordinator] EOF local completo para client_id={client_id}. Difundiendo a {self.config.total_workers} workers del nodo {self.config.node_prefix}."
-        )
-        self._enviar_control({
-            "type": "EOF_RECEIVED",
-            "client_id": client_id,
-            "originator": self.config.node_id
-        })
+            if originator is not None:
+                # La barrera de control ya fue activada por otro worker.
+                # Como nuestro EOF local ya está listo, podemos ejecutar el flush.
+                logger.info(f"[Coordinator] Barrera ya activa para {client_id} (originador: {originator}). Disparando flush diferido.")
+                ejecutar_flush_inmediato = True
+                originator_para_flush = originator
+            else:
+                # Somos el primer worker en completar el EOF local, nos autodeclaramos originador
+                self._originadores_reconocidos[client_id] = self.config.node_id
+                self._coordinaciones_eof[client_id] = {
+                    "workers": set(),
+                    "mensaje_original": mensaje_original
+                }
+                
+                logger.info(
+                    f"[Coordinator] EOF local completo para client_id={client_id} (somos originador). Difundiendo control."
+                )
+                self._enviar_control({
+                    "type": "EOF_RECEIVED",
+                    "client_id": client_id,
+                    "originator": self.config.node_id
+                })
+
+        if ejecutar_flush_inmediato:
+            self._ejecutar_flush_y_notificar(client_id, originator_para_flush)
 
     def _enviar_control(self, msg_dict: dict):
         try:
@@ -123,27 +176,15 @@ class DistributedCoordinator:
                         # No había originador previo, acepto este
                         self._originadores_reconocidos[client_id] = originator
 
-                logger.info(f"[Coordinator] EOF_RECEIVED validado del originator {originator} para client_id={client_id}. Esperando vuelos.")
-                self._esperar_vuelo_cero(client_id)
-
+                # AHORA: Verificamos si ya completamos nuestro EOF local
                 with self._coordinacion_lock:
-                    ya_flusheado = client_id in self._clientes_flusheados
-                    if not ya_flusheado:
-                        self._clientes_flusheados.add(client_id)
+                    local_completo = (client_id in self._local_eof_completed) or not self._tiene_cola_sharded
+                    originator_final = self._originadores_reconocidos[client_id]
 
-                if not ya_flusheado:
-                    logger.info(f"[Coordinator] Vuelos en cero para client_id={client_id}. Flusheando datos locales.")
-                    self.on_sync_complete(client_id, None)
+                if local_completo:
+                    self._ejecutar_flush_y_notificar(client_id, originator_final)
                 else:
-                    logger.info(f"[Coordinator] Ya flusheado para client_id={client_id}. Skip.")
-
-                logger.info(f"[Coordinator] Flush completo. Enviando WORKER_FINISHED a originator {originator}.")
-                self._enviar_control({
-                    "type": "WORKER_FINISHED",
-                    "client_id": client_id,
-                    "originator": originator,
-                    "worker_id": self.config.node_id
-                })
+                    logger.info(f"[Coordinator] EOF_RECEIVED para {client_id} (originator {originator_final}), pero el EOF local aún no está listo. Postergando flush.")
 
             elif msg_type == "WORKER_FINISHED" and originator == self.config.node_id:
                 with self._coordinacion_lock:
@@ -157,11 +198,21 @@ class DistributedCoordinator:
                         if len(self._coordinaciones_eof[client_id]["workers"]) >= self.config.total_workers:
                             msg_original = self._coordinaciones_eof[client_id]["mensaje_original"]
                             del self._coordinaciones_eof[client_id]
-                            self._clientes_flusheados.discard(client_id)  
-                            self._originadores_reconocidos.pop(client_id, None) # <- limpiar estado
                             
-                            logger.info(f"[Coordinator] Barrera completa para client_id={client_id}. Reenviando EOF final.")
+                            logger.info(f"[Coordinator] Barrera completa para client_id={client_id}. Difundiendo BARRIER_COMPLETE.")
+                            self._enviar_control({
+                                "type": "BARRIER_COMPLETE",
+                                "client_id": client_id
+                            })
+                            # Reenviar el EOF final a la siguiente etapa
                             self.on_sync_complete(client_id, msg_original)
+
+            elif msg_type == "BARRIER_COMPLETE":
+                with self._coordinacion_lock:
+                    self._clientes_flusheados.discard(client_id)
+                    self._originadores_reconocidos.pop(client_id, None)
+                    self._local_eof_completed.discard(client_id)
+                logger.info(f"[Coordinator] Barrera completa liberada globalmente para client_id={client_id}.")
 
         except Exception as e:
             logger.error(f"[Coordinator] Error en control: {e}", exc_info=True)
