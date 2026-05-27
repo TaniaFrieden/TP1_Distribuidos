@@ -87,27 +87,39 @@ class JoinerQ4Worker(BaseWorker):
             logger.error(f"Error procesando payload: {e}", exc_info=True)
             nack()
 
+    FLUSH_BATCH_SIZE = 1000
+    SCHEMA = ["a_bank", "a_account", "b_bank", "b_account", "c_bank", "c_account"]
+
+    def _enviar_batch(self, client_id: str, records: list):
+        output_payload = {
+            "client_id": client_id,
+            "batches": [
+                {
+                    "header": {
+                        "schema": self.SCHEMA,
+                        "client_id": client_id,
+                        "count": len(records)
+                    },
+                    "payload": records
+                }
+            ]
+        }
+        self._enviar(json.dumps(output_payload).encode("utf-8"), payload=output_payload)
+
     def al_completar_cliente(self, client_id: str):
         with self._lock:
             scatter = self._scatter.pop(client_id, {})
             txns    = self._txns.pop(client_id, {})
 
         logger.info(f"[JoinerQ4] scatter_keys={len(scatter)} txns_keys={len(txns)}")
-        
-        if scatter:
-            sample = list(scatter.items())[:3]
-            logger.info(f"[JoinerQ4] scatter sample: {sample}")
-        
-        if txns:
-            sample = list(txns.items())[:3]
-            logger.info(f"[JoinerQ4] txns sample: {sample}")
-        
+
         matches = [k for k in scatter if k in txns]
         logger.info(f"[JoinerQ4] keys que matchean scatter∩txns: {len(matches)}")
         if matches:
             logger.info(f"[JoinerQ4] match sample: {matches[:3]}")
 
-        records = []
+        batch = []
+        enviados = 0
         for b_key, a_list in scatter.items():
             if b_key not in txns:
                 continue
@@ -121,25 +133,18 @@ class JoinerQ4Worker(BaseWorker):
                     if (a_bank, a_account) == (c_bank, c_account):
                         continue
 
-                    records.append([a_bank, a_account, b_bank, b_account, c_bank, c_account])
+                    batch.append([a_bank, a_account, b_bank, b_account, c_bank, c_account])
 
-        if records:
-            output_payload = {
-                "client_id": client_id,
-                "batches": [
-                    {
-                        "header": {
-                            "schema": ["a_bank", "a_account", "b_bank", "b_account", "c_bank", "c_account"],
-                            "client_id": client_id,
-                            "count": len(records)
-                        },
-                        "payload": records
-                    }
-                ]
-            }
-            self._enviar(json.dumps(output_payload).encode("utf-8"), payload=output_payload)
+                    if len(batch) >= self.FLUSH_BATCH_SIZE:
+                        self._enviar_batch(client_id, batch)
+                        enviados += len(batch)
+                        batch = []
 
-        logger.info(f"[JoinerQ4] Flush completo para client_id={client_id}.")
+        if batch:
+            self._enviar_batch(client_id, batch)
+            enviados += len(batch)
+
+        logger.info(f"[JoinerQ4] Flush completo para client_id={client_id}. Registros emitidos: {enviados}.")
 
     def al_cerrar(self):
         logger.info("[JoinerQ4] Apagado.")

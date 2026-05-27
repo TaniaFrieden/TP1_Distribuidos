@@ -28,7 +28,7 @@ class BackendListener:
         try:
             transaccion = json.loads(body.decode("utf-8"))
             client_id = transaccion.pop("client_id", None)
-            logger.info(f"[RESULTADO FINAL RECIBIDO] -> {transaccion}")
+            logger.debug(f"[RESULTADO FINAL RECIBIDO] -> cliente={client_id}")
             if not client_id:
                 ack()
                 return
@@ -70,21 +70,22 @@ class BackendListener:
                     header = batch["header"]
                     schema = header["schema"]
                     records = batch["payload"]
-                    for record_values in records:
-                        record_dict = dict(zip(schema, record_values))
-                        record_dict["eof"] = False
-                        
-                        payload = {
-                            "query": query_id,
-                            "resultado": record_dict
-                        }
-                        payload_str = json.dumps(payload)
-                        with lock:
-                            message_protocol.external.send_msg(
-                                sock,
-                                message_protocol.external.MsgType.REPORTE,
-                                payload_str
-                            )
+                    # Enviar todos los registros del batch en un único REPORTE
+                    resultado_lista = [
+                        {**dict(zip(schema, record_values)), "eof": False}
+                        for record_values in records
+                    ]
+                    payload = {
+                        "query": query_id,
+                        "resultado": resultado_lista
+                    }
+                    payload_str = json.dumps(payload)
+                    with lock:
+                        message_protocol.external.send_msg(
+                            sock,
+                            message_protocol.external.MsgType.REPORTE,
+                            payload_str
+                        )
             else:
                 transaccion["eof"] = False
                 payload = {
@@ -92,7 +93,7 @@ class BackendListener:
                     "resultado": transaccion
                 }
                 payload_str = json.dumps(payload)
-                
+
                 with lock:
                     message_protocol.external.send_msg(
                         sock,

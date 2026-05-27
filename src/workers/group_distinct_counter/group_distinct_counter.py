@@ -85,6 +85,24 @@ class GroupDistinctCounterWorker(BaseWorker):
             logger.error(f"Error procesando payload: {e}", exc_info=True)
             nack()
 
+    FLUSH_BATCH_SIZE = 1000
+
+    def _enviar_batch(self, client_id: str, schema: list, records: list):
+        output_payload = {
+            "client_id": client_id,
+            "batches": [
+                {
+                    "header": {
+                        "schema": schema,
+                        "client_id": client_id,
+                        "count": len(records)
+                    },
+                    "payload": records
+                }
+            ]
+        }
+        self._enviar(json.dumps(output_payload).encode("utf-8"), payload=output_payload)
+
     def al_completar_cliente(self, client_id: str):
         with self._lock:
             grupos = self._grupos.pop(client_id, {})
@@ -94,38 +112,32 @@ class GroupDistinctCounterWorker(BaseWorker):
         for gkey, vset in top:
             logger.info(f"[GroupDistinctCounter] grupo {gkey}: {len(vset)} B's distintos")
 
-        records = []
         if self.emit_mode == "explode":
             schema = self.group_out + self.value_out
-            for gkey, vset in grupos.items():
-                if len(vset) != self.expected:
-                    continue
-                for vkey in vset:
-                    records.append(list(gkey) + list(vkey))
         else:
             schema = self.group_out + [self.count_field]
-            for gkey, vset in grupos.items():
-                if len(vset) != self.expected:
-                    continue
-                records.append(list(gkey) + [self.expected])
 
-        if records:
-            output_payload = {
-                "client_id": client_id,
-                "batches": [
-                    {
-                        "header": {
-                            "schema": schema,
-                            "client_id": client_id,
-                            "count": len(records)
-                        },
-                        "payload": records
-                    }
-                ]
-            }
-            self._enviar(json.dumps(output_payload).encode("utf-8"), payload=output_payload)
+        batch = []
+        enviados = 0
+        for gkey, vset in grupos.items():
+            if len(vset) != self.expected:
+                continue
+            if self.emit_mode == "explode":
+                for vkey in vset:
+                    batch.append(list(gkey) + list(vkey))
+            else:
+                batch.append(list(gkey) + [self.expected])
 
-        logger.info(f"[GroupDistinctCounter] Flush completo para client_id={client_id}.")
+            if len(batch) >= self.FLUSH_BATCH_SIZE:
+                self._enviar_batch(client_id, schema, batch)
+                enviados += len(batch)
+                batch = []
+
+        if batch:
+            self._enviar_batch(client_id, schema, batch)
+            enviados += len(batch)
+
+        logger.info(f"[GroupDistinctCounter] Flush completo para client_id={client_id}. Registros emitidos: {enviados}.")
     
     def al_cerrar(self):
         logger.info("[GroupDistinctCounter] Apagado.")

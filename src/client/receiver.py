@@ -60,19 +60,24 @@ def _procesar_resultado(payload, archivos, cabeceras, tiempos_inicio):
         archivos[q_id] = open(path, "w", encoding="utf-8")
         cabeceras[q_id] = False
 
-    es_mensaje_final = _es_eof(resultado)
+    # resultado puede ser un dict (registro único / EOF) o una lista de dicts (batch)
+    items = resultado if isinstance(resultado, list) else [resultado]
 
-    if isinstance(resultado, dict) and not (len(resultado) == 1 and es_mensaje_final):
-        _escribir_cabecera(q_id, resultado, archivos, cabeceras)
-        _escribir_datos(q_id, resultado, archivos)
+    for item in items:
+        es_mensaje_final = _es_eof(item)
 
-    if es_mensaje_final:
-        _cerrar_archivo(q_id, archivos)
-        inicio_query = tiempos_inicio.pop(q_id, None)
-        if inicio_query is not None:
-            logging.info(f"[QUERY {q_id}] Finalizada en {time.perf_counter() - inicio_query:.3f} s")
-        else:
-            logging.info(f"[QUERY {q_id}] EOF recibido sin inicio registrado")
+        if isinstance(item, dict) and not (len(item) == 1 and es_mensaje_final):
+            _escribir_cabecera(q_id, item, archivos, cabeceras)
+            _escribir_datos(q_id, item, archivos)
+
+        if es_mensaje_final:
+            _cerrar_archivo(q_id, archivos)
+            inicio_query = tiempos_inicio.pop(q_id, None)
+            if inicio_query is not None:
+                logging.info(f"[QUERY {q_id}] Finalizada en {time.perf_counter() - inicio_query:.3f} s")
+            else:
+                logging.info(f"[QUERY {q_id}] EOF recibido sin inicio registrado")
+            break  # EOF cierra el archivo; no procesar más ítems del batch
 
 ## --- Funciones auxiliares mantenidas ---
 def _es_eof(resultado):
