@@ -11,12 +11,12 @@ KEY_EOF = 'eof'
 
 OUTPUT_FILE_NAME = "output_{q_id}.csv"
 
-def escuchar_respuesta(sock):
+def escuchar_respuesta(sock, queries, inicio_envio):
     logging.info("Hilo receptor activo: Esperando reportes...")
     # Ahora archivos y cabeceras comienzan vacíos
     archivos_salida = {}
     cabeceras_escritas = {}
-    tiempos_inicio = {}
+    tiempos_inicio = {q_id: inicio_envio for q_id in queries}
     
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     
@@ -29,7 +29,7 @@ def escuchar_respuesta(sock):
                 break
             
             if msg_type == message_protocol.external.MsgType.REPORTE:
-                _procesar_resultado(payload, archivos_salida, cabeceras_escritas, tiempos_inicio)
+                _procesar_resultado(payload, archivos_salida, cabeceras_escritas, tiempos_inicio, inicio_envio)
             
             elif msg_type == message_protocol.external.MsgType.END_OF_RECODS:
                 break
@@ -38,7 +38,7 @@ def escuchar_respuesta(sock):
         for f in archivos_salida.values():
             f.close()
 
-def _procesar_resultado(payload, archivos, cabeceras, tiempos_inicio):
+def _procesar_resultado(payload, archivos, cabeceras, tiempos_inicio, inicio_envio):
     try:
         data = json.loads(payload) if isinstance(payload, str) else payload
     except json.JSONDecodeError:
@@ -51,7 +51,7 @@ def _procesar_resultado(payload, archivos, cabeceras, tiempos_inicio):
         return
 
     if q_id not in tiempos_inicio:
-        tiempos_inicio[q_id] = time.perf_counter()
+        tiempos_inicio[q_id] = inicio_envio
         logging.info(f"[QUERY {q_id}] Inicio de recepción de resultados.")
 
     # Lógica dinámica: Crear archivo si es la primera vez que vemos este q_id

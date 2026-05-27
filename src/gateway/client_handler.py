@@ -15,6 +15,22 @@ class ClientHandler:
         self.state = state
 
     def atender(self, client_socket):
+        # Enviar configuración de queries al conectar
+        try:
+            queries = []
+            for q in self.config.input_queues:
+                try:
+                    num = int(q.split('_')[0][1:])
+                    queries.append(num)
+                except (IndexError, ValueError):
+                    pass
+            queries.sort()
+            config_payload = json.dumps(queries)
+            logger.info(f"Enviando configuración de queries al cliente: {config_payload}")
+            message_protocol.external.send_msg(client_socket, message_protocol.external.MsgType.CONFIG_QUERIES, config_payload)
+        except Exception as e:
+            logger.error(f"Error enviando configuración de queries al cliente: {e}")
+
         client_id = None
         
         colas_tx = [middleware.MessageMiddlewareQueueRabbitMQ(self.config.mom_host, q) for q in self.config.output_queues]

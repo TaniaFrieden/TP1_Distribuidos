@@ -20,11 +20,24 @@ def main():
     if not sock:
         return 1
 
+    # Leer la configuración de queries enviada por el gateway al conectar
+    try:
+        msg_type, payload = message_protocol.external.recv_msg(sock)
+        if msg_type == message_protocol.external.MsgType.CONFIG_QUERIES:
+            queries = json.loads(payload)
+            logging.info(f"Queries configuradas en el sistema: {queries}")
+        else:
+            logging.warning("No se recibió la configuración de queries esperada del gateway. Usando lista vacía.")
+            queries = []
+    except Exception as e:
+        logging.error(f"Error recibiendo configuración de queries: {e}")
+        queries = []
+
     client_id = str(uuid.uuid4())
     logging.info(f"Cliente iniciado con ID: {client_id}")
 
     socket_lock = threading.Lock()
-    hilo_receptor, hilos_envio = _iniciar_hilos(sock, socket_lock, client_id)
+    hilo_receptor, hilos_envio = _iniciar_hilos(sock, socket_lock, client_id, queries, inicio_cliente)
     
     _esperar_envios(hilos_envio)
     _enviar_fin_registros(sock, socket_lock, client_id)
@@ -47,10 +60,11 @@ def _conectar_socket():
         logging.error(f"No se pudo conectar al servidor: {e}")
         return None
 
-def _iniciar_hilos(sock, lock, client_id):
+import json
+def _iniciar_hilos(sock, lock, client_id, queries, inicio_envio):
     hilo_receptor = threading.Thread(
         target=escuchar_respuesta,
-        args=(sock,),
+        args=(sock, queries, inicio_envio),
         daemon=True
     )
 

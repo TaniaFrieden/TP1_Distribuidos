@@ -14,6 +14,7 @@ class MsgType:
     REPORTE = 5
     LOTE_TRANSACCIONES = 6
     LOTE_BANCOS = 7
+    CONFIG_QUERIES = 8
 
   
 def _recv_sized(socket, size):
@@ -92,7 +93,8 @@ RECV_MSG_HANDLERS = {
     MsgType.END_OF_RECODS: _recv_end_of_records,
     MsgType.REPORTE: _recv_reporte,
     MsgType.LOTE_TRANSACCIONES: _recv_lote,
-    MsgType.LOTE_BANCOS: _recv_lote
+    MsgType.LOTE_BANCOS: _recv_lote,
+    MsgType.CONFIG_QUERIES: _recv_reporte
 }
 
 
@@ -132,7 +134,8 @@ SEND_MSG_HANDLERS = {
     MsgType.END_OF_RECODS: _send_end_of_records,
     MsgType.REPORTE: _send_reporte,
     MsgType.LOTE_TRANSACCIONES: _send_lote,
-    MsgType.LOTE_BANCOS: _send_lote
+    MsgType.LOTE_BANCOS: _send_lote,
+    MsgType.CONFIG_QUERIES: _send_reporte
 }
 
 
