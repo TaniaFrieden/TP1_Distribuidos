@@ -54,7 +54,7 @@ class JoinerQ4Worker(BaseWorker):
                                 from_account = record_values[from_account_idx] if from_account_idx is not None else ""
                                 
                                 b_key = f"{self._norm(to_bank)}|{self._norm(to_account)}"
-                                a_info = (from_bank, from_account)
+                                a_info = (self._norm(from_bank), self._norm(from_account))
                                 self._scatter.setdefault(client_id, {}).setdefault(b_key, []).append(a_info)
                         else:
                             from_bank_idx = schema.index("From Bank") if "From Bank" in schema else None
@@ -74,7 +74,7 @@ class JoinerQ4Worker(BaseWorker):
             else:
                 if "scatter" in queue_name:
                     b_key = f"{self._norm(payload['to_bank'])}|{self._norm(payload['to_account'])}"
-                    a_info = (payload["from_bank"], payload["from_account"])
+                    a_info = (self._norm(payload["from_bank"]), self._norm(payload["from_account"]))
                     with self._lock:
                         self._scatter.setdefault(client_id, {}).setdefault(b_key, []).append(a_info)
                 else:
@@ -106,18 +106,6 @@ class JoinerQ4Worker(BaseWorker):
         logger.info(f"[JoinerQ4] keys que matchean scatter∩txns: {len(matches)}")
         if matches:
             logger.info(f"[JoinerQ4] match sample: {matches[:3]}")
-
-        # Buscar el par específico del patrón esperado
-        target_a = ("26", "801A29190")
-        target_c = ("20", "800914620")
-        for b_key, a_list in scatter.items():
-            for a_bank, a_account in a_list:
-                if self._norm(a_bank) == target_a[0] and self._norm(a_account) == target_a[1]:
-                    logger.info(f"[JoinerQ4] ENCONTRADO A en scatter: b_key={b_key} a=({a_bank},{a_account})")
-                    if b_key in txns:
-                        for c_bank, c_account in txns[b_key]:
-                            if self._norm(c_bank) == target_c[0] and self._norm(c_account) == target_c[1]:
-                                logger.info(f"[JoinerQ4] MATCH COMPLETO A->B->C: b={b_key} c=({c_bank},{c_account})")
 
         records = []
         for b_key, a_list in scatter.items():
