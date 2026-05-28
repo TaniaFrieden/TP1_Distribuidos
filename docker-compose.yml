@@ -704,14 +704,14 @@ services:
       MOM_PASSWORD: distributed
       MOM_VHOST: /
       INPUT_QUEUES: q3_usd_filtered
-      OUTPUT_QUEUES: '[{"type": "conditional", "condition_field": "Timestamp", "cases": [{"operator": "between", "value": "2022/09/01,2022/09/05", "routing": {"queue_shard_prefix": "q3_temprano", "total_workers": 2, "hash_field": "Payment Format"}}, {"operator": "between", "value": "2022/09/06,2022/09/15", "routing": {"queue_shard_prefix": "q3_tardio", "total_workers": 2, "hash_field": "Payment Format"}}]}]'
+      OUTPUT_QUEUES: '[{"type": "conditional", "condition_field": "Timestamp", "cases": [{"operator": "between", "value": "2022/09/01,2022/09/05", "routing": {"queue_shard_prefix": "q3_temprano", "total_workers": 2, "hash_field": "Payment Format"}}, {"operator": "between", "value": "2022/09/06,2022/09/14 23:59:59", "routing": {"queue_shard_prefix": "q3_tardio", "total_workers": 2, "hash_field": "Payment Format"}}]}]'
       NODE_PREFIX: q3_filter_fechas
       ID: '1'
       TOTAL_WORKERS: '4'
       LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q3_filter_fechas_01.txt
       FILTER_FIELD: Timestamp
-      FILTER_VALUE: 2022/09/01,2022/09/15
+      FILTER_VALUE: 2022/09/01,2022/09/14 23:59:59
       FILTER_OPERATOR: between
   q3_filter_fechas_02:
     build:
@@ -732,14 +732,14 @@ services:
       MOM_PASSWORD: distributed
       MOM_VHOST: /
       INPUT_QUEUES: q3_usd_filtered
-      OUTPUT_QUEUES: '[{"type": "conditional", "condition_field": "Timestamp", "cases": [{"operator": "between", "value": "2022/09/01,2022/09/05", "routing": {"queue_shard_prefix": "q3_temprano", "total_workers": 2, "hash_field": "Payment Format"}}, {"operator": "between", "value": "2022/09/06,2022/09/15", "routing": {"queue_shard_prefix": "q3_tardio", "total_workers": 2, "hash_field": "Payment Format"}}]}]'
+      OUTPUT_QUEUES: '[{"type": "conditional", "condition_field": "Timestamp", "cases": [{"operator": "between", "value": "2022/09/01,2022/09/05", "routing": {"queue_shard_prefix": "q3_temprano", "total_workers": 2, "hash_field": "Payment Format"}}, {"operator": "between", "value": "2022/09/06,2022/09/14 23:59:59", "routing": {"queue_shard_prefix": "q3_tardio", "total_workers": 2, "hash_field": "Payment Format"}}]}]'
       NODE_PREFIX: q3_filter_fechas
       ID: '2'
       TOTAL_WORKERS: '4'
       LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q3_filter_fechas_02.txt
       FILTER_FIELD: Timestamp
-      FILTER_VALUE: 2022/09/01,2022/09/15
+      FILTER_VALUE: 2022/09/01,2022/09/14 23:59:59
       FILTER_OPERATOR: between
   q3_filter_fechas_03:
     build:
@@ -760,14 +760,14 @@ services:
       MOM_PASSWORD: distributed
       MOM_VHOST: /
       INPUT_QUEUES: q3_usd_filtered
-      OUTPUT_QUEUES: '[{"type": "conditional", "condition_field": "Timestamp", "cases": [{"operator": "between", "value": "2022/09/01,2022/09/05", "routing": {"queue_shard_prefix": "q3_temprano", "total_workers": 2, "hash_field": "Payment Format"}}, {"operator": "between", "value": "2022/09/06,2022/09/15", "routing": {"queue_shard_prefix": "q3_tardio", "total_workers": 2, "hash_field": "Payment Format"}}]}]'
+      OUTPUT_QUEUES: '[{"type": "conditional", "condition_field": "Timestamp", "cases": [{"operator": "between", "value": "2022/09/01,2022/09/05", "routing": {"queue_shard_prefix": "q3_temprano", "total_workers": 2, "hash_field": "Payment Format"}}, {"operator": "between", "value": "2022/09/06,2022/09/14 23:59:59", "routing": {"queue_shard_prefix": "q3_tardio", "total_workers": 2, "hash_field": "Payment Format"}}]}]'
       NODE_PREFIX: q3_filter_fechas
       ID: '3'
       TOTAL_WORKERS: '4'
       LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q3_filter_fechas_03.txt
       FILTER_FIELD: Timestamp
-      FILTER_VALUE: 2022/09/01,2022/09/15
+      FILTER_VALUE: 2022/09/01,2022/09/14 23:59:59
       FILTER_OPERATOR: between
   q3_filter_fechas_04:
     build:
@@ -788,14 +788,14 @@ services:
       MOM_PASSWORD: distributed
       MOM_VHOST: /
       INPUT_QUEUES: q3_usd_filtered
-      OUTPUT_QUEUES: '[{"type": "conditional", "condition_field": "Timestamp", "cases": [{"operator": "between", "value": "2022/09/01,2022/09/05", "routing": {"queue_shard_prefix": "q3_temprano", "total_workers": 2, "hash_field": "Payment Format"}}, {"operator": "between", "value": "2022/09/06,2022/09/15", "routing": {"queue_shard_prefix": "q3_tardio", "total_workers": 2, "hash_field": "Payment Format"}}]}]'
+      OUTPUT_QUEUES: '[{"type": "conditional", "condition_field": "Timestamp", "cases": [{"operator": "between", "value": "2022/09/01,2022/09/05", "routing": {"queue_shard_prefix": "q3_temprano", "total_workers": 2, "hash_field": "Payment Format"}}, {"operator": "between", "value": "2022/09/06,2022/09/14 23:59:59", "routing": {"queue_shard_prefix": "q3_tardio", "total_workers": 2, "hash_field": "Payment Format"}}]}]'
       NODE_PREFIX: q3_filter_fechas
       ID: '4'
       TOTAL_WORKERS: '4'
       LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q3_filter_fechas_04.txt
       FILTER_FIELD: Timestamp
-      FILTER_VALUE: 2022/09/01,2022/09/15
+      FILTER_VALUE: 2022/09/01,2022/09/14 23:59:59
       FILTER_OPERATOR: between
   q3_format_shard_01:
     build:
@@ -987,6 +987,7 @@ services:
       VALUE_FIELDS: To Bank,Account.1
       VALUE_OUTPUT_FIELDS: to_bank,to_account
       EXPECTED_COUNT: '5'
+      COMPARISON_OPERATOR: gt
       EMIT_MODE: explode
   q4_sumador_02:
     build:
@@ -1018,6 +1019,7 @@ services:
       VALUE_FIELDS: To Bank,Account.1
       VALUE_OUTPUT_FIELDS: to_bank,to_account
       EXPECTED_COUNT: '5'
+      COMPARISON_OPERATOR: gt
       EMIT_MODE: explode
   q4_sumador_03:
     build:
@@ -1049,6 +1051,7 @@ services:
       VALUE_FIELDS: To Bank,Account.1
       VALUE_OUTPUT_FIELDS: to_bank,to_account
       EXPECTED_COUNT: '5'
+      COMPARISON_OPERATOR: gt
       EMIT_MODE: explode
   q4_joiner_01:
     build:
@@ -1154,6 +1157,7 @@ services:
       GROUP_OUTPUT_FIELDS: From Bank,From Account,To Bank,To Account
       VALUE_FIELDS: b_bank,b_account
       EXPECTED_COUNT: '5'
+      COMPARISON_OPERATOR: gt
       EMIT_MODE: aggregate
       COUNT_OUTPUT_FIELD: Amount Transactions
   q4_contador_02:
@@ -1185,6 +1189,7 @@ services:
       GROUP_OUTPUT_FIELDS: From Bank,From Account,To Bank,To Account
       VALUE_FIELDS: b_bank,b_account
       EXPECTED_COUNT: '5'
+      COMPARISON_OPERATOR: gt
       EMIT_MODE: aggregate
       COUNT_OUTPUT_FIELD: Amount Transactions
   q4_contador_03:
@@ -1216,6 +1221,7 @@ services:
       GROUP_OUTPUT_FIELDS: From Bank,From Account,To Bank,To Account
       VALUE_FIELDS: b_bank,b_account
       EXPECTED_COUNT: '5'
+      COMPARISON_OPERATOR: gt
       EMIT_MODE: aggregate
       COUNT_OUTPUT_FIELD: Amount Transactions
   q5_projection_01:
@@ -1243,7 +1249,7 @@ services:
       TOTAL_WORKERS: '4'
       LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q5_projection_01.txt
-      CAMPOS: Timestamp,Payment Currency,Receiving Currency,Payment Format,Amount Received
+      CAMPOS: Timestamp,Payment Currency,Payment Format,Amount Paid
   q5_projection_02:
     build:
       context: ./src
@@ -1269,7 +1275,7 @@ services:
       TOTAL_WORKERS: '4'
       LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q5_projection_02.txt
-      CAMPOS: Timestamp,Payment Currency,Receiving Currency,Payment Format,Amount Received
+      CAMPOS: Timestamp,Payment Currency,Payment Format,Amount Paid
   q5_projection_03:
     build:
       context: ./src
@@ -1295,7 +1301,7 @@ services:
       TOTAL_WORKERS: '4'
       LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q5_projection_03.txt
-      CAMPOS: Timestamp,Payment Currency,Receiving Currency,Payment Format,Amount Received
+      CAMPOS: Timestamp,Payment Currency,Payment Format,Amount Paid
   q5_projection_04:
     build:
       context: ./src
@@ -1321,7 +1327,7 @@ services:
       TOTAL_WORKERS: '4'
       LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q5_projection_04.txt
-      CAMPOS: Timestamp,Payment Currency,Receiving Currency,Payment Format,Amount Received
+      CAMPOS: Timestamp,Payment Currency,Payment Format,Amount Paid
   q5_filter_period_01:
     build:
       context: ./src

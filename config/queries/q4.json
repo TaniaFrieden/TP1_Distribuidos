@@ -39,6 +39,7 @@
         "VALUE_FIELDS": "To Bank,Account.1",
         "VALUE_OUTPUT_FIELDS": "to_bank,to_account",
         "EXPECTED_COUNT": "5",
+        "COMPARISON_OPERATOR": "gt",
         "EMIT_MODE": "explode"
       }
     },
@@ -60,6 +61,7 @@
         "GROUP_OUTPUT_FIELDS": "From Bank,From Account,To Bank,To Account",
         "VALUE_FIELDS": "b_bank,b_account",
         "EXPECTED_COUNT": "5",
+        "COMPARISON_OPERATOR": "gt",
         "EMIT_MODE": "aggregate",
         "COUNT_OUTPUT_FIELD": "Amount Transactions"
       }

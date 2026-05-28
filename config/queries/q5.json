@@ -7,7 +7,7 @@
       "input_queue": "q5_raw_data",
       "output_queue": "q5_projected_data",
       "extra_env": {
-        "CAMPOS": "Timestamp,Payment Currency,Receiving Currency,Payment Format,Amount Received"
+        "CAMPOS": "Timestamp,Payment Currency,Payment Format,Amount Paid"
       }
     },
     {

@@ -41,6 +41,7 @@ class GroupDistinctCounterWorker(BaseWorker):
         self.group_out    = _parse("GROUP_OUTPUT_FIELDS") or self.group_fields
         self.value_out    = _parse("VALUE_OUTPUT_FIELDS") or self.value_fields
         self.expected     = int(os.environ.get("EXPECTED_COUNT", "5"))
+        self.operator     = os.environ.get("COMPARISON_OPERATOR", "eq").lower()
         self.emit_mode    = os.environ.get("EMIT_MODE", "aggregate").lower()
         self.count_field  = os.environ.get("COUNT_OUTPUT_FIELD", "Amount Transactions")
 
@@ -50,7 +51,7 @@ class GroupDistinctCounterWorker(BaseWorker):
 
         logger.info(
             f"[GroupDistinctCounter] group={self.group_fields} value={self.value_fields} "
-            f"expected={self.expected} mode={self.emit_mode}"
+            f"expected={self.expected} operator={self.operator} mode={self.emit_mode}"
         )
 
     def _make_key(self, payload: dict, fields: list) -> tuple:
@@ -120,13 +121,22 @@ class GroupDistinctCounterWorker(BaseWorker):
         batch = []
         enviados = 0
         for gkey, vset in grupos.items():
-            if len(vset) != self.expected:
-                continue
+            # Apply operator comparison
+            if self.operator == "gt":
+                if len(vset) <= self.expected:
+                    continue
+            elif self.operator == "gte":
+                if len(vset) < self.expected:
+                    continue
+            else: # eq
+                if len(vset) != self.expected:
+                    continue
+
             if self.emit_mode == "explode":
                 for vkey in vset:
                     batch.append(list(gkey) + list(vkey))
             else:
-                batch.append(list(gkey) + [self.expected])
+                batch.append(list(gkey) + [len(vset)])
 
             if len(batch) >= self.FLUSH_BATCH_SIZE:
                 self._enviar_batch(client_id, schema, batch)

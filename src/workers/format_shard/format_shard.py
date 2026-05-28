@@ -127,10 +127,12 @@ class FormatShardWorker(BaseWorker):
         # Agrupamos las salidas en un único lote final
         records = []
         for schema, record_values in estado["cache_tardio"]:
+            from_bank_idx = schema.index("From Bank") if "From Bank" in schema else None
             formato_idx = schema.index("Payment Format") if "Payment Format" in schema else None
             monto_idx = schema.index("Amount Paid") if "Amount Paid" in schema else None
             account_idx = schema.index("Account") if "Account" in schema else None
             
+            from_bank = record_values[from_bank_idx] if from_bank_idx is not None else ""
             formato = record_values[formato_idx] if formato_idx is not None else ""
             monto = float(record_values[monto_idx] if monto_idx is not None else 0)
             promedio = promedios.get(formato)
@@ -140,7 +142,7 @@ class FormatShardWorker(BaseWorker):
                 
             if monto < promedio * 0.01:
                 account = record_values[account_idx] if account_idx is not None else ""
-                records.append([account, monto])
+                records.append([from_bank, account, formato, monto])
                 
         if records:
             output_payload = {
@@ -148,7 +150,7 @@ class FormatShardWorker(BaseWorker):
                 "batches": [
                     {
                         "header": {
-                            "schema": ["From Account", "Amount Paid"],
+                            "schema": ["From Bank", "Account", "Payment Format", "Amount Paid"],
                             "client_id": client_id,
                             "count": len(records)
                         },

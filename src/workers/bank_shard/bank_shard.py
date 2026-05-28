@@ -180,7 +180,7 @@ class AgregadorBancarioWorker(BaseWorker):
                         logger.warning(f"[FILTRO] Descartando banco {bank_id} para cliente {client_id}: Nombre desconocido.")
                         continue
                     
-                    records.append([bank_id, datos["bank_name"], datos["account"], datos["max_amount"]])
+                    records.append([bank_id, datos["account"], datos["bank_name"], datos["max_amount"]])
 
                 if records:
                     batch_payload = {
@@ -188,7 +188,7 @@ class AgregadorBancarioWorker(BaseWorker):
                         "batches": [
                             {
                                 "header": {
-                                    "schema": ["Bank ID", "Bank Name", "Account", "Max Amount"],
+                                    "schema": ["From Bank", "Account", "Bank Name", "Amount Paid"],
                                     "client_id": client_id,
                                     "count": len(records)
                                 },

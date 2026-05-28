@@ -22,7 +22,7 @@
             },
             {
               "operator": "between",
-              "value": "2022/09/06,2022/09/15",
+              "value": "2022/09/06,2022/09/14 23:59:59",
               "routing": {
                 "queue_shard_prefix": "q3_tardio",
                 "total_workers": 2,
@@ -34,7 +34,7 @@
       ],
       "extra_env": {
         "FILTER_FIELD": "Timestamp",
-        "FILTER_VALUE": "2022/09/01,2022/09/15",
+        "FILTER_VALUE": "2022/09/01,2022/09/14 23:59:59",
         "FILTER_OPERATOR": "between"
       }
     },
