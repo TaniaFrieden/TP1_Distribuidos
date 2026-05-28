@@ -1,35 +1,58 @@
 #!/usr/bin/env python3
 import os
 import sys
+import shutil
 import pandas as pd
 import requests
 from datetime import date, timedelta
 from pathlib import Path
 
-# =====================================================================
-# CONFIGURACIÓN EDITABLE
-# =====================================================================
-# Rutas y nombres de los datasets de entrada
 RUTA_DATASETS = "datasets"
 DATASET_TRANS = "HI-Large_Trans_sample_30.csv"
 DATASET_ACCOUNTS = "HI-Large_accounts.csv"
 
-# Directorio de salida y nombres de archivos de destino (seteados con un bucle for)
 RUTA_SALIDAS = "output/Hi-Large-30"
-OUTPUTS = {}
-for q in range(1, 6):
-    OUTPUTS[q] = f"{RUTA_SALIDAS}/q{q}_solucion.csv"
-# =====================================================================
+
 
 def main():
-    # Encontrar la raíz del proyecto para asegurar rutas correctas
     project_root = Path(__file__).resolve().parents[1]
+    args = sys.argv[1:]
     
-    input_trans = project_root / RUTA_DATASETS / DATASET_TRANS
+    if len(args) >= 1:
+        arg_str = args[0]
+        if not arg_str.endswith('.csv'):
+            arg_str = f"{arg_str}.csv"
+        path_arg = Path(arg_str)
+        if path_arg.is_absolute():
+            input_trans = path_arg
+        elif len(path_arg.parts) == 1:
+            input_trans = project_root / RUTA_DATASETS / path_arg
+        else:
+            input_trans = project_root / path_arg
+    else:
+        input_trans = project_root / RUTA_DATASETS / DATASET_TRANS
+        
     input_accounts = project_root / RUTA_DATASETS / DATASET_ACCOUNTS
     
-    # Crear carpeta de salida si no existe
-    Path(project_root / RUTA_SALIDAS).mkdir(parents=True, exist_ok=True)
+    if len(args) >= 2:
+        dir_arg = args[1]
+        if '/' not in dir_arg and '\\' not in dir_arg:
+            dir_arg = f"solutions/{dir_arg}"
+        path_arg = Path(dir_arg)
+        out_dir = path_arg if path_arg.is_absolute() else project_root / path_arg
+    else:
+        out_dir = project_root / RUTA_SALIDAS
+        
+    if out_dir.exists():
+        print(f"Borrando carpeta de destino existente: {out_dir}")
+        if out_dir.is_dir():
+            shutil.rmtree(out_dir)
+        else:
+            out_dir.unlink()
+            
+    out_dir.mkdir(parents=True, exist_ok=True)
+    
+    outputs = {q: out_dir / f"q{q}_solucion.csv" for q in range(1, 6)}
     
     print(f"--- Cargando Datasets ---")
     print(f"Cargando transacciones desde: {input_trans}")
@@ -46,45 +69,33 @@ def main():
     accounts_df = pd.read_csv(input_accounts)
     print(f"Tamaño de cuentas (filas, columnas): {accounts_df.shape}")
 
-    # Rango de Timestamps
     if "Timestamp" in trans_df.columns:
         print(f"Rango de Timestamps: [{trans_df['Timestamp'].min()}, {trans_df['Timestamp'].max()}]")
     else:
         print("Advertencia: No se encontró la columna 'Timestamp' en las transacciones.")
 
-    # Filtrar transacciones que no sean en USD
     print("\nFiltrando transacciones que no son en dólares (US Dollar)...")
     trans_usd_df = trans_df[trans_df['Payment Currency'] == "US Dollar"]
     print(f"Cantidad de transacciones USD: {trans_usd_df.shape[0]}")
 
-    # Filtrar transacciones USD en el primer período (01 al 06 de Septiembre de 2022)
     trans_usd_sept_1st_df = trans_usd_df[(trans_usd_df["Timestamp"] >= '2022/09/01') & (trans_usd_df["Timestamp"] <= '2022/09/06')]
     
-    # -----------------------------------------------------------------
-    # QUERY 1
-    # -----------------------------------------------------------------
     print("\nProcesando Query 1...")
     low_profile_transactions = trans_usd_df[trans_usd_df['Amount Paid'] < 50]
     low_profile_transactions = low_profile_transactions[['From Bank', 'Account', 'To Bank', 'Account.1', 'Amount Paid']]
-    q1_path = project_root / OUTPUTS[1]
+    q1_path = outputs[1]
     low_profile_transactions.to_csv(q1_path, index=False)
     print(f"Query 1 guardada en: {q1_path} ({low_profile_transactions.shape[0]} filas)")
 
-    # -----------------------------------------------------------------
-    # QUERY 2
-    # -----------------------------------------------------------------
     print("\nProcesando Query 2...")
     max_amount_trans_usd_idx = trans_usd_df.groupby(["From Bank"])["Amount Paid"].idxmax()
     max_amount_trans_usd = trans_usd_df.loc[max_amount_trans_usd_idx]
     max_amount_bank = max_amount_trans_usd.merge(accounts_df, left_on="From Bank", right_on="Bank ID")
     q2_solucion = max_amount_bank[["From Bank", "Account", "Bank Name", "Amount Paid"]].drop_duplicates()
-    q2_path = project_root / OUTPUTS[2]
+    q2_path = outputs[2]
     q2_solucion.to_csv(q2_path, index=False)
     print(f"Query 2 guardada en: {q2_path} ({q2_solucion.shape[0]} filas)")
 
-    # -----------------------------------------------------------------
-    # QUERY 3
-    # -----------------------------------------------------------------
     print("\nProcesando Query 3...")
     avg_amounts_per_type = trans_usd_sept_1st_df.groupby(["Payment Format"])["Amount Paid"].mean().reset_index()
     trans_usd_sept_2nd_df = trans_usd_df[(trans_usd_df["Timestamp"] >= '2022/09/06') & (trans_usd_df["Timestamp"] <= '2022/09/15')]
@@ -94,19 +105,14 @@ def main():
     })
     lower_trans_usd_sept_2nd_with_avg_df = trans_usd_sept_2nd_with_avg_df[trans_usd_sept_2nd_with_avg_df["Amount Paid"] < trans_usd_sept_2nd_with_avg_df["AVG"] * 0.01]
     q3_solucion = lower_trans_usd_sept_2nd_with_avg_df[["From Bank", "Account", "Payment Format", "Amount Paid"]]
-    q3_path = project_root / OUTPUTS[3]
+    q3_path = outputs[3]
     q3_solucion.to_csv(q3_path, index=False)
     print(f"Query 3 guardada en: {q3_path} ({q3_solucion.shape[0]} filas)")
 
-    # -----------------------------------------------------------------
-    # QUERY 4
-    # -----------------------------------------------------------------
     print("\nProcesando Query 4...")
     ranged_trans_usd_sept_df = trans_usd_sept_1st_df\
         .groupby(["From Bank", "Account"])\
         .filter(lambda x: x.groupby(["To Bank", "Account.1"]).size().size > 5)
-
-
 
     accounts_ab = ranged_trans_usd_sept_df[["From Bank", "Account", "To Bank", "Account.1"]]
     accounts_bc = trans_usd_sept_1st_df[["From Bank", "Account", "To Bank", "Account.1"]]
@@ -131,13 +137,10 @@ def main():
         "To Account": "Account"
     })
     unique_accounts = pd.concat([from_account_pairs_df, to_account_pairs_df]).drop_duplicates()
-    q4_path = project_root / OUTPUTS[4]
+    q4_path = outputs[4]
     unique_accounts.to_csv(q4_path, index=False)
     print(f"Query 4 guardada en: {q4_path} ({unique_accounts.shape[0]} filas)")
 
-    # -----------------------------------------------------------------
-    # QUERY 5
-    # -----------------------------------------------------------------
     print("\nProcesando Query 5...")
     CURRENCY_MAP_Q5 = {
         "US Dollar": "USD", "Euro": "EUR", "UK Pound": "GBP", "Yen": "JPY",
@@ -191,7 +194,7 @@ def main():
     trans_sept_1st_wire_or_ach_filtered = trans_sept_1st_wire_or_ach_converted_df[trans_sept_1st_wire_or_ach_converted_df['Amount'] < 1.0]
     
     q5_solucion = pd.DataFrame({"count": [trans_sept_1st_wire_or_ach_filtered.shape[0]]})
-    q5_path = project_root / OUTPUTS[5]
+    q5_path = outputs[5]
     q5_solucion.to_csv(q5_path, index=False)
     print(f"Query 5 guardada en: {q5_path} (Valor: {trans_sept_1st_wire_or_ach_filtered.shape[0]})")
     print("\n¡Ejecución de queries completada con éxito!")

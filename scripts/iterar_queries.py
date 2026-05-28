@@ -4,23 +4,17 @@ import sys
 import subprocess
 from pathlib import Path
 
-# =====================================================================
-# CONFIGURACIÓN POR DEFECTO
-# =====================================================================
 CANTIDAD_EJECUCIONES = 1
 ACTUAL_TEMPLATE = "output/q{q}_solucion.csv"
 EXPECTED_TEMPLATE = "solutions/Hi-Large-30/q{q}_solucion.csv"
 
-# Archivos de datasets a pasar al cliente
 TRANSACTIONS_FILE = "datasets/HI-Large_Trans_sample_30.csv"
 ACCOUNTS_FILE = "datasets/HI-Large_accounts.csv"
-# =====================================================================
+
 
 def main():
-    # Encontrar la raíz del proyecto (un nivel arriba del directorio scripts/)
     project_root = Path(__file__).resolve().parents[1]
     
-    # Agregar scripts/ al path de importación para importar los scripts auxiliares
     scripts_dir = Path(__file__).resolve().parent
     sys.path.append(str(scripts_dir))
     
@@ -32,7 +26,6 @@ def main():
         print(f"Error al importar módulos auxiliares desde scripts/: {e}")
         sys.exit(1)
         
-    # Obtener las queries configuradas en el docker-compose
     try:
         queries = obtener_queries_desde_compose(project_root / "docker-compose.yml")
     except Exception as e:
@@ -41,27 +34,41 @@ def main():
 
     fallas_por_query = {q: 0 for q in queries}
 
-    # Leer cantidad de iteraciones si se pasa por parámetro (ej. ./iterar_queries.py 5)
+    transactions_file = TRANSACTIONS_FILE
+    accounts_file = ACCOUNTS_FILE
     cantidad_iteraciones = CANTIDAD_EJECUCIONES
+    expected_template = EXPECTED_TEMPLATE
     args = sys.argv[1:]
-    if args:
+    
+    if len(args) > 0:
         try:
             cantidad_iteraciones = int(args[0])
         except ValueError:
-            print(f"Argumento inválido '{args[0]}', se usará el valor por defecto de {CANTIDAD_EJECUCIONES} iteraciones.")
+            print(f"Argumento de iteraciones inválido '{args[0]}', se usará el valor por defecto de {CANTIDAD_EJECUCIONES} iteraciones.")
+    if len(args) > 1:
+        tx_arg = args[1]
+        if not tx_arg.endswith('.csv'):
+            tx_arg = f"{tx_arg}.csv"
+        transactions_file = tx_arg if ('/' in tx_arg or '\\' in tx_arg) else f"datasets/{tx_arg}"
+    if len(args) > 2:
+        acc_arg = args[2]
+        if not acc_arg.endswith('.csv'):
+            acc_arg = f"{acc_arg}.csv"
+        accounts_file = acc_arg if ('/' in acc_arg or '\\' in acc_arg) else f"datasets/{acc_arg}"
+    if len(args) > 3:
+        expected_template = f"solutions/{args[3]}/q{{q}}_solucion.csv"
 
     for indice in range(1, cantidad_iteraciones + 1):
         imprimir_titulo(f"Iteración {indice}/{cantidad_iteraciones}")
         
-        # Ejecutar el cliente usando make client
         try:
             subprocess.run(
                 [
                     "make",
                     "-C", str(project_root),
                     "client",
-                    f"TRANSACTIONS_FILE={TRANSACTIONS_FILE}",
-                    f"ACCOUNTS_FILE={ACCOUNTS_FILE}",
+                    f"TRANSACTIONS_FILE={transactions_file}",
+                    f"ACCOUNTS_FILE={accounts_file}",
                     f"OUTPUT_DIR={ACTUAL_TEMPLATE.split('/')[0]}"
                 ],
                 check=True
@@ -72,27 +79,23 @@ def main():
                 fallas_por_query[query] += 1
             continue
 
-        # Comparar los resultados de cada query obtenida frente a su dataset solución esperado
         for query in queries:
             actual_csv = project_root / ACTUAL_TEMPLATE.format(q=query)
-            expected_csv = project_root / EXPECTED_TEMPLATE.format(q=query)
+            expected_csv = project_root / expected_template.format(q=query)
 
-            print(f"\nComparando CSVs para Query {query}:")
             son_iguales, mensaje = comparar_csv_sin_orden(actual_csv, expected_csv)
-            print(mensaje)
-
             if son_iguales:
-                print("Resultado: iguales")
+                print(f"\nComparando CSVs para Query {query}: Iguales")
             else:
                 fallas_por_query[query] += 1
-                print("Resultado: diferentes")
+                print(f"\nComparando CSVs para Query {query}: Diferentes")
+                print(mensaje)
 
     imprimir_titulo("Resumen")
     print(f"\nResumen de fallas por query después de {cantidad_iteraciones} iteraciones:")
     for query, fallas in fallas_por_query.items():
         print(f"Query {query}: {fallas} fallas en {cantidad_iteraciones} ejecuciones")
 
-    # Si hay fallas detectadas, salir con código de error
     total_fallas = sum(fallas_por_query.values())
     if total_fallas > 0:
         sys.exit(1)

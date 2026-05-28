@@ -6,9 +6,6 @@ import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
 
-
-# Configuracion editable desde el archivo.
-# Si ejecutas el script sin argumentos, usa estos valores.
 DEFAULT_INPUT_DATASET = "datasets/LI-Small_Trans.csv"
 DEFAULT_OUTPUT_DATASET = "datasets/transacciones_sample_q4.csv"
 DEFAULT_FANOUT = 6
