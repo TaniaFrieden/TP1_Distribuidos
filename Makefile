@@ -4,8 +4,8 @@ PYTEST := PYTHONPATH=src $(PYTHON) -m pytest
 START_VERBOSE := $(if $(filter !logs,$(MAKECMDGOALS)),0,1)
 
 # Variables del cliente
-TRANSACTIONS_FILE ?= datasets/LI-Small_Trans.csv
-# TRANSACTIONS_FILE ?= datasets/transacciones_sample.csv
+# TRANSACTIONS_FILE ?= datasets/LI-Small_Trans.csv
+TRANSACTIONS_FILE ?= datasets/transacciones_sample.csv
 ACCOUNTS_FILE ?= datasets/LI-Small_accounts.csv
 OUTPUT_DIR ?= output
 SERVER_HOST ?= 127.0.0.1

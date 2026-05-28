@@ -1,5 +1,4 @@
 import logging
-import json
 from common import message_protocol
 from config import LOTE_SIZE
 
@@ -8,15 +7,22 @@ from config import LOTE_SIZE
 ## Funciones auxiliares
 ## --------------------    
 def _leer_registros_dinamico(filepath):
-    with open(filepath, "r", encoding="utf-8") as f:
-        linea_headers = f.readline().strip()
-        if not linea_headers:
-            return
-        headers = linea_headers.split(",")
-        for linea in f:
-            if linea.strip():
-                valores = linea.strip().split(",")
-                yield json.dumps(dict(zip(headers, valores)))
+    f = open(filepath, "r", encoding="utf-8")
+    linea_headers = f.readline().strip()
+    if not linea_headers:
+        f.close()
+        return None, iter([])
+    headers = linea_headers.split(",")
+
+    def _gen():
+        try:
+            for linea in f:
+                if linea.strip():
+                    yield linea.strip().split(",")
+        finally:
+            f.close()
+
+    return headers, _gen()
 
 def enviar_archivo(filepath, tipo_mensaje, sock, lock, client_id, shutdown_event=None):
     logging.info(f"Iniciando envío dinámico desde {filepath} para client_id {client_id}")
