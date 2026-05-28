@@ -1,19 +1,6 @@
 {
+  "gateway_queue": "raw_data",
   "workers": [
-    {
-      "type": "filter",
-      "prefix": "01_filter_usd",
-      "replicas": 2,
-      "input_queue": "q1_raw_data",
-      "output_queue": [
-        "q1_pre_projection"
-      ],
-      "extra_env": {
-        "FILTER_FIELD": "Payment Currency",
-        "FILTER_VALUE": "US Dollar",
-        "FILTER_OPERATOR": "eq"
-      }
-    },
     {
       "type": "projection",
       "prefix": "q1_projection",

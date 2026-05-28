@@ -29,6 +29,7 @@ class DistributedCoordinator:
         
         self._coordinacion_lock = threading.Lock()
         self._vuelo_lock = threading.Lock()
+        self._control_send_lock = threading.Lock()
         
         # Canal de Control
         self.control_exchange = middleware.FanoutExchangeRabbitMQ(
@@ -154,7 +155,8 @@ class DistributedCoordinator:
             logger.info(
                 f"[Coordinator] Enviando control {msg_dict.get('type')} para client_id={msg_dict.get('client_id')} desde worker {self.config.node_id}."
             )
-            self.control_exchange.send(json.dumps(msg_dict).encode('utf-8'))
+            with self._control_send_lock:
+                self.control_exchange.send(json.dumps(msg_dict).encode('utf-8'))
         except Exception as e:
             logger.error(f"[Coordinator] Error enviando control: {e}")
 

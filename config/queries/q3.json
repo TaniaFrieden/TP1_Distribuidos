@@ -1,17 +1,6 @@
 {
+  "gateway_queue": "raw_data",
   "workers": [
-    {
-      "type": "filter",
-      "prefix": "q3_filter_usd",
-      "replicas": 4,
-      "input_queue": "q3_raw_data",
-      "output_queue": "q3_usd_filtered",
-      "extra_env": {
-        "FILTER_FIELD": "Payment Currency",
-        "FILTER_VALUE": "US Dollar",
-        "FILTER_OPERATOR": "eq"
-      }
-    },
     {
       "type": "filter",
       "prefix": "q3_filter_fechas",
@@ -53,10 +42,7 @@
       "type": "format_shard",
       "prefix": "q3_format_shard",
       "replicas": 2,
-      "input_queue": [
-        "q3_temprano_{id}",
-        "q3_tardio_{id}"
-      ],
+      "input_queue": ["q3_temprano_{id}", "q3_tardio_{id}"],
       "output_queue": "q3_results"
     }
   ]

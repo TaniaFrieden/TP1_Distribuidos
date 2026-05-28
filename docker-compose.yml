@@ -22,8 +22,8 @@ services:
       MOM_USER: distributed
       MOM_PASSWORD: distributed
       MOM_VHOST: /
-      OUTPUTS_QUEUE: q5_raw_data, q1_raw_data, q3_raw_data, q2_raw_data, q4_raw_data
-      INPUTS_QUEUE: q5_results, q1_results, q3_results, q2_results, q4_results
+      OUTPUTS_QUEUE: raw_data, q5_raw_data
+      INPUTS_QUEUE: q1_results, q2_results, q3_results, q4_results, q5_results
       HTTP_HOST: 0.0.0.0
       HTTP_PORT: '8080'
       BANK_QUEUE: '{"queue_shard_prefix": "q2_raw_banks", "total_workers": 3, "hash_field": "Bank ID"}'
@@ -35,6 +35,7 @@ services:
       RABBITMQ_DEFAULT_USER: distributed
       RABBITMQ_DEFAULT_PASS: distributed
       RABBITMQ_DEFAULT_VHOST: /
+      RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: -rabbit vm_memory_high_watermark 0.4
     healthcheck:
       interval: 5s
       retries: 10
@@ -44,11 +45,32 @@ services:
     ports:
     - 5672:5672
     - 15672:15672
-  q5_projection_01:
+  client:
     build:
       context: ./src
-      dockerfile: workers/projection/Dockerfile
-    container_name: q5_projection_01
+      dockerfile: client/Dockerfile
+    profiles:
+    - clients
+    depends_on:
+      gateway:
+        condition: service_started
+    volumes:
+    - ./datasets:/app/datasets
+    - ./output:/app/output
+    environment:
+      PYTHONUNBUFFERED: '1'
+      SERVER_HOST: gateway
+      SERVER_PORT: '5678'
+      TRANSACTIONS_FILE: /app/datasets/transacciones_sample.csv
+      ACCOUNTS_FILE: /app/datasets/accounts_sample.csv
+      OUTPUT_DIR: /app/output
+      OUTPUT_APPEND_HOSTNAME: 'true'
+      BATCH_SIZE: '5000'
+  shared_filter_usd_01:
+    build:
+      context: ./src
+      dockerfile: workers/filter/Dockerfile
+    container_name: shared_filter_usd_01
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -57,363 +79,26 @@ services:
     volumes:
     - ./logs:/app/logs
     environment:
+      PYTHONUNBUFFERED: '1'
       MOM_HOST: rabbitmq
       MOM_PORT: '5672'
       MOM_USER: distributed
       MOM_PASSWORD: distributed
       MOM_VHOST: /
-      INPUT_QUEUES: q5_raw_data
-      OUTPUT_QUEUES: q5_projected_data
-      NODE_PREFIX: q5_projection
+      INPUT_QUEUES: raw_data
+      OUTPUT_QUEUES: '["q1_pre_projection", "q2_pre_projection", "q3_usd_filtered", "q4_pre_projection"]'
+      NODE_PREFIX: shared_filter_usd
       ID: '1'
-      TOTAL_WORKERS: '4'
-      LOG_FILE: /app/logs/q5_projection_01.txt
-      CAMPOS: Timestamp,Payment Currency,Receiving Currency,Payment Format,Amount Received
-  q5_projection_02:
-    build:
-      context: ./src
-      dockerfile: workers/projection/Dockerfile
-    container_name: q5_projection_02
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      gateway:
-        condition: service_started
-    volumes:
-    - ./logs:/app/logs
-    environment:
-      MOM_HOST: rabbitmq
-      MOM_PORT: '5672'
-      MOM_USER: distributed
-      MOM_PASSWORD: distributed
-      MOM_VHOST: /
-      INPUT_QUEUES: q5_raw_data
-      OUTPUT_QUEUES: q5_projected_data
-      NODE_PREFIX: q5_projection
-      ID: '2'
-      TOTAL_WORKERS: '4'
-      LOG_FILE: /app/logs/q5_projection_02.txt
-      CAMPOS: Timestamp,Payment Currency,Receiving Currency,Payment Format,Amount Received
-  q5_projection_03:
-    build:
-      context: ./src
-      dockerfile: workers/projection/Dockerfile
-    container_name: q5_projection_03
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      gateway:
-        condition: service_started
-    volumes:
-    - ./logs:/app/logs
-    environment:
-      MOM_HOST: rabbitmq
-      MOM_PORT: '5672'
-      MOM_USER: distributed
-      MOM_PASSWORD: distributed
-      MOM_VHOST: /
-      INPUT_QUEUES: q5_raw_data
-      OUTPUT_QUEUES: q5_projected_data
-      NODE_PREFIX: q5_projection
-      ID: '3'
-      TOTAL_WORKERS: '4'
-      LOG_FILE: /app/logs/q5_projection_03.txt
-      CAMPOS: Timestamp,Payment Currency,Receiving Currency,Payment Format,Amount Received
-  q5_projection_04:
-    build:
-      context: ./src
-      dockerfile: workers/projection/Dockerfile
-    container_name: q5_projection_04
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      gateway:
-        condition: service_started
-    volumes:
-    - ./logs:/app/logs
-    environment:
-      MOM_HOST: rabbitmq
-      MOM_PORT: '5672'
-      MOM_USER: distributed
-      MOM_PASSWORD: distributed
-      MOM_VHOST: /
-      INPUT_QUEUES: q5_raw_data
-      OUTPUT_QUEUES: q5_projected_data
-      NODE_PREFIX: q5_projection
-      ID: '4'
-      TOTAL_WORKERS: '4'
-      LOG_FILE: /app/logs/q5_projection_04.txt
-      CAMPOS: Timestamp,Payment Currency,Receiving Currency,Payment Format,Amount Received
-  q5_filter_period_01:
-    build:
-      context: ./src
-      dockerfile: workers/filter/Dockerfile
-    container_name: q5_filter_period_01
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      gateway:
-        condition: service_started
-    volumes:
-    - ./logs:/app/logs
-    environment:
-      MOM_HOST: rabbitmq
-      MOM_PORT: '5672'
-      MOM_USER: distributed
-      MOM_PASSWORD: distributed
-      MOM_VHOST: /
-      INPUT_QUEUES: q5_projected_data
-      OUTPUT_QUEUES: q5_period_to_format
-      NODE_PREFIX: q5_filter_period
-      ID: '1'
-      TOTAL_WORKERS: '4'
-      LOG_FILE: /app/logs/q5_filter_period_01.txt
-      FILTER_FIELD: Timestamp
-      FILTER_VALUE: 2022/09/01, 2022/09/05
-      FILTER_OPERATOR: between
-  q5_filter_period_02:
-    build:
-      context: ./src
-      dockerfile: workers/filter/Dockerfile
-    container_name: q5_filter_period_02
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      gateway:
-        condition: service_started
-    volumes:
-    - ./logs:/app/logs
-    environment:
-      MOM_HOST: rabbitmq
-      MOM_PORT: '5672'
-      MOM_USER: distributed
-      MOM_PASSWORD: distributed
-      MOM_VHOST: /
-      INPUT_QUEUES: q5_projected_data
-      OUTPUT_QUEUES: q5_period_to_format
-      NODE_PREFIX: q5_filter_period
-      ID: '2'
-      TOTAL_WORKERS: '4'
-      LOG_FILE: /app/logs/q5_filter_period_02.txt
-      FILTER_FIELD: Timestamp
-      FILTER_VALUE: 2022/09/01, 2022/09/05
-      FILTER_OPERATOR: between
-  q5_filter_period_03:
-    build:
-      context: ./src
-      dockerfile: workers/filter/Dockerfile
-    container_name: q5_filter_period_03
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      gateway:
-        condition: service_started
-    volumes:
-    - ./logs:/app/logs
-    environment:
-      MOM_HOST: rabbitmq
-      MOM_PORT: '5672'
-      MOM_USER: distributed
-      MOM_PASSWORD: distributed
-      MOM_VHOST: /
-      INPUT_QUEUES: q5_projected_data
-      OUTPUT_QUEUES: q5_period_to_format
-      NODE_PREFIX: q5_filter_period
-      ID: '3'
-      TOTAL_WORKERS: '4'
-      LOG_FILE: /app/logs/q5_filter_period_03.txt
-      FILTER_FIELD: Timestamp
-      FILTER_VALUE: 2022/09/01, 2022/09/05
-      FILTER_OPERATOR: between
-  q5_filter_period_04:
-    build:
-      context: ./src
-      dockerfile: workers/filter/Dockerfile
-    container_name: q5_filter_period_04
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      gateway:
-        condition: service_started
-    volumes:
-    - ./logs:/app/logs
-    environment:
-      MOM_HOST: rabbitmq
-      MOM_PORT: '5672'
-      MOM_USER: distributed
-      MOM_PASSWORD: distributed
-      MOM_VHOST: /
-      INPUT_QUEUES: q5_projected_data
-      OUTPUT_QUEUES: q5_period_to_format
-      NODE_PREFIX: q5_filter_period
-      ID: '4'
-      TOTAL_WORKERS: '4'
-      LOG_FILE: /app/logs/q5_filter_period_04.txt
-      FILTER_FIELD: Timestamp
-      FILTER_VALUE: 2022/09/01, 2022/09/05
-      FILTER_OPERATOR: between
-  q5_filter_format_01:
-    build:
-      context: ./src
-      dockerfile: workers/filter/Dockerfile
-    container_name: q5_filter_format_01
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      gateway:
-        condition: service_started
-    volumes:
-    - ./logs:/app/logs
-    environment:
-      MOM_HOST: rabbitmq
-      MOM_PORT: '5672'
-      MOM_USER: distributed
-      MOM_PASSWORD: distributed
-      MOM_VHOST: /
-      INPUT_QUEUES: q5_period_to_format
-      OUTPUT_QUEUES: q5_format_to_convert
-      NODE_PREFIX: q5_filter_format
-      ID: '1'
-      TOTAL_WORKERS: '2'
-      LOG_FILE: /app/logs/q5_filter_format_01.txt
-      FILTER_FIELD: Payment Format
-      FILTER_VALUE: Wire, ACH
-      FILTER_OPERATOR: in
-  q5_filter_format_02:
-    build:
-      context: ./src
-      dockerfile: workers/filter/Dockerfile
-    container_name: q5_filter_format_02
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      gateway:
-        condition: service_started
-    volumes:
-    - ./logs:/app/logs
-    environment:
-      MOM_HOST: rabbitmq
-      MOM_PORT: '5672'
-      MOM_USER: distributed
-      MOM_PASSWORD: distributed
-      MOM_VHOST: /
-      INPUT_QUEUES: q5_period_to_format
-      OUTPUT_QUEUES: q5_format_to_convert
-      NODE_PREFIX: q5_filter_format
-      ID: '2'
-      TOTAL_WORKERS: '2'
-      LOG_FILE: /app/logs/q5_filter_format_02.txt
-      FILTER_FIELD: Payment Format
-      FILTER_VALUE: Wire, ACH
-      FILTER_OPERATOR: in
-  q5_converter_01:
-    build:
-      context: ./src
-      dockerfile: workers/converter/Dockerfile
-    container_name: q5_converter_01
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      gateway:
-        condition: service_started
-    volumes:
-    - ./logs:/app/logs
-    environment:
-      MOM_HOST: rabbitmq
-      MOM_PORT: '5672'
-      MOM_USER: distributed
-      MOM_PASSWORD: distributed
-      MOM_VHOST: /
-      INPUT_QUEUES: q5_format_to_convert
-      OUTPUT_QUEUES: q5_filtered
-      NODE_PREFIX: q5_converter
-      ID: '1'
-      TOTAL_WORKERS: '2'
-      LOG_FILE: /app/logs/q5_converter_01.txt
-      START_DATE: '2022-09-01'
-      END_DATE: '2022-09-05'
-  q5_converter_02:
-    build:
-      context: ./src
-      dockerfile: workers/converter/Dockerfile
-    container_name: q5_converter_02
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      gateway:
-        condition: service_started
-    volumes:
-    - ./logs:/app/logs
-    environment:
-      MOM_HOST: rabbitmq
-      MOM_PORT: '5672'
-      MOM_USER: distributed
-      MOM_PASSWORD: distributed
-      MOM_VHOST: /
-      INPUT_QUEUES: q5_format_to_convert
-      OUTPUT_QUEUES: q5_filtered
-      NODE_PREFIX: q5_converter
-      ID: '2'
-      TOTAL_WORKERS: '2'
-      LOG_FILE: /app/logs/q5_converter_02.txt
-      START_DATE: '2022-09-01'
-      END_DATE: '2022-09-05'
-  q5_counter_01:
-    build:
-      context: ./src
-      dockerfile: workers/counter/Dockerfile
-    container_name: q5_counter_01
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      gateway:
-        condition: service_started
-    volumes:
-    - ./logs:/app/logs
-    environment:
-      MOM_HOST: rabbitmq
-      MOM_PORT: '5672'
-      MOM_USER: distributed
-      MOM_PASSWORD: distributed
-      MOM_VHOST: /
-      INPUT_QUEUES: q5_filtered
-      OUTPUT_QUEUES: q5_results
-      NODE_PREFIX: q5_counter
-      ID: '1'
-      TOTAL_WORKERS: '1'
-      LOG_FILE: /app/logs/q5_counter_01.txt
-  01_filter_usd_01:
-    build:
-      context: ./src
-      dockerfile: workers/filter/Dockerfile
-    container_name: 01_filter_usd_01
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      gateway:
-        condition: service_started
-    volumes:
-    - ./logs:/app/logs
-    environment:
-      MOM_HOST: rabbitmq
-      MOM_PORT: '5672'
-      MOM_USER: distributed
-      MOM_PASSWORD: distributed
-      MOM_VHOST: /
-      INPUT_QUEUES: q1_raw_data
-      OUTPUT_QUEUES: '["q1_pre_projection"]'
-      NODE_PREFIX: 01_filter_usd
-      ID: '1'
-      TOTAL_WORKERS: '2'
-      LOG_FILE: /app/logs/01_filter_usd_01.txt
+      TOTAL_WORKERS: '3'
+      LOG_FILE: /app/logs/shared_filter_usd_01.txt
       FILTER_FIELD: Payment Currency
       FILTER_VALUE: US Dollar
       FILTER_OPERATOR: eq
-  01_filter_usd_02:
+  shared_filter_usd_02:
     build:
       context: ./src
       dockerfile: workers/filter/Dockerfile
-    container_name: 01_filter_usd_02
+    container_name: shared_filter_usd_02
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -422,17 +107,46 @@ services:
     volumes:
     - ./logs:/app/logs
     environment:
+      PYTHONUNBUFFERED: '1'
       MOM_HOST: rabbitmq
       MOM_PORT: '5672'
       MOM_USER: distributed
       MOM_PASSWORD: distributed
       MOM_VHOST: /
-      INPUT_QUEUES: q1_raw_data
-      OUTPUT_QUEUES: '["q1_pre_projection"]'
-      NODE_PREFIX: 01_filter_usd
+      INPUT_QUEUES: raw_data
+      OUTPUT_QUEUES: '["q1_pre_projection", "q2_pre_projection", "q3_usd_filtered", "q4_pre_projection"]'
+      NODE_PREFIX: shared_filter_usd
       ID: '2'
-      TOTAL_WORKERS: '2'
-      LOG_FILE: /app/logs/01_filter_usd_02.txt
+      TOTAL_WORKERS: '3'
+      LOG_FILE: /app/logs/shared_filter_usd_02.txt
+      FILTER_FIELD: Payment Currency
+      FILTER_VALUE: US Dollar
+      FILTER_OPERATOR: eq
+  shared_filter_usd_03:
+    build:
+      context: ./src
+      dockerfile: workers/filter/Dockerfile
+    container_name: shared_filter_usd_03
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    volumes:
+    - ./logs:/app/logs
+    environment:
+      PYTHONUNBUFFERED: '1'
+      MOM_HOST: rabbitmq
+      MOM_PORT: '5672'
+      MOM_USER: distributed
+      MOM_PASSWORD: distributed
+      MOM_VHOST: /
+      INPUT_QUEUES: raw_data
+      OUTPUT_QUEUES: '["q1_pre_projection", "q2_pre_projection", "q3_usd_filtered", "q4_pre_projection"]'
+      NODE_PREFIX: shared_filter_usd
+      ID: '3'
+      TOTAL_WORKERS: '3'
+      LOG_FILE: /app/logs/shared_filter_usd_03.txt
       FILTER_FIELD: Payment Currency
       FILTER_VALUE: US Dollar
       FILTER_OPERATOR: eq
@@ -569,324 +283,6 @@ services:
       FILTER_FIELD: Amount Paid
       FILTER_VALUE: '50'
       FILTER_OPERATOR: lt
-  q3_filter_usd_01:
-    build:
-      context: ./src
-      dockerfile: workers/filter/Dockerfile
-    container_name: q3_filter_usd_01
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      gateway:
-        condition: service_started
-    volumes:
-    - ./logs:/app/logs
-    environment:
-      MOM_HOST: rabbitmq
-      MOM_PORT: '5672'
-      MOM_USER: distributed
-      MOM_PASSWORD: distributed
-      MOM_VHOST: /
-      INPUT_QUEUES: q3_raw_data
-      OUTPUT_QUEUES: q3_usd_filtered
-      NODE_PREFIX: q3_filter_usd
-      ID: '1'
-      TOTAL_WORKERS: '4'
-      LOG_FILE: /app/logs/q3_filter_usd_01.txt
-      FILTER_FIELD: Payment Currency
-      FILTER_VALUE: US Dollar
-      FILTER_OPERATOR: eq
-  q3_filter_usd_02:
-    build:
-      context: ./src
-      dockerfile: workers/filter/Dockerfile
-    container_name: q3_filter_usd_02
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      gateway:
-        condition: service_started
-    volumes:
-    - ./logs:/app/logs
-    environment:
-      MOM_HOST: rabbitmq
-      MOM_PORT: '5672'
-      MOM_USER: distributed
-      MOM_PASSWORD: distributed
-      MOM_VHOST: /
-      INPUT_QUEUES: q3_raw_data
-      OUTPUT_QUEUES: q3_usd_filtered
-      NODE_PREFIX: q3_filter_usd
-      ID: '2'
-      TOTAL_WORKERS: '4'
-      LOG_FILE: /app/logs/q3_filter_usd_02.txt
-      FILTER_FIELD: Payment Currency
-      FILTER_VALUE: US Dollar
-      FILTER_OPERATOR: eq
-  q3_filter_usd_03:
-    build:
-      context: ./src
-      dockerfile: workers/filter/Dockerfile
-    container_name: q3_filter_usd_03
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      gateway:
-        condition: service_started
-    volumes:
-    - ./logs:/app/logs
-    environment:
-      MOM_HOST: rabbitmq
-      MOM_PORT: '5672'
-      MOM_USER: distributed
-      MOM_PASSWORD: distributed
-      MOM_VHOST: /
-      INPUT_QUEUES: q3_raw_data
-      OUTPUT_QUEUES: q3_usd_filtered
-      NODE_PREFIX: q3_filter_usd
-      ID: '3'
-      TOTAL_WORKERS: '4'
-      LOG_FILE: /app/logs/q3_filter_usd_03.txt
-      FILTER_FIELD: Payment Currency
-      FILTER_VALUE: US Dollar
-      FILTER_OPERATOR: eq
-  q3_filter_usd_04:
-    build:
-      context: ./src
-      dockerfile: workers/filter/Dockerfile
-    container_name: q3_filter_usd_04
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      gateway:
-        condition: service_started
-    volumes:
-    - ./logs:/app/logs
-    environment:
-      MOM_HOST: rabbitmq
-      MOM_PORT: '5672'
-      MOM_USER: distributed
-      MOM_PASSWORD: distributed
-      MOM_VHOST: /
-      INPUT_QUEUES: q3_raw_data
-      OUTPUT_QUEUES: q3_usd_filtered
-      NODE_PREFIX: q3_filter_usd
-      ID: '4'
-      TOTAL_WORKERS: '4'
-      LOG_FILE: /app/logs/q3_filter_usd_04.txt
-      FILTER_FIELD: Payment Currency
-      FILTER_VALUE: US Dollar
-      FILTER_OPERATOR: eq
-  q3_filter_fechas_01:
-    build:
-      context: ./src
-      dockerfile: workers/filter/Dockerfile
-    container_name: q3_filter_fechas_01
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      gateway:
-        condition: service_started
-    volumes:
-    - ./logs:/app/logs
-    environment:
-      MOM_HOST: rabbitmq
-      MOM_PORT: '5672'
-      MOM_USER: distributed
-      MOM_PASSWORD: distributed
-      MOM_VHOST: /
-      INPUT_QUEUES: q3_usd_filtered
-      OUTPUT_QUEUES: '[{"type": "conditional", "condition_field": "Timestamp", "cases": [{"operator": "between", "value": "2022/09/01,2022/09/05", "routing": {"queue_shard_prefix": "q3_temprano", "total_workers": 2, "hash_field": "Payment Format"}}, {"operator": "between", "value": "2022/09/06,2022/09/15", "routing": {"queue_shard_prefix": "q3_tardio", "total_workers": 2, "hash_field": "Payment Format"}}]}]'
-      NODE_PREFIX: q3_filter_fechas
-      ID: '1'
-      TOTAL_WORKERS: '4'
-      LOG_FILE: /app/logs/q3_filter_fechas_01.txt
-      FILTER_FIELD: Timestamp
-      FILTER_VALUE: 2022/09/01,2022/09/15
-      FILTER_OPERATOR: between
-  q3_filter_fechas_02:
-    build:
-      context: ./src
-      dockerfile: workers/filter/Dockerfile
-    container_name: q3_filter_fechas_02
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      gateway:
-        condition: service_started
-    volumes:
-    - ./logs:/app/logs
-    environment:
-      MOM_HOST: rabbitmq
-      MOM_PORT: '5672'
-      MOM_USER: distributed
-      MOM_PASSWORD: distributed
-      MOM_VHOST: /
-      INPUT_QUEUES: q3_usd_filtered
-      OUTPUT_QUEUES: '[{"type": "conditional", "condition_field": "Timestamp", "cases": [{"operator": "between", "value": "2022/09/01,2022/09/05", "routing": {"queue_shard_prefix": "q3_temprano", "total_workers": 2, "hash_field": "Payment Format"}}, {"operator": "between", "value": "2022/09/06,2022/09/15", "routing": {"queue_shard_prefix": "q3_tardio", "total_workers": 2, "hash_field": "Payment Format"}}]}]'
-      NODE_PREFIX: q3_filter_fechas
-      ID: '2'
-      TOTAL_WORKERS: '4'
-      LOG_FILE: /app/logs/q3_filter_fechas_02.txt
-      FILTER_FIELD: Timestamp
-      FILTER_VALUE: 2022/09/01,2022/09/15
-      FILTER_OPERATOR: between
-  q3_filter_fechas_03:
-    build:
-      context: ./src
-      dockerfile: workers/filter/Dockerfile
-    container_name: q3_filter_fechas_03
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      gateway:
-        condition: service_started
-    volumes:
-    - ./logs:/app/logs
-    environment:
-      MOM_HOST: rabbitmq
-      MOM_PORT: '5672'
-      MOM_USER: distributed
-      MOM_PASSWORD: distributed
-      MOM_VHOST: /
-      INPUT_QUEUES: q3_usd_filtered
-      OUTPUT_QUEUES: '[{"type": "conditional", "condition_field": "Timestamp", "cases": [{"operator": "between", "value": "2022/09/01,2022/09/05", "routing": {"queue_shard_prefix": "q3_temprano", "total_workers": 2, "hash_field": "Payment Format"}}, {"operator": "between", "value": "2022/09/06,2022/09/15", "routing": {"queue_shard_prefix": "q3_tardio", "total_workers": 2, "hash_field": "Payment Format"}}]}]'
-      NODE_PREFIX: q3_filter_fechas
-      ID: '3'
-      TOTAL_WORKERS: '4'
-      LOG_FILE: /app/logs/q3_filter_fechas_03.txt
-      FILTER_FIELD: Timestamp
-      FILTER_VALUE: 2022/09/01,2022/09/15
-      FILTER_OPERATOR: between
-  q3_filter_fechas_04:
-    build:
-      context: ./src
-      dockerfile: workers/filter/Dockerfile
-    container_name: q3_filter_fechas_04
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      gateway:
-        condition: service_started
-    volumes:
-    - ./logs:/app/logs
-    environment:
-      MOM_HOST: rabbitmq
-      MOM_PORT: '5672'
-      MOM_USER: distributed
-      MOM_PASSWORD: distributed
-      MOM_VHOST: /
-      INPUT_QUEUES: q3_usd_filtered
-      OUTPUT_QUEUES: '[{"type": "conditional", "condition_field": "Timestamp", "cases": [{"operator": "between", "value": "2022/09/01,2022/09/05", "routing": {"queue_shard_prefix": "q3_temprano", "total_workers": 2, "hash_field": "Payment Format"}}, {"operator": "between", "value": "2022/09/06,2022/09/15", "routing": {"queue_shard_prefix": "q3_tardio", "total_workers": 2, "hash_field": "Payment Format"}}]}]'
-      NODE_PREFIX: q3_filter_fechas
-      ID: '4'
-      TOTAL_WORKERS: '4'
-      LOG_FILE: /app/logs/q3_filter_fechas_04.txt
-      FILTER_FIELD: Timestamp
-      FILTER_VALUE: 2022/09/01,2022/09/15
-      FILTER_OPERATOR: between
-  q3_format_shard_01:
-    build:
-      context: ./src
-      dockerfile: workers/format_shard/Dockerfile
-    container_name: q3_format_shard_01
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      gateway:
-        condition: service_started
-    volumes:
-    - ./logs:/app/logs
-    environment:
-      MOM_HOST: rabbitmq
-      MOM_PORT: '5672'
-      MOM_USER: distributed
-      MOM_PASSWORD: distributed
-      MOM_VHOST: /
-      INPUT_QUEUES: '["q3_temprano_1", "q3_tardio_1"]'
-      OUTPUT_QUEUES: q3_results
-      NODE_PREFIX: q3_format_shard
-      ID: '1'
-      TOTAL_WORKERS: '2'
-      LOG_FILE: /app/logs/q3_format_shard_01.txt
-  q3_format_shard_02:
-    build:
-      context: ./src
-      dockerfile: workers/format_shard/Dockerfile
-    container_name: q3_format_shard_02
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      gateway:
-        condition: service_started
-    volumes:
-    - ./logs:/app/logs
-    environment:
-      MOM_HOST: rabbitmq
-      MOM_PORT: '5672'
-      MOM_USER: distributed
-      MOM_PASSWORD: distributed
-      MOM_VHOST: /
-      INPUT_QUEUES: '["q3_temprano_2", "q3_tardio_2"]'
-      OUTPUT_QUEUES: q3_results
-      NODE_PREFIX: q3_format_shard
-      ID: '2'
-      TOTAL_WORKERS: '2'
-      LOG_FILE: /app/logs/q3_format_shard_02.txt
-  q2_filter_usd_01:
-    build:
-      context: ./src
-      dockerfile: workers/filter/Dockerfile
-    container_name: q2_filter_usd_01
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      gateway:
-        condition: service_started
-    volumes:
-    - ./logs:/app/logs
-    environment:
-      MOM_HOST: rabbitmq
-      MOM_PORT: '5672'
-      MOM_USER: distributed
-      MOM_PASSWORD: distributed
-      MOM_VHOST: /
-      INPUT_QUEUES: q2_raw_data
-      OUTPUT_QUEUES: '["q2_pre_projection"]'
-      NODE_PREFIX: q2_filter_usd
-      ID: '1'
-      TOTAL_WORKERS: '2'
-      LOG_FILE: /app/logs/q2_filter_usd_01.txt
-      FILTER_FIELD: Payment Currency
-      FILTER_VALUE: US Dollar
-      FILTER_OPERATOR: eq
-  q2_filter_usd_02:
-    build:
-      context: ./src
-      dockerfile: workers/filter/Dockerfile
-    container_name: q2_filter_usd_02
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      gateway:
-        condition: service_started
-    volumes:
-    - ./logs:/app/logs
-    environment:
-      MOM_HOST: rabbitmq
-      MOM_PORT: '5672'
-      MOM_USER: distributed
-      MOM_PASSWORD: distributed
-      MOM_VHOST: /
-      INPUT_QUEUES: q2_raw_data
-      OUTPUT_QUEUES: '["q2_pre_projection"]'
-      NODE_PREFIX: q2_filter_usd
-      ID: '2'
-      TOTAL_WORKERS: '2'
-      LOG_FILE: /app/logs/q2_filter_usd_02.txt
-      FILTER_FIELD: Payment Currency
-      FILTER_VALUE: US Dollar
-      FILTER_OPERATOR: eq
   q2_bank_projection_01:
     build:
       context: ./src
@@ -1265,11 +661,11 @@ services:
       ID: '6'
       TOTAL_WORKERS: '6'
       LOG_FILE: /app/logs/q2_agregador_shard_06.txt
-  q4_filter_usd_01:
+  q3_filter_fechas_01:
     build:
       context: ./src
       dockerfile: workers/filter/Dockerfile
-    container_name: q4_filter_usd_01
+    container_name: q3_filter_fechas_01
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -1283,20 +679,125 @@ services:
       MOM_USER: distributed
       MOM_PASSWORD: distributed
       MOM_VHOST: /
-      INPUT_QUEUES: q4_raw_data
-      OUTPUT_QUEUES: '["q4_pre_projection"]'
-      NODE_PREFIX: q4_filter_usd
+      INPUT_QUEUES: q3_usd_filtered
+      OUTPUT_QUEUES: '[{"type": "conditional", "condition_field": "Timestamp", "cases": [{"operator": "between", "value": "2022/09/01,2022/09/05", "routing": {"queue_shard_prefix": "q3_temprano", "total_workers": 2, "hash_field": "Payment Format"}}, {"operator": "between", "value": "2022/09/06,2022/09/15", "routing": {"queue_shard_prefix": "q3_tardio", "total_workers": 2, "hash_field": "Payment Format"}}]}]'
+      NODE_PREFIX: q3_filter_fechas
+      ID: '1'
+      TOTAL_WORKERS: '4'
+      LOG_FILE: /app/logs/q3_filter_fechas_01.txt
+      FILTER_FIELD: Timestamp
+      FILTER_VALUE: 2022/09/01,2022/09/15
+      FILTER_OPERATOR: between
+  q3_filter_fechas_02:
+    build:
+      context: ./src
+      dockerfile: workers/filter/Dockerfile
+    container_name: q3_filter_fechas_02
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    volumes:
+    - ./logs:/app/logs
+    environment:
+      MOM_HOST: rabbitmq
+      MOM_PORT: '5672'
+      MOM_USER: distributed
+      MOM_PASSWORD: distributed
+      MOM_VHOST: /
+      INPUT_QUEUES: q3_usd_filtered
+      OUTPUT_QUEUES: '[{"type": "conditional", "condition_field": "Timestamp", "cases": [{"operator": "between", "value": "2022/09/01,2022/09/05", "routing": {"queue_shard_prefix": "q3_temprano", "total_workers": 2, "hash_field": "Payment Format"}}, {"operator": "between", "value": "2022/09/06,2022/09/15", "routing": {"queue_shard_prefix": "q3_tardio", "total_workers": 2, "hash_field": "Payment Format"}}]}]'
+      NODE_PREFIX: q3_filter_fechas
+      ID: '2'
+      TOTAL_WORKERS: '4'
+      LOG_FILE: /app/logs/q3_filter_fechas_02.txt
+      FILTER_FIELD: Timestamp
+      FILTER_VALUE: 2022/09/01,2022/09/15
+      FILTER_OPERATOR: between
+  q3_filter_fechas_03:
+    build:
+      context: ./src
+      dockerfile: workers/filter/Dockerfile
+    container_name: q3_filter_fechas_03
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    volumes:
+    - ./logs:/app/logs
+    environment:
+      MOM_HOST: rabbitmq
+      MOM_PORT: '5672'
+      MOM_USER: distributed
+      MOM_PASSWORD: distributed
+      MOM_VHOST: /
+      INPUT_QUEUES: q3_usd_filtered
+      OUTPUT_QUEUES: '[{"type": "conditional", "condition_field": "Timestamp", "cases": [{"operator": "between", "value": "2022/09/01,2022/09/05", "routing": {"queue_shard_prefix": "q3_temprano", "total_workers": 2, "hash_field": "Payment Format"}}, {"operator": "between", "value": "2022/09/06,2022/09/15", "routing": {"queue_shard_prefix": "q3_tardio", "total_workers": 2, "hash_field": "Payment Format"}}]}]'
+      NODE_PREFIX: q3_filter_fechas
+      ID: '3'
+      TOTAL_WORKERS: '4'
+      LOG_FILE: /app/logs/q3_filter_fechas_03.txt
+      FILTER_FIELD: Timestamp
+      FILTER_VALUE: 2022/09/01,2022/09/15
+      FILTER_OPERATOR: between
+  q3_filter_fechas_04:
+    build:
+      context: ./src
+      dockerfile: workers/filter/Dockerfile
+    container_name: q3_filter_fechas_04
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    volumes:
+    - ./logs:/app/logs
+    environment:
+      MOM_HOST: rabbitmq
+      MOM_PORT: '5672'
+      MOM_USER: distributed
+      MOM_PASSWORD: distributed
+      MOM_VHOST: /
+      INPUT_QUEUES: q3_usd_filtered
+      OUTPUT_QUEUES: '[{"type": "conditional", "condition_field": "Timestamp", "cases": [{"operator": "between", "value": "2022/09/01,2022/09/05", "routing": {"queue_shard_prefix": "q3_temprano", "total_workers": 2, "hash_field": "Payment Format"}}, {"operator": "between", "value": "2022/09/06,2022/09/15", "routing": {"queue_shard_prefix": "q3_tardio", "total_workers": 2, "hash_field": "Payment Format"}}]}]'
+      NODE_PREFIX: q3_filter_fechas
+      ID: '4'
+      TOTAL_WORKERS: '4'
+      LOG_FILE: /app/logs/q3_filter_fechas_04.txt
+      FILTER_FIELD: Timestamp
+      FILTER_VALUE: 2022/09/01,2022/09/15
+      FILTER_OPERATOR: between
+  q3_format_shard_01:
+    build:
+      context: ./src
+      dockerfile: workers/format_shard/Dockerfile
+    container_name: q3_format_shard_01
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    volumes:
+    - ./logs:/app/logs
+    environment:
+      MOM_HOST: rabbitmq
+      MOM_PORT: '5672'
+      MOM_USER: distributed
+      MOM_PASSWORD: distributed
+      MOM_VHOST: /
+      INPUT_QUEUES: '["q3_temprano_1", "q3_tardio_1"]'
+      OUTPUT_QUEUES: q3_results
+      NODE_PREFIX: q3_format_shard
       ID: '1'
       TOTAL_WORKERS: '2'
-      LOG_FILE: /app/logs/q4_filter_usd_01.txt
-      FILTER_FIELD: Payment Currency
-      FILTER_VALUE: US Dollar
-      FILTER_OPERATOR: eq
-  q4_filter_usd_02:
+      LOG_FILE: /app/logs/q3_format_shard_01.txt
+  q3_format_shard_02:
     build:
       context: ./src
-      dockerfile: workers/filter/Dockerfile
-    container_name: q4_filter_usd_02
+      dockerfile: workers/format_shard/Dockerfile
+    container_name: q3_format_shard_02
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -1310,15 +811,12 @@ services:
       MOM_USER: distributed
       MOM_PASSWORD: distributed
       MOM_VHOST: /
-      INPUT_QUEUES: q4_raw_data
-      OUTPUT_QUEUES: '["q4_pre_projection"]'
-      NODE_PREFIX: q4_filter_usd
+      INPUT_QUEUES: '["q3_temprano_2", "q3_tardio_2"]'
+      OUTPUT_QUEUES: q3_results
+      NODE_PREFIX: q3_format_shard
       ID: '2'
       TOTAL_WORKERS: '2'
-      LOG_FILE: /app/logs/q4_filter_usd_02.txt
-      FILTER_FIELD: Payment Currency
-      FILTER_VALUE: US Dollar
-      FILTER_OPERATOR: eq
+      LOG_FILE: /app/logs/q3_format_shard_02.txt
   q4_projection_01:
     build:
       context: ./src
@@ -1677,3 +1175,341 @@ services:
       EXPECTED_COUNT: '5'
       EMIT_MODE: aggregate
       COUNT_OUTPUT_FIELD: Amount Transactions
+  q5_projection_01:
+    build:
+      context: ./src
+      dockerfile: workers/projection/Dockerfile
+    container_name: q5_projection_01
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    volumes:
+    - ./logs:/app/logs
+    environment:
+      MOM_HOST: rabbitmq
+      MOM_PORT: '5672'
+      MOM_USER: distributed
+      MOM_PASSWORD: distributed
+      MOM_VHOST: /
+      INPUT_QUEUES: q5_raw_data
+      OUTPUT_QUEUES: q5_projected_data
+      NODE_PREFIX: q5_projection
+      ID: '1'
+      TOTAL_WORKERS: '4'
+      LOG_FILE: /app/logs/q5_projection_01.txt
+      CAMPOS: Timestamp,Payment Currency,Receiving Currency,Payment Format,Amount Received
+  q5_projection_02:
+    build:
+      context: ./src
+      dockerfile: workers/projection/Dockerfile
+    container_name: q5_projection_02
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    volumes:
+    - ./logs:/app/logs
+    environment:
+      MOM_HOST: rabbitmq
+      MOM_PORT: '5672'
+      MOM_USER: distributed
+      MOM_PASSWORD: distributed
+      MOM_VHOST: /
+      INPUT_QUEUES: q5_raw_data
+      OUTPUT_QUEUES: q5_projected_data
+      NODE_PREFIX: q5_projection
+      ID: '2'
+      TOTAL_WORKERS: '4'
+      LOG_FILE: /app/logs/q5_projection_02.txt
+      CAMPOS: Timestamp,Payment Currency,Receiving Currency,Payment Format,Amount Received
+  q5_projection_03:
+    build:
+      context: ./src
+      dockerfile: workers/projection/Dockerfile
+    container_name: q5_projection_03
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    volumes:
+    - ./logs:/app/logs
+    environment:
+      MOM_HOST: rabbitmq
+      MOM_PORT: '5672'
+      MOM_USER: distributed
+      MOM_PASSWORD: distributed
+      MOM_VHOST: /
+      INPUT_QUEUES: q5_raw_data
+      OUTPUT_QUEUES: q5_projected_data
+      NODE_PREFIX: q5_projection
+      ID: '3'
+      TOTAL_WORKERS: '4'
+      LOG_FILE: /app/logs/q5_projection_03.txt
+      CAMPOS: Timestamp,Payment Currency,Receiving Currency,Payment Format,Amount Received
+  q5_projection_04:
+    build:
+      context: ./src
+      dockerfile: workers/projection/Dockerfile
+    container_name: q5_projection_04
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    volumes:
+    - ./logs:/app/logs
+    environment:
+      MOM_HOST: rabbitmq
+      MOM_PORT: '5672'
+      MOM_USER: distributed
+      MOM_PASSWORD: distributed
+      MOM_VHOST: /
+      INPUT_QUEUES: q5_raw_data
+      OUTPUT_QUEUES: q5_projected_data
+      NODE_PREFIX: q5_projection
+      ID: '4'
+      TOTAL_WORKERS: '4'
+      LOG_FILE: /app/logs/q5_projection_04.txt
+      CAMPOS: Timestamp,Payment Currency,Receiving Currency,Payment Format,Amount Received
+  q5_filter_period_01:
+    build:
+      context: ./src
+      dockerfile: workers/filter/Dockerfile
+    container_name: q5_filter_period_01
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    volumes:
+    - ./logs:/app/logs
+    environment:
+      MOM_HOST: rabbitmq
+      MOM_PORT: '5672'
+      MOM_USER: distributed
+      MOM_PASSWORD: distributed
+      MOM_VHOST: /
+      INPUT_QUEUES: q5_projected_data
+      OUTPUT_QUEUES: q5_period_to_format
+      NODE_PREFIX: q5_filter_period
+      ID: '1'
+      TOTAL_WORKERS: '4'
+      LOG_FILE: /app/logs/q5_filter_period_01.txt
+      FILTER_FIELD: Timestamp
+      FILTER_VALUE: 2022/09/01, 2022/09/05
+      FILTER_OPERATOR: between
+  q5_filter_period_02:
+    build:
+      context: ./src
+      dockerfile: workers/filter/Dockerfile
+    container_name: q5_filter_period_02
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    volumes:
+    - ./logs:/app/logs
+    environment:
+      MOM_HOST: rabbitmq
+      MOM_PORT: '5672'
+      MOM_USER: distributed
+      MOM_PASSWORD: distributed
+      MOM_VHOST: /
+      INPUT_QUEUES: q5_projected_data
+      OUTPUT_QUEUES: q5_period_to_format
+      NODE_PREFIX: q5_filter_period
+      ID: '2'
+      TOTAL_WORKERS: '4'
+      LOG_FILE: /app/logs/q5_filter_period_02.txt
+      FILTER_FIELD: Timestamp
+      FILTER_VALUE: 2022/09/01, 2022/09/05
+      FILTER_OPERATOR: between
+  q5_filter_period_03:
+    build:
+      context: ./src
+      dockerfile: workers/filter/Dockerfile
+    container_name: q5_filter_period_03
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    volumes:
+    - ./logs:/app/logs
+    environment:
+      MOM_HOST: rabbitmq
+      MOM_PORT: '5672'
+      MOM_USER: distributed
+      MOM_PASSWORD: distributed
+      MOM_VHOST: /
+      INPUT_QUEUES: q5_projected_data
+      OUTPUT_QUEUES: q5_period_to_format
+      NODE_PREFIX: q5_filter_period
+      ID: '3'
+      TOTAL_WORKERS: '4'
+      LOG_FILE: /app/logs/q5_filter_period_03.txt
+      FILTER_FIELD: Timestamp
+      FILTER_VALUE: 2022/09/01, 2022/09/05
+      FILTER_OPERATOR: between
+  q5_filter_period_04:
+    build:
+      context: ./src
+      dockerfile: workers/filter/Dockerfile
+    container_name: q5_filter_period_04
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    volumes:
+    - ./logs:/app/logs
+    environment:
+      MOM_HOST: rabbitmq
+      MOM_PORT: '5672'
+      MOM_USER: distributed
+      MOM_PASSWORD: distributed
+      MOM_VHOST: /
+      INPUT_QUEUES: q5_projected_data
+      OUTPUT_QUEUES: q5_period_to_format
+      NODE_PREFIX: q5_filter_period
+      ID: '4'
+      TOTAL_WORKERS: '4'
+      LOG_FILE: /app/logs/q5_filter_period_04.txt
+      FILTER_FIELD: Timestamp
+      FILTER_VALUE: 2022/09/01, 2022/09/05
+      FILTER_OPERATOR: between
+  q5_filter_format_01:
+    build:
+      context: ./src
+      dockerfile: workers/filter/Dockerfile
+    container_name: q5_filter_format_01
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    volumes:
+    - ./logs:/app/logs
+    environment:
+      MOM_HOST: rabbitmq
+      MOM_PORT: '5672'
+      MOM_USER: distributed
+      MOM_PASSWORD: distributed
+      MOM_VHOST: /
+      INPUT_QUEUES: q5_period_to_format
+      OUTPUT_QUEUES: q5_format_to_convert
+      NODE_PREFIX: q5_filter_format
+      ID: '1'
+      TOTAL_WORKERS: '2'
+      LOG_FILE: /app/logs/q5_filter_format_01.txt
+      FILTER_FIELD: Payment Format
+      FILTER_VALUE: Wire, ACH
+      FILTER_OPERATOR: in
+  q5_filter_format_02:
+    build:
+      context: ./src
+      dockerfile: workers/filter/Dockerfile
+    container_name: q5_filter_format_02
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    volumes:
+    - ./logs:/app/logs
+    environment:
+      MOM_HOST: rabbitmq
+      MOM_PORT: '5672'
+      MOM_USER: distributed
+      MOM_PASSWORD: distributed
+      MOM_VHOST: /
+      INPUT_QUEUES: q5_period_to_format
+      OUTPUT_QUEUES: q5_format_to_convert
+      NODE_PREFIX: q5_filter_format
+      ID: '2'
+      TOTAL_WORKERS: '2'
+      LOG_FILE: /app/logs/q5_filter_format_02.txt
+      FILTER_FIELD: Payment Format
+      FILTER_VALUE: Wire, ACH
+      FILTER_OPERATOR: in
+  q5_converter_01:
+    build:
+      context: ./src
+      dockerfile: workers/converter/Dockerfile
+    container_name: q5_converter_01
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    volumes:
+    - ./logs:/app/logs
+    environment:
+      MOM_HOST: rabbitmq
+      MOM_PORT: '5672'
+      MOM_USER: distributed
+      MOM_PASSWORD: distributed
+      MOM_VHOST: /
+      INPUT_QUEUES: q5_format_to_convert
+      OUTPUT_QUEUES: q5_filtered
+      NODE_PREFIX: q5_converter
+      ID: '1'
+      TOTAL_WORKERS: '2'
+      LOG_FILE: /app/logs/q5_converter_01.txt
+      START_DATE: '2022-09-01'
+      END_DATE: '2022-09-05'
+  q5_converter_02:
+    build:
+      context: ./src
+      dockerfile: workers/converter/Dockerfile
+    container_name: q5_converter_02
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    volumes:
+    - ./logs:/app/logs
+    environment:
+      MOM_HOST: rabbitmq
+      MOM_PORT: '5672'
+      MOM_USER: distributed
+      MOM_PASSWORD: distributed
+      MOM_VHOST: /
+      INPUT_QUEUES: q5_format_to_convert
+      OUTPUT_QUEUES: q5_filtered
+      NODE_PREFIX: q5_converter
+      ID: '2'
+      TOTAL_WORKERS: '2'
+      LOG_FILE: /app/logs/q5_converter_02.txt
+      START_DATE: '2022-09-01'
+      END_DATE: '2022-09-05'
+  q5_counter_01:
+    build:
+      context: ./src
+      dockerfile: workers/counter/Dockerfile
+    container_name: q5_counter_01
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    volumes:
+    - ./logs:/app/logs
+    environment:
+      MOM_HOST: rabbitmq
+      MOM_PORT: '5672'
+      MOM_USER: distributed
+      MOM_PASSWORD: distributed
+      MOM_VHOST: /
+      INPUT_QUEUES: q5_filtered
+      OUTPUT_QUEUES: q5_results
+      NODE_PREFIX: q5_counter
+      ID: '1'
+      TOTAL_WORKERS: '1'
+      LOG_FILE: /app/logs/q5_counter_01.txt

@@ -1,19 +1,6 @@
 {
+  "gateway_queue": "raw_data",
   "workers": [
-    {
-      "type": "filter",
-      "prefix": "q4_filter_usd",
-      "replicas": 2,
-      "input_queue": "q4_raw_data",
-      "output_queue": [
-        "q4_pre_projection"
-      ],
-      "extra_env": {
-        "FILTER_FIELD": "Payment Currency",
-        "FILTER_VALUE": "US Dollar",
-        "FILTER_OPERATOR": "eq"
-      }
-    },
     {
       "type": "projection",
       "prefix": "q4_projection",
@@ -31,22 +18,8 @@
       "replicas": 2,
       "input_queue": "q4_projected",
       "output_queue": [
-        {
-          "queue_shard_prefix": "q4_to_sumador",
-          "total_workers": 3,
-          "hash_fields": [
-            "From Bank",
-            "Account"
-          ]
-        },
-        {
-          "queue_shard_prefix": "q4_to_joiner",
-          "total_workers": 3,
-          "hash_fields": [
-            "From Bank",
-            "Account"
-          ]
-        }
+        {"queue_shard_prefix": "q4_to_sumador", "total_workers": 3, "hash_fields": ["From Bank", "Account"]},
+        {"queue_shard_prefix": "q4_to_joiner", "total_workers": 3, "hash_fields": ["From Bank", "Account"]}
       ],
       "extra_env": {
         "FILTER_FIELD": "Timestamp",
@@ -59,16 +32,7 @@
       "prefix": "q4_sumador",
       "replicas": 3,
       "input_queue": "q4_to_sumador_{id}",
-      "output_queue": [
-        {
-          "queue_shard_prefix": "q4_scatter_edges",
-          "total_workers": 3,
-          "hash_fields": [
-            "to_bank",
-            "to_account"
-          ]
-        }
-      ],
+      "output_queue": [{"queue_shard_prefix": "q4_scatter_edges", "total_workers": 3, "hash_fields": ["to_bank", "to_account"]}],
       "extra_env": {
         "GROUP_FIELDS": "From Bank,Account",
         "GROUP_OUTPUT_FIELDS": "from_bank,from_account",
@@ -82,22 +46,8 @@
       "type": "joiner_q4",
       "prefix": "q4_joiner",
       "replicas": 3,
-      "input_queue": [
-        "q4_scatter_edges_{id}",
-        "q4_to_joiner_{id}"
-      ],
-      "output_queue": [
-        {
-          "queue_shard_prefix": "q4_paths",
-          "total_workers": 3,
-          "hash_fields": [
-            "a_bank",
-            "a_account",
-            "c_bank",
-            "c_account"
-          ]
-        }
-      ]
+      "input_queue": ["q4_scatter_edges_{id}", "q4_to_joiner_{id}"],
+      "output_queue": [{"queue_shard_prefix": "q4_paths", "total_workers": 3, "hash_fields": ["a_bank", "a_account", "c_bank", "c_account"]}]
     },
     {
       "type": "group_distinct_counter",
