@@ -50,9 +50,6 @@ class RabbitMQBase:
            )
         )
         self.channel = self.connection.channel()
-        # Publisher confirms: basic_publish bloquea hasta que el broker confirma recepción,
-        # garantizando que los mensajes están en la cola antes de continuar.
-        self.channel.confirm_delivery()
 
     def __enter__(self):
         return self

@@ -32,16 +32,29 @@ def main():
     else:
         input_trans = project_root / RUTA_DATASETS / DATASET_TRANS
         
-    input_accounts = project_root / RUTA_DATASETS / DATASET_ACCOUNTS
-    
     if len(args) >= 2:
-        dir_arg = args[1]
+        accounts_arg = args[1]
+        if not accounts_arg.endswith('.csv'):
+            accounts_arg = f"{accounts_arg}.csv"
+        path_accounts_arg = Path(accounts_arg)
+        if path_accounts_arg.is_absolute():
+            input_accounts = path_accounts_arg
+        elif len(path_accounts_arg.parts) == 1:
+            input_accounts = project_root / RUTA_DATASETS / path_accounts_arg
+        else:
+            input_accounts = project_root / path_accounts_arg
+    else:
+        input_accounts = project_root / RUTA_DATASETS / DATASET_ACCOUNTS
+
+    if len(args) >= 3:
+        dir_arg = args[2]
         if '/' not in dir_arg and '\\' not in dir_arg:
             dir_arg = f"solutions/{dir_arg}"
         path_arg = Path(dir_arg)
         out_dir = path_arg if path_arg.is_absolute() else project_root / path_arg
     else:
         out_dir = project_root / RUTA_SALIDAS
+
         
     if out_dir.exists():
         print(f"Borrando carpeta de destino existente: {out_dir}")

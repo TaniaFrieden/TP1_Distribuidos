@@ -32,7 +32,9 @@ help:
 	@echo "  make log <servicio>              - Muestra logs de un servicio específico"
 	@echo "  make generar <queries>           - Genera el docker-compose para las queries dadas"
 	@echo "  make iterar [iteraciones] [transacciones] [cuentas] [soluciones] - Itera queries pasándole número iteraciones, datasets y carpeta de soluciones"
-	@echo "  make solucionar <dataset> <dir>  - Ejecuta la solución del notebook (sin dir ni extensión) en el dir destino (sin solutions/)"
+	@echo "  make solucionar <dataset> <cuentas> [dir] - Ejecuta la solución del notebook con el dataset de transacciones, el de cuentas y opcionalmente el directorio de destino"
+
+
 	@echo "  make generar-sample <dataset> <porcentaje> - Genera una muestra de un dataset con el porcentaje indicado (default: 30)"
 
 venv:
@@ -163,13 +165,15 @@ iterar:
 solucionar:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
 	if [ -z "$$ARGS" ]; then \
-		echo "Error: Debes especificar el dataset y la carpeta de destino de soluciones."; \
-		echo "Uso: make solucionar <dataset> <dir carpeta solutions>"; \
-		echo "Ejemplo: make solucionar HI-Large_Trans_sample_30 Hi-Large-30"; \
+		echo "Error: Debes especificar al menos el dataset de transacciones y el de cuentas."; \
+		echo "Uso: make solucionar <dataset_transacciones> <dataset_cuentas> [dir_carpeta_solutions]"; \
+		echo "Ejemplo: make solucionar HI-Large_Trans_sample_30 HI-Large_accounts Hi-Large-30"; \
 		exit 1; \
 	else \
 		$(PYTHON) scripts/ejecutar_solucion_notebook.py $$ARGS; \
 	fi
+
+
 
 generar-sample:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \

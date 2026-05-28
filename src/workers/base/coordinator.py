@@ -1,6 +1,7 @@
 import json
 import threading
 import logging
+import time
 from common import middleware
 
 logger = logging.getLogger(__name__)
@@ -27,7 +28,7 @@ class DistributedCoordinator:
             self._tiene_cola_sharded = True
         
         self._coordinacion_lock = threading.Lock()
-        self._vuelo_condition = threading.Condition()
+        self._vuelo_lock = threading.Lock()
         self._control_send_lock = threading.Lock()
 
         self.control_exchange = middleware.FanoutExchangeRabbitMQ(
@@ -39,23 +40,32 @@ class DistributedCoordinator:
         )
 
     def registrar_vuelo(self, client_id):
-        with self._vuelo_condition:
+        with self._vuelo_lock:
             self._mensajes_en_vuelo[client_id] = self._mensajes_en_vuelo.get(client_id, 0) + 1
 
     def descontar_vuelo(self, client_id):
-        with self._vuelo_condition:
+        with self._vuelo_lock:
             if client_id in self._mensajes_en_vuelo:
                 self._mensajes_en_vuelo[client_id] -= 1
                 if self._mensajes_en_vuelo[client_id] <= 0:
                     del self._mensajes_en_vuelo[client_id]
-                    self._vuelo_condition.notify_all()
 
     def _esperar_vuelo_cero(self, client_id):
-        """Bloquea hasta que no haya mensajes en vuelo para client_id."""
-        with self._vuelo_condition:
-            self._vuelo_condition.wait_for(
-                lambda: self._mensajes_en_vuelo.get(client_id, 0) == 0
-            )
+        """Espera hasta que no haya mensajes en vuelo para client_id, confirmado durante 1 segundo continuo."""
+        confirmado_cero_desde = None
+        while True:
+            with self._vuelo_lock:
+                vuelo = self._mensajes_en_vuelo.get(client_id, 0)
+
+            if vuelo == 0:
+                if confirmado_cero_desde is None:
+                    confirmado_cero_desde = time.perf_counter()
+                elif time.perf_counter() - confirmado_cero_desde >= 1.0:
+                    break
+            else:
+                confirmado_cero_desde = None
+
+            time.sleep(0.05)
 
     def registrar_eof_local(self, client_id, queue_name, total_esperados) -> bool:
         with self._coordinacion_lock:
@@ -98,9 +108,8 @@ class DistributedCoordinator:
             self._originadores_reconocidos.pop(client_id, None)
             self._eofs_locales_recibidos.pop(client_id, None)
             self._clientes_flusheados.discard(client_id)
-        with self._vuelo_condition:
+        with self._vuelo_lock:
             self._mensajes_en_vuelo.pop(client_id, None)
-            self._vuelo_condition.notify_all()
 
     def iniciar_barrera(self, client_id: str, mensaje_original: bytes):
         ejecutar_flush_inmediato = False
