@@ -15,7 +15,7 @@ MOM_HOST ?= localhost
 INPUT_QUEUE ?= input_queue
 OUTPUT_QUEUE ?= output_queue
 
-.PHONY: help venv install test test-worker-base clean free-ports client run-clients test-server gateway start down docker-logs iterar solucionar generar log
+.PHONY: help venv install test test-worker-base clean free-ports client run-clients test-server gateway start down docker-logs iterar solucionar generar log generar-sample
 
 help:
 	@echo "Targets disponibles:"
@@ -33,6 +33,7 @@ help:
 	@echo "  make generar <queries>           - Genera el docker-compose para las queries dadas"
 	@echo "  make iterar [iteraciones] [transacciones] [cuentas] [soluciones] - Itera queries pasándole número iteraciones, datasets y carpeta de soluciones"
 	@echo "  make solucionar <dataset> <dir>  - Ejecuta la solución del notebook (sin dir ni extensión) en el dir destino (sin solutions/)"
+	@echo "  make generar-sample <dataset> <porcentaje> - Genera una muestra de un dataset con el porcentaje indicado (default: 30)"
 
 venv:
 	python3 -m venv .venv
@@ -99,8 +100,8 @@ client:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
 	TX=$$(echo $$ARGS | cut -d' ' -f1); \
 	ACC=$$(echo $$ARGS | cut -d' ' -f2); \
-	TRANSACTIONS_FILE=$${TX:-$(TRANSACTIONS_FILE)} \
-	ACCOUNTS_FILE=$${ACC:-$(ACCOUNTS_FILE)} \
+	TRANSACTIONS_FILE=$${TRANSACTIONS_FILE:-$$TX} \
+	ACCOUNTS_FILE=$${ACCOUNTS_FILE:-$$ACC} \
 	OUTPUT_DIR=$(OUTPUT_DIR) \
 	SERVER_HOST=$(SERVER_HOST) \
 	SERVER_PORT=$(SERVER_PORT) \
@@ -169,6 +170,22 @@ solucionar:
 	else \
 		$(PYTHON) scripts/ejecutar_solucion_notebook.py $$ARGS; \
 	fi
+
+generar-sample:
+	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
+	DB=$$(echo $$ARGS | cut -d' ' -f1); \
+	PCT=$$(echo $$ARGS | cut -d' ' -f2); \
+	PCT=$${PCT:-30}; \
+	if [ -z "$$DB" ]; then \
+		echo "Error: Debes especificar el nombre del dataset."; \
+		echo "Uso: make generar-sample <dataset> [porcentaje]"; \
+		echo "Ejemplo: make generar-sample HI-Large_Trans 30"; \
+		exit 1; \
+	fi; \
+	$(PYTHON) scripts/sample_dataset.py \
+		--input datasets/$$DB.csv \
+		--output datasets/$${DB}_sample_$${PCT}.csv \
+		--percentage $$PCT
 
 # Ignorar argumentos pasados a targets dinámicos
 %:
