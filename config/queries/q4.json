@@ -9,7 +9,7 @@
       "output_queue": "q4_projected",
       "extra_env": {
         "CAMPOS": "From Bank,Account,To Bank,Account.1,Timestamp",
-        "INT_FIELDS": ""
+        "INT_FIELDS": "From Bank,To Bank"
       }
     },
     {
