@@ -37,7 +37,7 @@ class CurrencyConverterWorker(BaseWorker):
         self._cargar_cotizaciones()
 
     def _cargar_cotizaciones(self):
-        url = f"https://api.frankfurter.app/{self._start_date}..{self._end_date}"
+        url = f"https://api.frankfurter.app/{self._start_date}..{self._end_date}?base=USD"
         try:
             resp = requests.get(url, timeout=10)
             resp.raise_for_status()
@@ -67,16 +67,10 @@ class CurrencyConverterWorker(BaseWorker):
         rates = self._cotizaciones.get(fecha)
         if not rates:
             return None
-        rate_usd = rates.get("USD")
-        if not rate_usd:
-            return None
-        if iso == "EUR":
-            return monto * rate_usd
-        # Triangulation: source -> EUR -> USD
         rate_origen = rates.get(iso)
         if not rate_origen:
             return None
-        return (monto / rate_origen) * rate_usd
+        return monto / rate_origen
 
     def procesar_payload(self, queue_name: str, client_id: str, payload: dict | str, mensaje_original: bytes, ack, nack):
         try:
@@ -89,14 +83,14 @@ class CurrencyConverterWorker(BaseWorker):
                     schema = header["schema"]
                     records = batch["payload"]
                     
-                    rec_curr_idx = schema.index("Receiving Currency") if "Receiving Currency" in schema else None
+                    pay_curr_idx = schema.index("Payment Currency") if "Payment Currency" in schema else None
                     timestamp_idx = schema.index("Timestamp") if "Timestamp" in schema else None
-                    amt_rec_idx = schema.index("Amount Received") if "Amount Received" in schema else None
+                    amt_paid_idx = schema.index("Amount Paid") if "Amount Paid" in schema else None
                     
                     filtered_records = []
                     for record_values in records:
                         try:
-                            curr_val = record_values[rec_curr_idx] if rec_curr_idx is not None else ""
+                            curr_val = record_values[pay_curr_idx] if pay_curr_idx is not None else ""
                             iso = CURRENCY_MAP.get(curr_val)
                             if not iso:
                                 continue
@@ -104,7 +98,7 @@ class CurrencyConverterWorker(BaseWorker):
                             ts_val = record_values[timestamp_idx] if timestamp_idx is not None else ""
                             fecha = ts_val.split(" ")[0].replace("/", "-")
                             
-                            amt_val = record_values[amt_rec_idx] if amt_rec_idx is not None else 0
+                            amt_val = record_values[amt_paid_idx] if amt_paid_idx is not None else 0
                             monto = float(amt_val)
                             
                             amount_usd = self._convertir_a_usd(monto, iso, fecha)
@@ -132,13 +126,13 @@ class CurrencyConverterWorker(BaseWorker):
                     self._enviar(msg_bytes, payload=output_payload)
             else:
                 # Fallback para formato anterior
-                iso = CURRENCY_MAP.get(t.get("Receiving Currency", ""))
+                iso = CURRENCY_MAP.get(t.get("Payment Currency", ""))
                 if not iso:
                     ack()
                     return
 
                 fecha = t.get("Timestamp", "").split(" ")[0].replace("/", "-")
-                monto = float(t.get("Amount Received", 0))
+                monto = float(t.get("Amount Paid", 0))
                 amount_usd = self._convertir_a_usd(monto, iso, fecha)
 
                 if amount_usd is None:
