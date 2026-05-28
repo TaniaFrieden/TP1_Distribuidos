@@ -78,7 +78,7 @@ def _procesar_resultado(payload, archivos, cabeceras, tiempos_inicio, inicio_env
                     q4_accounts.add((str(to_bank), str(to_acc)))
             else:
                 _escribir_cabecera(q_id, item, archivos, cabeceras)
-                _escribir_datos(q_id, item, archivos)
+                _escribir_datos(q_id, item, archivos, cabeceras)
 
         if es_mensaje_final:
             if str(q_id) == '4':
@@ -100,19 +100,26 @@ def _escribir_cabecera(q_id, resultado, archivos, cabeceras):
     if not cabeceras[q_id]:
         claves = []
         for k in resultado.keys():
-            if k == KEY_EOF:
+            if str(k).lower() == 'eof':
                 continue
-            if k == "Account.1":
-                claves.append("Account")
-            else:
-                claves.append(str(k))
-        archivos[q_id].write(",".join(claves) + "\n")
-        cabeceras[q_id] = True
+            claves.append(k)
+        
+        cabeceras[q_id] = claves
 
-def _escribir_datos(q_id, resultado, archivos):
-    valores = [str(v) for k, v in resultado.items() if k != KEY_EOF]
+        claves_cabecera = []
+        for k in claves:
+            if k == "Account.1":
+                claves_cabecera.append("Account")
+            else:
+                claves_cabecera.append(str(k))
+        archivos[q_id].write(",".join(claves_cabecera) + "\n")
+
+def _escribir_datos(q_id, resultado, archivos, cabeceras):
+    claves = cabeceras[q_id]
+    valores = [str(resultado.get(k, '')) for k in claves]
     archivos[q_id].write(",".join(valores) + "\n")
     archivos[q_id].flush()
+
 
 def _cerrar_archivo(q_id, archivos):
     logging.info(f"EOF recibido para query {q_id}")

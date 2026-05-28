@@ -33,6 +33,8 @@ help:
 	@echo "  make generar <queries>           - Genera el docker-compose para las queries dadas"
 	@echo "  make iterar [iteraciones] [transacciones] [cuentas] [soluciones] - Itera queries pasándole número iteraciones, datasets y carpeta de soluciones"
 	@echo "  make solucionar <dataset> <cuentas> [dir] - Ejecuta la solución del notebook con el dataset de transacciones, el de cuentas y opcionalmente el directorio de destino"
+	@echo "  make client <trans> <cuentas> [dir] - Corre un cliente enviando transacciones y cuentas, guardando resultados en el directorio de salida indicado"
+
 
 
 	@echo "  make generar-sample <dataset> <porcentaje> - Genera una muestra de un dataset con el porcentaje indicado (default: 30)"
@@ -102,13 +104,15 @@ client:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
 	TX=$$(echo $$ARGS | cut -d' ' -f1); \
 	ACC=$$(echo $$ARGS | cut -d' ' -f2); \
+	OUT=$$(echo $$ARGS | cut -d' ' -f3); \
 	TRANSACTIONS_FILE=$${TRANSACTIONS_FILE:-$$TX} \
 	ACCOUNTS_FILE=$${ACCOUNTS_FILE:-$$ACC} \
-	OUTPUT_DIR=$(OUTPUT_DIR) \
+	OUTPUT_DIR=$${OUTPUT_DIR:-$${OUT:-$(OUTPUT_DIR)}} \
 	SERVER_HOST=$(SERVER_HOST) \
 	SERVER_PORT=$(SERVER_PORT) \
 	BATCH_SIZE=$(BATCH_SIZE) \
 	PYTHONPATH=src $(PYTHON) src/client/client.py
+
 
 run-clients:
 	docker compose --profile clients up --build --scale client=$(SCALE)

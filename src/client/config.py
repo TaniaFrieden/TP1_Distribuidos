@@ -16,6 +16,9 @@ SERVER_HOST = os.environ.get("SERVER_HOST", "localhost")
 SERVER_PORT = int(os.environ.get("SERVER_PORT", 8080))
 LOTE_SIZE = int(os.environ.get("BATCH_SIZE", 100))
 
-_output_base = os.environ.get("OUTPUT_DIR", "outputs")
+_output_base = os.environ.get("OUTPUT_DIR", "output")
+if '/' not in _output_base and '\\' not in _output_base:
+    _output_base = f"output/{_output_base}"
+
 _append_hostname = os.environ.get("OUTPUT_APPEND_HOSTNAME", "false").lower() == "true"
 OUTPUT_DIR = os.path.join(_output_base, socket.gethostname()) if _append_hostname else _output_base
