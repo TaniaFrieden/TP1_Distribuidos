@@ -1,7 +1,7 @@
 PYTHON := .venv/bin/python
 PIP := $(PYTHON) -m pip
 PYTEST := PYTHONPATH=src $(PYTHON) -m pytest
-START_VERBOSE := $(if $(filter !logs,$(MAKECMDGOALS)),0,1)
+START_VERBOSE := $(if $(filter --verbose,$(MAKECMDGOALS)),1,0)
 
 # Variables del cliente
 OUTPUT_DIR ?= output
@@ -10,52 +10,29 @@ SERVER_PORT ?= 5678
 BATCH_SIZE ?= 10000
 SCALE ?= 2
 
-
 # Variables del gateway
 MOM_HOST ?= localhost
 INPUT_QUEUE ?= input_queue
 OUTPUT_QUEUE ?= output_queue
 
-.PHONY: help venv install test test-worker-base clean free-ports client run-clients test-server gateway start down docker-logs
+.PHONY: help venv install test test-worker-base clean free-ports client run-clients test-server gateway start down docker-logs iterar solucionar generar log
 
 help:
 	@echo "Targets disponibles:"
-	@echo "  make venv              - crea el entorno virtual .venv"
-	@echo "  make install           - instala las dependencias en .venv"
-	@echo "  make test              - corre todos los tests"
-	@echo "  make test-worker-base  - corre solo el test de BaseWorker"
-	@echo "  make clean             - limpia caches, artefactos temporales y libera todos los puertos"
-	@echo "  make test-server       - inicia servidor de prueba"
-	@echo "  make start             - levanta docker-compose con logs en consola"
-	@echo "  make start !logs       - levanta docker-compose en segundo plano"
-	@echo "  make down              - detiene docker-compose"
-	@echo "  make docker-logs       - muestra logs de docker"
-	@echo ""
-	@echo "Uso local con N clientes (sin docker):"
-	@echo "  Terminal 1: make gateway"
-	@echo "  Terminal 2: make client OUTPUT_DIR=output/c1"
-	@echo "  Terminal 3: make client OUTPUT_DIR=output/c2"
-	@echo "  Terminal N: make client OUTPUT_DIR=output/cN"
-	@echo ""
-	@echo "Uso con docker (N clientes en contenedores):"
-	@echo "  1. make start                   (levanta gateway + workers)"
-	@echo "  2. make run-clients             (lanza 2 clientes por defecto)"
-	@echo "  2. make run-clients SCALE=N     (lanza N clientes)"
-	@echo "  Cada cliente escribe a output/<hostname>/"
-	@echo ""
-	@echo "Variables del cliente (override con: make client TRANSACTIONS_FILE=...):"
-	@echo "  TRANSACTIONS_FILE=$(TRANSACTIONS_FILE)"
-	@echo "  ACCOUNTS_FILE=$(ACCOUNTS_FILE)"
-	@echo "  OUTPUT_DIR=$(OUTPUT_DIR)"
-	@echo "  SERVER_HOST=$(SERVER_HOST)"
-	@echo "  SERVER_PORT=$(SERVER_PORT)"
-	@echo "  BATCH_SIZE=$(BATCH_SIZE)"
-	@echo "  SCALE=$(SCALE)  (solo para run-clients)"
-	@echo ""
-	@echo "Variables del gateway:"
-	@echo "  MOM_HOST=$(MOM_HOST)"
-	@echo "  INPUT_QUEUE=$(INPUT_QUEUE)"
-	@echo "  OUTPUT_QUEUE=$(OUTPUT_QUEUE)"
+	@echo "  make venv                        - Crea el entorno virtual .venv"
+	@echo "  make install                     - Instala las dependencias en .venv"
+	@echo "  make test                        - Corre todos los tests"
+	@echo "  make test-worker-base            - Corre solo el test de BaseWorker"
+	@echo "  make clean                       - Limpia caches, temporales y libera puertos"
+	@echo "  make test-server                 - Inicia servidor de prueba"
+	@echo "  make start                       - Levanta docker-compose en segundo plano (detached)"
+	@echo "  make start --verbose             - Levanta docker-compose con logs en consola"
+	@echo "  make down                        - Detiene docker-compose"
+	@echo "  make docker-logs                 - Muestra logs de docker"
+	@echo "  make log <servicio>              - Muestra logs de un servicio específico"
+	@echo "  make generar <queries>           - Genera el docker-compose para las queries dadas"
+	@echo "  make iterar [iteraciones] [transacciones] [cuentas] [soluciones] - Itera queries pasándole número iteraciones, datasets y carpeta de soluciones"
+	@echo "  make solucionar <dataset> <dir>  - Ejecuta la solución del notebook (sin dir ni extensión) en el dir destino (sin solutions/)"
 
 venv:
 	python3 -m venv .venv
@@ -119,8 +96,11 @@ test-server:
 	PYTHONPATH=src $(PYTHON) scripts/test_server.py
 
 client:
-	TRANSACTIONS_FILE=$(TRANSACTIONS_FILE) \
-	ACCOUNTS_FILE=$(ACCOUNTS_FILE) \
+	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
+	TX=$$(echo $$ARGS | cut -d' ' -f1); \
+	ACC=$$(echo $$ARGS | cut -d' ' -f2); \
+	TRANSACTIONS_FILE=$${TX:-$(TRANSACTIONS_FILE)} \
+	ACCOUNTS_FILE=$${ACC:-$(ACCOUNTS_FILE)} \
 	OUTPUT_DIR=$(OUTPUT_DIR) \
 	SERVER_HOST=$(SERVER_HOST) \
 	SERVER_PORT=$(SERVER_PORT) \
@@ -149,7 +129,6 @@ start:
 down:
 	docker compose down
 
-.PHONY: generar
 generar:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
 	if [ -z "$$ARGS" ]; then \
@@ -161,9 +140,6 @@ generar:
 		python3 generar_compose.py $$ARGS; \
 	fi
 
-%:
-	@:
-
 log:
 	@if [ -z "$(filter-out $@,$(MAKECMDGOALS))" ]; then \
 		echo "Error: Debes especificar el nombre del servicio."; \
@@ -171,3 +147,29 @@ log:
 		exit 1; \
 	fi
 	docker compose logs -f $(filter-out $@,$(MAKECMDGOALS))
+
+iterar:
+	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
+	if [ -z "$$ARGS" ]; then \
+		echo "Error: Debes especificar al menos el número de iteraciones."; \
+		echo "Uso: make iterar [iteraciones] [transacciones] [cuentas] [soluciones]"; \
+		echo "Ejemplo: make iterar 5 HI-Large_Trans_sample_30 HI-Large_accounts Hi-Large-30"; \
+		exit 1; \
+	else \
+		PYTHONPATH=src $(PYTHON) scripts/iterar_queries.py $$ARGS; \
+	fi
+
+solucionar:
+	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
+	if [ -z "$$ARGS" ]; then \
+		echo "Error: Debes especificar el dataset y la carpeta de destino de soluciones."; \
+		echo "Uso: make solucionar <dataset> <dir carpeta solutions>"; \
+		echo "Ejemplo: make solucionar HI-Large_Trans_sample_30 Hi-Large-30"; \
+		exit 1; \
+	else \
+		$(PYTHON) scripts/ejecutar_solucion_notebook.py $$ARGS; \
+	fi
+
+# Ignorar argumentos pasados a targets dinámicos
+%:
+	@:

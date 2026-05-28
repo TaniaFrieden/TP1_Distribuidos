@@ -41,14 +41,30 @@ def main():
 
     fallas_por_query = {q: 0 for q in queries}
 
-    # Leer cantidad de iteraciones si se pasa por parámetro (ej. ./iterar_queries.py 5)
+    # Leer parámetros pasados por consola (primero iteraciones, luego datasets y directorio de soluciones)
+    transactions_file = TRANSACTIONS_FILE
+    accounts_file = ACCOUNTS_FILE
     cantidad_iteraciones = CANTIDAD_EJECUCIONES
+    expected_template = EXPECTED_TEMPLATE
     args = sys.argv[1:]
-    if args:
+    
+    if len(args) > 0:
         try:
             cantidad_iteraciones = int(args[0])
         except ValueError:
-            print(f"Argumento inválido '{args[0]}', se usará el valor por defecto de {CANTIDAD_EJECUCIONES} iteraciones.")
+            print(f"Argumento de iteraciones inválido '{args[0]}', se usará el valor por defecto de {CANTIDAD_EJECUCIONES} iteraciones.")
+    if len(args) > 1:
+        tx_arg = args[1]
+        if not tx_arg.endswith('.csv'):
+            tx_arg = f"{tx_arg}.csv"
+        transactions_file = tx_arg if ('/' in tx_arg or '\\' in tx_arg) else f"datasets/{tx_arg}"
+    if len(args) > 2:
+        acc_arg = args[2]
+        if not acc_arg.endswith('.csv'):
+            acc_arg = f"{acc_arg}.csv"
+        accounts_file = acc_arg if ('/' in acc_arg or '\\' in acc_arg) else f"datasets/{acc_arg}"
+    if len(args) > 3:
+        expected_template = f"solutions/{args[3]}/q{{q}}_solucion.csv"
 
     for indice in range(1, cantidad_iteraciones + 1):
         imprimir_titulo(f"Iteración {indice}/{cantidad_iteraciones}")
@@ -60,8 +76,8 @@ def main():
                     "make",
                     "-C", str(project_root),
                     "client",
-                    f"TRANSACTIONS_FILE={TRANSACTIONS_FILE}",
-                    f"ACCOUNTS_FILE={ACCOUNTS_FILE}",
+                    f"TRANSACTIONS_FILE={transactions_file}",
+                    f"ACCOUNTS_FILE={accounts_file}",
                     f"OUTPUT_DIR={ACTUAL_TEMPLATE.split('/')[0]}"
                 ],
                 check=True
@@ -75,7 +91,7 @@ def main():
         # Comparar los resultados de cada query obtenida frente a su dataset solución esperado
         for query in queries:
             actual_csv = project_root / ACTUAL_TEMPLATE.format(q=query)
-            expected_csv = project_root / EXPECTED_TEMPLATE.format(q=query)
+            expected_csv = project_root / expected_template.format(q=query)
 
             print(f"\nComparando CSVs para Query {query}:")
             son_iguales, mensaje = comparar_csv_sin_orden(actual_csv, expected_csv)
