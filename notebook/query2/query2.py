@@ -12,50 +12,83 @@ def ejecutar_query(nombre_dataset, dataset_accounts):
     def normalizar_bank_id(serie):
         return serie.str.strip().str.lstrip("0").replace("", "0")
 
+    chunksize = 100000
+
     # ── PASO 1: Creación de archivos normalizados ─────────────────────────────
-    transacciones = pd.read_csv(
+    # Cuentas
+    first_chunk = True
+    for chunk in pd.read_csv(
+        ruta_datasets / dataset_accounts,
+        dtype={"Bank ID": "string", "Account Number": "string"},
+        chunksize=chunksize
+    ):
+        chunk["Bank ID Normalized"] = normalizar_bank_id(chunk["Bank ID"])
+        if first_chunk:
+            chunk.to_csv(ruta_cuentas_norm, mode='w', index=False)
+            first_chunk = False
+        else:
+            chunk.to_csv(ruta_cuentas_norm, mode='a', header=False, index=False)
+
+    # Transacciones
+    first_chunk = True
+    for chunk in pd.read_csv(
         ruta_datasets / nombre_dataset,
         dtype={"From Bank": "string", "Account": "string",
-               "To Bank": "string", "Account.1": "string"}
-    )
-    cuentas = pd.read_csv(
-        ruta_datasets / dataset_accounts,
-        dtype={"Bank ID": "string", "Account Number": "string"}
-    )
-
-    transacciones["From Bank Normalized"] = normalizar_bank_id(transacciones["From Bank"])
-    transacciones["To Bank Normalized"]   = normalizar_bank_id(transacciones["To Bank"])
-    cuentas["Bank ID Normalized"]         = normalizar_bank_id(cuentas["Bank ID"])
-
-    transacciones.to_csv(ruta_transacciones_norm, index=False)
-    cuentas.to_csv(ruta_cuentas_norm, index=False)
+               "To Bank": "string", "Account.1": "string"},
+        chunksize=chunksize
+    ):
+        chunk["From Bank Normalized"] = normalizar_bank_id(chunk["From Bank"])
+        chunk["To Bank Normalized"]   = normalizar_bank_id(chunk["To Bank"])
+        if first_chunk:
+            chunk.to_csv(ruta_transacciones_norm, mode='w', index=False)
+            first_chunk = False
+        else:
+            chunk.to_csv(ruta_transacciones_norm, mode='a', header=False, index=False)
 
     # ── PASO 2: Procesar la consulta desde los nuevos archivos ────────────────
-    df_transacciones = pd.read_csv(
-        ruta_transacciones_norm,
-        dtype={"From Bank Normalized": "string", "Payment Currency": "string"}
-    )
-    df_cuentas = pd.read_csv(
+    # Construir dataframe de bancos únicos en memoria
+    bancos_list = []
+    for chunk in pd.read_csv(
         ruta_cuentas_norm,
-        dtype={"Bank ID Normalized": "string", "Bank ID": "string"}
-    )
+        dtype={"Bank ID Normalized": "string", "Bank ID": "string"},
+        chunksize=chunksize
+    ):
+        df_b = chunk[["Bank ID Normalized", "Bank ID", "Bank Name"]].rename(
+            columns={"Bank ID Normalized": "From Bank Normalized"}
+        )
+        bancos_list.append(df_b)
+    
+    bancos = pd.concat(bancos_list).drop_duplicates(subset=["From Bank Normalized"])
 
-    transacciones_usd = df_transacciones[df_transacciones["Payment Currency"] == "US Dollar"].copy()
-    transacciones_usd["Amount Paid"] = pd.to_numeric(transacciones_usd["Amount Paid"], errors="coerce")
-    transacciones_usd = transacciones_usd.dropna(subset=["Amount Paid"])
+    max_by_bank = pd.DataFrame(columns=["Bank ID", "Bank Name", "Account", "Amount Paid", "From Bank Normalized"])
 
-    bancos = df_cuentas[["Bank ID Normalized", "Bank ID", "Bank Name"]].rename(
-        columns={"Bank ID Normalized": "From Bank Normalized"}
-    ).drop_duplicates(subset=["From Bank Normalized"])
+    for chunk in pd.read_csv(
+        ruta_transacciones_norm,
+        dtype={"From Bank Normalized": "string", "Payment Currency": "string"},
+        chunksize=chunksize
+    ):
+        transacciones_usd = chunk[chunk["Payment Currency"] == "US Dollar"].copy()
+        transacciones_usd["Amount Paid"] = pd.to_numeric(transacciones_usd["Amount Paid"], errors="coerce")
+        transacciones_usd = transacciones_usd.dropna(subset=["Amount Paid"])
 
-    transacciones_con_banco = transacciones_usd.merge(
-        bancos, on="From Bank Normalized", how="inner"
-    )
+        transacciones_con_banco = transacciones_usd.merge(
+            bancos, on="From Bank Normalized", how="inner"
+        )
 
-    idx_maximos = transacciones_con_banco.groupby("From Bank Normalized")["Amount Paid"].idxmax()
-    resultado_query2 = transacciones_con_banco.loc[
-        idx_maximos, ["Bank ID", "Bank Name", "Account", "Amount Paid"]
-    ].rename(columns={"Amount Paid": "Max Amount"}).sort_values(by="Bank ID").reset_index(drop=True)
+        if not transacciones_con_banco.empty:
+            idx_maximos = transacciones_con_banco.groupby("From Bank Normalized")["Amount Paid"].idxmax()
+            chunk_max = transacciones_con_banco.loc[
+                idx_maximos, ["Bank ID", "Bank Name", "Account", "Amount Paid", "From Bank Normalized"]
+            ]
+            max_by_bank = pd.concat([max_by_bank, chunk_max], ignore_index=True)
+            
+            # Keep only the global maximum transaction per bank seen so far
+            idx_global_max = max_by_bank.groupby("From Bank Normalized")["Amount Paid"].idxmax()
+            max_by_bank = max_by_bank.loc[idx_global_max].reset_index(drop=True)
+
+    resultado_query2 = max_by_bank[["Bank ID", "Bank Name", "Account", "Amount Paid"]].rename(
+        columns={"Amount Paid": "Max Amount"}
+    ).sort_values(by="Bank ID").reset_index(drop=True)
 
     resultado_query2.to_csv(ruta_resultado, index=False)
 

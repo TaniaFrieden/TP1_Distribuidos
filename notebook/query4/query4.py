@@ -6,47 +6,57 @@ def ejecutar_query(nombre_dataset):
     ruta_datasets = base_dir.parents[1] / "datasets"
     ruta_resultado = base_dir / "q4_solucion.csv"
 
-    transacciones = pd.read_csv(
+    chunksize = 100000
+    relaciones_list = []
+
+    for chunk in pd.read_csv(
         ruta_datasets / nombre_dataset,
         dtype={
             "From Bank": "string", 
             "Account": "string",
             "To Bank": "string", 
-            "Account.1": "string"
-        }
-    )
+            "Account.1": "string",
+            "Timestamp": "string"
+        },
+        chunksize=chunksize
+    ):
+        if "Account" in chunk.columns and "Account.1" in chunk.columns:
+            chunk = chunk.rename(columns={
+                "Account": "From Account", 
+                "Account.1": "To Account"
+            })
 
-    if "Account" in transacciones.columns and "Account.1" in transacciones.columns:
-        transacciones = transacciones.rename(columns={
-            "Account": "From Account", 
-            "Account.1": "To Account"
-        })
+        chunk["Amount Paid"] = pd.to_numeric(chunk["Amount Paid"], errors="coerce")
 
-    transacciones["Timestamp"] = pd.to_datetime(transacciones["Timestamp"])
-    transacciones["Amount Paid"] = pd.to_numeric(transacciones["Amount Paid"], errors="coerce")
+        df = chunk[
+            (chunk["Payment Currency"] == "US Dollar") & 
+            (chunk["Amount Paid"].notna()) &
+            (chunk["Timestamp"] >= "2022/09/01") & 
+            (chunk["Timestamp"] <= "2022/09/05 23:59:59")
+        ]
 
-    df = transacciones[
-        (transacciones["Payment Currency"] == "US Dollar") & 
-        (transacciones["Amount Paid"].notna())
-    ]
+        if df.empty:
+            continue
 
-    df_periodo = df[
-        (df["Timestamp"] >= "2022-09-01") & 
-        (df["Timestamp"] <= "2022-09-05 23:59:59")
-    ].copy()
+        df_periodo = df.copy()
+        df_periodo["From"] = df_periodo["From Bank"].astype(str) + "|" + df_periodo["From Account"].astype(str)
+        df_periodo["To"]   = df_periodo["To Bank"].astype(str)   + "|" + df_periodo["To Account"].astype(str)
 
-    df_periodo["From"] = df_periodo["From Bank"] + "|" + df_periodo["From Account"]
-    df_periodo["To"]   = df_periodo["To Bank"]   + "|" + df_periodo["To Account"]
+        relaciones_chunk = df_periodo[["From", "To"]].drop_duplicates()
+        relaciones_list.append(relaciones_chunk)
+
+    if relaciones_list:
+        relaciones_ab = pd.concat(relaciones_list, ignore_index=True).drop_duplicates()
+    else:
+        relaciones_ab = pd.DataFrame(columns=["From", "To"])
 
     # PASO 1: SCATTER
-    relaciones_ab = df_periodo[["From", "To"]].drop_duplicates()
     conteo_b_por_a = relaciones_ab.groupby("From")["To"].count()
     cuentas_a_validas = conteo_b_por_a[conteo_b_por_a == 5].index
     scatter_df = relaciones_ab[relaciones_ab["From"].isin(cuentas_a_validas)]
 
     # PASO 2: GATHER
-    relaciones_bc = df_periodo[["From", "To"]].drop_duplicates()
-    relaciones_bc = relaciones_bc.rename(columns={
+    relaciones_bc = relaciones_ab.rename(columns={
         "From": "Intermediate", 
         "To": "Final"
     })

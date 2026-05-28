@@ -6,45 +6,83 @@ def ejecutar_query(nombre_dataset):
     ruta_datasets = base_dir.parents[1] / "datasets"
     ruta_resultado = base_dir / "q3_solucion.csv"
 
-    transacciones_completas = pd.read_csv(
+    chunksize = 100000
+    
+    # Paso 1: calcular estadísticas en el periodo temprano
+    stats = {}
+    
+    for chunk in pd.read_csv(
         ruta_datasets / nombre_dataset,
         dtype={"From Bank": "string", "Account": "string",
-               "To Bank": "string", "Account.1": "string"}
-    )
+               "To Bank": "string", "Account.1": "string",
+               "Timestamp": "string"},
+        chunksize=chunksize
+    ):
+        transacciones = chunk[chunk["Payment Currency"] == "US Dollar"].copy()
+        if transacciones.empty:
+            continue
+        transacciones["Amount Paid"] = pd.to_numeric(transacciones["Amount Paid"], errors="coerce")
+        transacciones = transacciones.dropna(subset=["Amount Paid", "Payment Format", "Timestamp"])
+        
+        # String comparison is extremely fast and works because format is YYYY/MM/DD HH:MM
+        periodo_temprano = transacciones[
+            (transacciones["Timestamp"] >= "2022/09/01") &
+            (transacciones["Timestamp"] < "2022/09/06")
+        ]
+        
+        if not periodo_temprano.empty:
+            grouped = periodo_temprano.groupby("Payment Format")["Amount Paid"].agg(["sum", "count"])
+            for fmt, row in grouped.iterrows():
+                if fmt not in stats:
+                    stats[fmt] = {"sum": 0.0, "count": 0}
+                stats[fmt]["sum"] += row["sum"]
+                stats[fmt]["count"] += row["count"]
 
-    transacciones = transacciones_completas[
-        transacciones_completas["Payment Currency"] == "US Dollar"
-    ].copy()
+    promedios = {}
+    for fmt, val in stats.items():
+        if val["count"] > 0:
+            promedios[fmt] = val["sum"] / val["count"]
 
-    transacciones["Timestamp"]   = pd.to_datetime(transacciones["Timestamp"])
-    transacciones["Amount Paid"] = pd.to_numeric(transacciones["Amount Paid"], errors="coerce")
-    transacciones = transacciones.dropna(subset=["Amount Paid", "Payment Format"])
+    # Paso 2: filtrar periodo tardío usando las medias obtenidas
+    first_chunk = True
+    for chunk in pd.read_csv(
+        ruta_datasets / nombre_dataset,
+        dtype={"From Bank": "string", "Account": "string",
+               "To Bank": "string", "Account.1": "string",
+               "Timestamp": "string"},
+        chunksize=chunksize
+    ):
+        transacciones = chunk[chunk["Payment Currency"] == "US Dollar"].copy()
+        if transacciones.empty:
+            continue
+        transacciones["Amount Paid"] = pd.to_numeric(transacciones["Amount Paid"], errors="coerce")
+        transacciones = transacciones.dropna(subset=["Amount Paid", "Payment Format", "Timestamp"])
+        
+        periodo_tardio = transacciones[
+            (transacciones["Timestamp"] >= "2022/09/06") &
+            (transacciones["Timestamp"] < "2022/09/16")
+        ].copy()
+        
+        if periodo_tardio.empty:
+            continue
+            
+        periodo_tardio["Promedio Formato"] = periodo_tardio["Payment Format"].map(promedios)
+        periodo_tardio = periodo_tardio.dropna(subset=["Promedio Formato"])
+        
+        resultado_chunk = periodo_tardio[
+            periodo_tardio["Amount Paid"] < periodo_tardio["Promedio Formato"] * 0.01
+        ][["Account", "Amount Paid"]].rename(columns={"Account": "From Account"})
+        
+        if not resultado_chunk.empty:
+            if first_chunk:
+                resultado_chunk.to_csv(ruta_resultado, mode='w', index=False)
+                first_chunk = False
+            else:
+                resultado_chunk.to_csv(ruta_resultado, mode='a', header=False, index=False)
 
-    periodo_temprano = transacciones[
-        (transacciones["Timestamp"] >= "2022-09-01") &
-        (transacciones["Timestamp"] < "2022-09-06")
-    ]
-    periodo_tardio = transacciones[
-        (transacciones["Timestamp"] >= "2022-09-06") &
-        (transacciones["Timestamp"] < "2022-09-16")
-    ]
-
-    stats_por_formato = (
-        periodo_temprano
-        .groupby("Payment Format")["Amount Paid"]
-        .agg(suma="sum", count="count")
-    )
-    stats_por_formato["promedio"] = stats_por_formato["suma"] / stats_por_formato["count"]
-
-    df = periodo_tardio.copy()
-    df["Promedio Formato"] = df["Payment Format"].map(stats_por_formato["promedio"])
-    df = df.dropna(subset=["Promedio Formato"])
-
-    resultado_query3 = df[
-        df["Amount Paid"] < df["Promedio Formato"] * 0.01
-    ][["Account", "Amount Paid"]].rename(columns={"Account": "From Account"}).reset_index(drop=True)
-
-    resultado_query3.to_csv(ruta_resultado, index=False)
+    if first_chunk:
+        resultado = pd.DataFrame(columns=["From Account", "Amount Paid"])
+        resultado.to_csv(ruta_resultado, index=False)
 
 if __name__ == "__main__":
     ejecutar_query("transacciones_sample.csv")
