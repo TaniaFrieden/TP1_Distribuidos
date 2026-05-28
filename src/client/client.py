@@ -12,8 +12,6 @@ from config import SERVER_HOST, SERVER_PORT, TRANSACTIONS_FILE, ACCOUNTS_FILE
 from receiver import escuchar_respuesta
 from sender import enviar_archivo
 
-LOG_FORMAT = "%(levelname)s: %(message)s"
-
 def main():
     setup_logging("client")
     inicio_cliente = time.perf_counter()
@@ -50,10 +48,6 @@ def main():
     logging.info(f"Cliente finalizado en {time.perf_counter() - inicio_cliente:.3f} s")
 
     return 0
-
-## --------------------
-## Funciones auxiliares
-## --------------------
 
 def _conectar_socket():
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

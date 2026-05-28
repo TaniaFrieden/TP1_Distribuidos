@@ -28,7 +28,6 @@ class BackendListener:
         try:
             transaccion = json.loads(body.decode("utf-8"))
             client_id = transaccion.pop("client_id", None)
-            logger.debug(f"[RESULTADO FINAL RECIBIDO] -> cliente={client_id}")
             if not client_id:
                 ack()
                 return

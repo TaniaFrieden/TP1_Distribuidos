@@ -3,9 +3,6 @@ from common import message_protocol
 from config import LOTE_SIZE
 
 
-## --------------------
-## Funciones auxiliares
-## --------------------    
 def _leer_registros_dinamico(filepath):
     f = open(filepath, "r", encoding="utf-8")
     linea_headers = f.readline().strip()

@@ -14,8 +14,6 @@ class GenericFilterWorker(BaseWorker):
         
         self.campo_objetivo = os.environ["FILTER_FIELD"]
         self.valor_objetivo = os.environ["FILTER_VALUE"]
-        
-        # Guardamos el string del operador para saber si es matemático
         self.operador_str = os.environ.get("FILTER_OPERATOR", "eq").lower()
         
         operaciones = {
@@ -35,11 +33,9 @@ class GenericFilterWorker(BaseWorker):
 
     def procesar_payload(self, queue_name: str, client_id: str, payload: dict | str, mensaje_original: bytes, ack, nack):
         try:
-            logger.info(f'Transaccion recibida {payload}')
             if isinstance(payload, dict):
                 transaccion = payload
             else:
-                # Si viene como string o bytes, lo parseamos
                 transaccion = json.loads(payload)
             if transaccion.get("EOF"):
                 logger.info(f"[EOF] Reenviando señal de fin para cliente {client_id}.")
@@ -78,9 +74,8 @@ class GenericFilterWorker(BaseWorker):
                     msg_bytes = json.dumps(output_payload).encode("utf-8")
                     self._enviar(msg_bytes, payload=output_payload)
             else:
-                # Fallback para formato de registro unico anterior
                 if self._match_filter(transaccion, client_id):
-                    self._enviar(mensaje_original, payload=transaccion)  # Reenviamos el mensaje original sin modificar
+                    self._enviar(mensaje_original, payload=transaccion)
 
             ack()
 
@@ -96,14 +91,11 @@ class GenericFilterWorker(BaseWorker):
             valor_actual = transaccion[self.campo_objetivo]
             valor_referencia = self.valor_objetivo
 
-            # --- Si es un operador matemático, forzamos a que sean números (float) ---
             if self.operador_str == "between":
-                # Esperamos que valor_objetivo sea "valor1,valor2"
                 limites = [limite.strip() for limite in str(self.valor_objetivo).split(",")]
                 if len(limites) == 2:
                     valor_referencia = limites
-                    # Truncar al largo del límite para comparar solo la parte relevante
-                    # (ej: "2022/09/05 00:00:00" ->"2022/09/05")
+                    # Trunca al largo del límite para comparar solo la parte relevante (ej: "2022/09/05 00:00:00" → "2022/09/05")
                     max_len = min(len(limites[0]), len(limites[1]))
                     valor_actual = str(valor_actual)[:max_len]
                 else:
@@ -116,15 +108,12 @@ class GenericFilterWorker(BaseWorker):
 
             elif self.operador_str in ["lt", "gt", "lte", "gte"]:
                 try:
-                    # Intentamos convertir a float (para números)
                     valor_actual = float(valor_actual)
                     valor_referencia = float(valor_referencia)
                 except (ValueError, TypeError):
-                    # Si falla (ej. son fechas '2022-09-01'), las comparamos como strings
                     valor_actual = str(valor_actual)
                     valor_referencia = str(valor_referencia)
             else:
-                # eq, neq, contains
                 valor_actual = str(valor_actual)
                 valor_referencia = str(valor_referencia)
 

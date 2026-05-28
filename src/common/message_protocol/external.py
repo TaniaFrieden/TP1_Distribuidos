@@ -45,7 +45,6 @@ def _recv_reporte(socket):
     raw_bytes = _recv_sized(socket, reporte_size)
     
     try:
-        # Intentamos decodificar
         reporte = raw_bytes.decode("utf-8")
     except UnicodeDecodeError:
         logger.error("DEBUG CRÍTICO: Recibidos %s bytes que no son UTF-8: %s", reporte_size, raw_bytes.hex())

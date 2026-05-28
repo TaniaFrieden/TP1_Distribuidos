@@ -102,11 +102,9 @@ class BaseWorker(ABC):
                 return ack()
 
             if mensaje_json.get("EOF"):
-                # Novedad: Permitir que la subclase intercepte y maneje el EOF por cola
                 if self.interceptar_eof(queue_name, client_id, mensaje_json, mensaje):
                     return ack()
 
-                # Flujo por defecto si la subclase no intercepta (ej. para Q2)
                 logger.info(f"[{self.__class__.__name__}] EOF interceptado en la cola {queue_name}. Esperando a {len(self.router.input_queues)} colas locales.")
                 termino_local = self.coordinator.registrar_eof_local(
                     client_id, queue_name, len(self.router.input_queues)
@@ -144,17 +142,11 @@ class BaseWorker(ABC):
 
     def _al_completar_sincronizacion_global(self, client_id: str, mensaje_original: bytes):
         if mensaje_original is None:
-            # Flush local — todos los workers
             logger.info(f"[{self.__class__.__name__}] Flusheando datos para client_id={client_id}.")
             self.al_completar_cliente(client_id)
         else:
-            # Solo el originator llega acá — reenvía el EOF
             logger.info(f"[{self.__class__.__name__}] Barrera completa, reenviando EOF para client_id={client_id}.")
             self._enviar(mensaje_original)
-
-    # ------------------------------------------------------------------
-    # API Exclusiva para Subclases
-    # ------------------------------------------------------------------
 
     def interceptar_eof(self, queue_name: str, client_id: str, payload: dict, mensaje_original: bytes) -> bool:
         """

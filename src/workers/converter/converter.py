@@ -46,7 +46,7 @@ class CurrencyConverterWorker(BaseWorker):
             logger.error(f"Error conectando con Frankfurter: {e}")
             raise
 
-        # Forward-fill: weekends/holidays inherit the last known rate
+        # Forward-fill: fines de semana y feriados heredan la última tasa conocida
         self._cotizaciones = {}
         last_rates = None
         dia = date.fromisoformat(self._start_date)
@@ -125,7 +125,6 @@ class CurrencyConverterWorker(BaseWorker):
                     msg_bytes = json.dumps(output_payload).encode("utf-8")
                     self._enviar(msg_bytes, payload=output_payload)
             else:
-                # Fallback para formato anterior
                 iso = CURRENCY_MAP.get(t.get("Payment Currency", ""))
                 if not iso:
                     ack()

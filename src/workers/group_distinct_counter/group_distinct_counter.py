@@ -45,7 +45,6 @@ class GroupDistinctCounterWorker(BaseWorker):
         self.emit_mode    = os.environ.get("EMIT_MODE", "aggregate").lower()
         self.count_field  = os.environ.get("COUNT_OUTPUT_FIELD", "Amount Transactions")
 
-        # { client_id: { group_key: set(value_key) } }
         self._grupos: dict = {}
         self._lock = threading.Lock()
 
@@ -76,7 +75,6 @@ class GroupDistinctCounterWorker(BaseWorker):
                             
                             self._grupos.setdefault(client_id, {}).setdefault(gkey, set()).add(vkey)
             else:
-                # Fallback para formato anterior
                 gkey = self._make_key(payload, self.group_fields)
                 vkey = self._make_key(payload, self.value_fields)
                 with self._lock:
@@ -121,7 +119,6 @@ class GroupDistinctCounterWorker(BaseWorker):
         batch = []
         enviados = 0
         for gkey, vset in grupos.items():
-            # Apply operator comparison
             if self.operator == "gt":
                 if len(vset) <= self.expected:
                     continue
