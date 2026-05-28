@@ -9,7 +9,7 @@ from pathlib import Path
 # =====================================================================
 # Directorios a comparar
 DIR1 = "output"
-DIR2 = "notebook/solucion-medium-sg"
+DIR2 = "solutions/Hi-Large-30"
 
 # Plantilla de nombre de archivo (usará {q} para reemplazar por el número de query)
 TEMPLATE = "q{q}_solucion.csv"

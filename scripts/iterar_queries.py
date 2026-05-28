@@ -7,13 +7,13 @@ from pathlib import Path
 # =====================================================================
 # CONFIGURACIÓN POR DEFECTO
 # =====================================================================
-CANTIDAD_EJECUCIONES = 2
+CANTIDAD_EJECUCIONES = 1
 ACTUAL_TEMPLATE = "output/q{q}_solucion.csv"
-EXPECTED_TEMPLATE = "notebook/solucion-medium-sg/q{q}_solucion.csv"
+EXPECTED_TEMPLATE = "solutions/Hi-Large-30/q{q}_solucion.csv"
 
 # Archivos de datasets a pasar al cliente
-TRANSACTIONS_FILE = "datasets/HI-Medium_Trans_sg.csv"
-ACCOUNTS_FILE = "datasets/HI-Medium_accounts.csv"
+TRANSACTIONS_FILE = "datasets/HI-Large_Trans_sample_30.csv"
+ACCOUNTS_FILE = "datasets/HI-Large_accounts.csv"
 # =====================================================================
 
 def main():
