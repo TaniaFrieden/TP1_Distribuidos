@@ -66,7 +66,7 @@ services:
       ACCOUNTS_FILE: /app/datasets/accounts_sample.csv
       OUTPUT_DIR: /app/output
       OUTPUT_APPEND_HOSTNAME: 'true'
-      BATCH_SIZE: '4000'
+      BATCH_SIZE: '2500'
   shared_filter_usd_01:
     build:
       context: ./src
@@ -873,7 +873,7 @@ services:
       LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q4_projection_01.txt
       CAMPOS: From Bank,Account,To Bank,Account.1,Timestamp
-      INT_FIELDS: ''
+      INT_FIELDS: From Bank,To Bank
   q4_projection_02:
     build:
       context: ./src
@@ -900,7 +900,7 @@ services:
       LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q4_projection_02.txt
       CAMPOS: From Bank,Account,To Bank,Account.1,Timestamp
-      INT_FIELDS: ''
+      INT_FIELDS: From Bank,To Bank
   q4_filter_period_01:
     build:
       context: ./src

@@ -10,7 +10,7 @@ from pathlib import Path
 # Configuracion editable desde el archivo.
 # Si ejecutas el script sin argumentos, usa estos valores.
 DEFAULT_INPUT_DATASET = "datasets/LI-Small_Trans.csv"
-DEFAULT_OUTPUT_DATASET = "datasets/transacciones_sample.csv"
+DEFAULT_OUTPUT_DATASET = "datasets/transacciones_sample_q4.csv"
 DEFAULT_FANOUT = 6
 DEFAULT_TIMESTAMP = "2022/09/02 10:00"
 DEFAULT_AMOUNT = 1000.0
@@ -234,20 +234,27 @@ def copy_with_injection(
         fieldnames = normalize_fieldnames(raw_fieldnames)
         ensure_required_columns(fieldnames)
 
+        output_headers = [
+            "Account" if name == "Account.1" else name
+            for name in fieldnames
+        ]
+
         with temp_output_path.open("w", newline="", encoding="utf-8") as target_file:
-            writer = csv.DictWriter(target_file, fieldnames=fieldnames)
-            writer.writeheader()
+            writer = csv.writer(target_file)
+            writer.writerow(output_headers)
 
             for values in raw_reader:
-                row = {
-                    fieldnames[index]: values[index] if index < len(values) else ""
-                    for index in range(len(fieldnames))
-                }
-                writer.writerow(row)
+                row_values = list(values)
+                if len(row_values) < len(fieldnames):
+                    row_values.extend([""] * (len(fieldnames) - len(row_values)))
+                elif len(row_values) > len(fieldnames):
+                    row_values = row_values[:len(fieldnames)]
+                writer.writerow(row_values)
                 original_rows += 1
 
             for row in injected_rows:
-                writer.writerow({column: row.get(column, "") for column in fieldnames})
+                row_values = [row.get(column, "") for column in fieldnames]
+                writer.writerow(row_values)
 
     if same_file:
         os.replace(temp_output_path, output_path)
