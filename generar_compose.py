@@ -92,6 +92,7 @@ def generar_compose():
                     'NODE_PREFIX': prefix,
                     'ID': worker_id,
                     'TOTAL_WORKERS': str(replicas),
+                    'LOG_LEVEL': 'WARNING',
                     'LOG_FILE': f'/app/logs/{worker_name}.txt'
                 })
                 env.update(node.get('extra_env', {}))

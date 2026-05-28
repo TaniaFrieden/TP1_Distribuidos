@@ -4,6 +4,9 @@ from pathlib import Path
 
 
 def setup_logging(service_name: str, log_file: str | None = None, level: int = logging.INFO):
+    log_level_str = os.environ.get("LOG_LEVEL", "INFO").upper()
+    level = getattr(logging, log_level_str, logging.INFO)
+
     log_path = Path(log_file or os.environ.get("LOG_FILE") or f"logs/{service_name}.txt")
     log_path.parent.mkdir(parents=True, exist_ok=True)
 

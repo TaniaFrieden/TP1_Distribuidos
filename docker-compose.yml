@@ -14,6 +14,7 @@ services:
     - ./logs:/app/logs
     environment:
       PYTHONUNBUFFERED: '1'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/gateway.txt
       SERVER_HOST: gateway
       SERVER_PORT: '5678'
@@ -65,7 +66,7 @@ services:
       ACCOUNTS_FILE: /app/datasets/accounts_sample.csv
       OUTPUT_DIR: /app/output
       OUTPUT_APPEND_HOSTNAME: 'true'
-      BATCH_SIZE: '5000'
+      BATCH_SIZE: '4000'
   shared_filter_usd_01:
     build:
       context: ./src
@@ -80,6 +81,7 @@ services:
     - ./logs:/app/logs
     environment:
       PYTHONUNBUFFERED: '1'
+      LOG_LEVEL: WARNING
       MOM_HOST: rabbitmq
       MOM_PORT: '5672'
       MOM_USER: distributed
@@ -108,6 +110,7 @@ services:
     - ./logs:/app/logs
     environment:
       PYTHONUNBUFFERED: '1'
+      LOG_LEVEL: WARNING
       MOM_HOST: rabbitmq
       MOM_PORT: '5672'
       MOM_USER: distributed
@@ -136,6 +139,7 @@ services:
     - ./logs:/app/logs
     environment:
       PYTHONUNBUFFERED: '1'
+      LOG_LEVEL: WARNING
       MOM_HOST: rabbitmq
       MOM_PORT: '5672'
       MOM_USER: distributed
@@ -173,6 +177,7 @@ services:
       NODE_PREFIX: q1_projection
       ID: '1'
       TOTAL_WORKERS: '2'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q1_projection_01.txt
       CAMPOS: From Bank,Account,To Bank,Account.1,Amount Paid
       INT_FIELDS: From Bank
@@ -199,6 +204,7 @@ services:
       NODE_PREFIX: q1_projection
       ID: '2'
       TOTAL_WORKERS: '2'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q1_projection_02.txt
       CAMPOS: From Bank,Account,To Bank,Account.1,Amount Paid
       INT_FIELDS: From Bank
@@ -225,6 +231,7 @@ services:
       NODE_PREFIX: q1_minor_than_50
       ID: '1'
       TOTAL_WORKERS: '3'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q1_minor_than_50_01.txt
       FILTER_FIELD: Amount Paid
       FILTER_VALUE: '50'
@@ -252,6 +259,7 @@ services:
       NODE_PREFIX: q1_minor_than_50
       ID: '2'
       TOTAL_WORKERS: '3'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q1_minor_than_50_02.txt
       FILTER_FIELD: Amount Paid
       FILTER_VALUE: '50'
@@ -279,6 +287,7 @@ services:
       NODE_PREFIX: q1_minor_than_50
       ID: '3'
       TOTAL_WORKERS: '3'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q1_minor_than_50_03.txt
       FILTER_FIELD: Amount Paid
       FILTER_VALUE: '50'
@@ -306,6 +315,7 @@ services:
       NODE_PREFIX: q2_bank_projection
       ID: '1'
       TOTAL_WORKERS: '3'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q2_bank_projection_01.txt
       CAMPOS: Bank ID,Bank Name,Account Number
       INT_FIELDS: ''
@@ -332,6 +342,7 @@ services:
       NODE_PREFIX: q2_bank_projection
       ID: '2'
       TOTAL_WORKERS: '3'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q2_bank_projection_02.txt
       CAMPOS: Bank ID,Bank Name,Account Number
       INT_FIELDS: ''
@@ -358,6 +369,7 @@ services:
       NODE_PREFIX: q2_bank_projection
       ID: '3'
       TOTAL_WORKERS: '3'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q2_bank_projection_03.txt
       CAMPOS: Bank ID,Bank Name,Account Number
       INT_FIELDS: ''
@@ -384,6 +396,7 @@ services:
       NODE_PREFIX: q2_projection
       ID: '1'
       TOTAL_WORKERS: '6'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q2_projection_01.txt
       CAMPOS: From Bank,Account,Payment Currency,Receiving Currency,Amount Received,Amount Paid
       INT_FIELDS: From Bank
@@ -410,6 +423,7 @@ services:
       NODE_PREFIX: q2_projection
       ID: '2'
       TOTAL_WORKERS: '6'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q2_projection_02.txt
       CAMPOS: From Bank,Account,Payment Currency,Receiving Currency,Amount Received,Amount Paid
       INT_FIELDS: From Bank
@@ -436,6 +450,7 @@ services:
       NODE_PREFIX: q2_projection
       ID: '3'
       TOTAL_WORKERS: '6'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q2_projection_03.txt
       CAMPOS: From Bank,Account,Payment Currency,Receiving Currency,Amount Received,Amount Paid
       INT_FIELDS: From Bank
@@ -462,6 +477,7 @@ services:
       NODE_PREFIX: q2_projection
       ID: '4'
       TOTAL_WORKERS: '6'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q2_projection_04.txt
       CAMPOS: From Bank,Account,Payment Currency,Receiving Currency,Amount Received,Amount Paid
       INT_FIELDS: From Bank
@@ -488,6 +504,7 @@ services:
       NODE_PREFIX: q2_projection
       ID: '5'
       TOTAL_WORKERS: '6'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q2_projection_05.txt
       CAMPOS: From Bank,Account,Payment Currency,Receiving Currency,Amount Received,Amount Paid
       INT_FIELDS: From Bank
@@ -514,6 +531,7 @@ services:
       NODE_PREFIX: q2_projection
       ID: '6'
       TOTAL_WORKERS: '6'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q2_projection_06.txt
       CAMPOS: From Bank,Account,Payment Currency,Receiving Currency,Amount Received,Amount Paid
       INT_FIELDS: From Bank
@@ -540,6 +558,7 @@ services:
       NODE_PREFIX: q2_agregador_shard
       ID: '1'
       TOTAL_WORKERS: '6'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q2_agregador_shard_01.txt
   q2_agregador_shard_02:
     build:
@@ -564,6 +583,7 @@ services:
       NODE_PREFIX: q2_agregador_shard
       ID: '2'
       TOTAL_WORKERS: '6'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q2_agregador_shard_02.txt
   q2_agregador_shard_03:
     build:
@@ -588,6 +608,7 @@ services:
       NODE_PREFIX: q2_agregador_shard
       ID: '3'
       TOTAL_WORKERS: '6'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q2_agregador_shard_03.txt
   q2_agregador_shard_04:
     build:
@@ -612,6 +633,7 @@ services:
       NODE_PREFIX: q2_agregador_shard
       ID: '4'
       TOTAL_WORKERS: '6'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q2_agregador_shard_04.txt
   q2_agregador_shard_05:
     build:
@@ -636,6 +658,7 @@ services:
       NODE_PREFIX: q2_agregador_shard
       ID: '5'
       TOTAL_WORKERS: '6'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q2_agregador_shard_05.txt
   q2_agregador_shard_06:
     build:
@@ -660,6 +683,7 @@ services:
       NODE_PREFIX: q2_agregador_shard
       ID: '6'
       TOTAL_WORKERS: '6'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q2_agregador_shard_06.txt
   q3_filter_fechas_01:
     build:
@@ -684,6 +708,7 @@ services:
       NODE_PREFIX: q3_filter_fechas
       ID: '1'
       TOTAL_WORKERS: '4'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q3_filter_fechas_01.txt
       FILTER_FIELD: Timestamp
       FILTER_VALUE: 2022/09/01,2022/09/15
@@ -711,6 +736,7 @@ services:
       NODE_PREFIX: q3_filter_fechas
       ID: '2'
       TOTAL_WORKERS: '4'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q3_filter_fechas_02.txt
       FILTER_FIELD: Timestamp
       FILTER_VALUE: 2022/09/01,2022/09/15
@@ -738,6 +764,7 @@ services:
       NODE_PREFIX: q3_filter_fechas
       ID: '3'
       TOTAL_WORKERS: '4'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q3_filter_fechas_03.txt
       FILTER_FIELD: Timestamp
       FILTER_VALUE: 2022/09/01,2022/09/15
@@ -765,6 +792,7 @@ services:
       NODE_PREFIX: q3_filter_fechas
       ID: '4'
       TOTAL_WORKERS: '4'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q3_filter_fechas_04.txt
       FILTER_FIELD: Timestamp
       FILTER_VALUE: 2022/09/01,2022/09/15
@@ -792,6 +820,7 @@ services:
       NODE_PREFIX: q3_format_shard
       ID: '1'
       TOTAL_WORKERS: '2'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q3_format_shard_01.txt
   q3_format_shard_02:
     build:
@@ -816,6 +845,7 @@ services:
       NODE_PREFIX: q3_format_shard
       ID: '2'
       TOTAL_WORKERS: '2'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q3_format_shard_02.txt
   q4_projection_01:
     build:
@@ -840,6 +870,7 @@ services:
       NODE_PREFIX: q4_projection
       ID: '1'
       TOTAL_WORKERS: '2'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q4_projection_01.txt
       CAMPOS: From Bank,Account,To Bank,Account.1,Timestamp
       INT_FIELDS: ''
@@ -866,6 +897,7 @@ services:
       NODE_PREFIX: q4_projection
       ID: '2'
       TOTAL_WORKERS: '2'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q4_projection_02.txt
       CAMPOS: From Bank,Account,To Bank,Account.1,Timestamp
       INT_FIELDS: ''
@@ -892,6 +924,7 @@ services:
       NODE_PREFIX: q4_filter_period
       ID: '1'
       TOTAL_WORKERS: '2'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q4_filter_period_01.txt
       FILTER_FIELD: Timestamp
       FILTER_VALUE: 2022/09/01, 2022/09/05
@@ -919,6 +952,7 @@ services:
       NODE_PREFIX: q4_filter_period
       ID: '2'
       TOTAL_WORKERS: '2'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q4_filter_period_02.txt
       FILTER_FIELD: Timestamp
       FILTER_VALUE: 2022/09/01, 2022/09/05
@@ -946,6 +980,7 @@ services:
       NODE_PREFIX: q4_sumador
       ID: '1'
       TOTAL_WORKERS: '3'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q4_sumador_01.txt
       GROUP_FIELDS: From Bank,Account
       GROUP_OUTPUT_FIELDS: from_bank,from_account
@@ -976,6 +1011,7 @@ services:
       NODE_PREFIX: q4_sumador
       ID: '2'
       TOTAL_WORKERS: '3'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q4_sumador_02.txt
       GROUP_FIELDS: From Bank,Account
       GROUP_OUTPUT_FIELDS: from_bank,from_account
@@ -1006,6 +1042,7 @@ services:
       NODE_PREFIX: q4_sumador
       ID: '3'
       TOTAL_WORKERS: '3'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q4_sumador_03.txt
       GROUP_FIELDS: From Bank,Account
       GROUP_OUTPUT_FIELDS: from_bank,from_account
@@ -1036,6 +1073,7 @@ services:
       NODE_PREFIX: q4_joiner
       ID: '1'
       TOTAL_WORKERS: '3'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q4_joiner_01.txt
   q4_joiner_02:
     build:
@@ -1060,6 +1098,7 @@ services:
       NODE_PREFIX: q4_joiner
       ID: '2'
       TOTAL_WORKERS: '3'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q4_joiner_02.txt
   q4_joiner_03:
     build:
@@ -1084,6 +1123,7 @@ services:
       NODE_PREFIX: q4_joiner
       ID: '3'
       TOTAL_WORKERS: '3'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q4_joiner_03.txt
   q4_contador_01:
     build:
@@ -1108,6 +1148,7 @@ services:
       NODE_PREFIX: q4_contador
       ID: '1'
       TOTAL_WORKERS: '3'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q4_contador_01.txt
       GROUP_FIELDS: a_bank,a_account,c_bank,c_account
       GROUP_OUTPUT_FIELDS: From Bank,From Account,To Bank,To Account
@@ -1138,6 +1179,7 @@ services:
       NODE_PREFIX: q4_contador
       ID: '2'
       TOTAL_WORKERS: '3'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q4_contador_02.txt
       GROUP_FIELDS: a_bank,a_account,c_bank,c_account
       GROUP_OUTPUT_FIELDS: From Bank,From Account,To Bank,To Account
@@ -1168,6 +1210,7 @@ services:
       NODE_PREFIX: q4_contador
       ID: '3'
       TOTAL_WORKERS: '3'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q4_contador_03.txt
       GROUP_FIELDS: a_bank,a_account,c_bank,c_account
       GROUP_OUTPUT_FIELDS: From Bank,From Account,To Bank,To Account
@@ -1198,6 +1241,7 @@ services:
       NODE_PREFIX: q5_projection
       ID: '1'
       TOTAL_WORKERS: '4'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q5_projection_01.txt
       CAMPOS: Timestamp,Payment Currency,Receiving Currency,Payment Format,Amount Received
   q5_projection_02:
@@ -1223,6 +1267,7 @@ services:
       NODE_PREFIX: q5_projection
       ID: '2'
       TOTAL_WORKERS: '4'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q5_projection_02.txt
       CAMPOS: Timestamp,Payment Currency,Receiving Currency,Payment Format,Amount Received
   q5_projection_03:
@@ -1248,6 +1293,7 @@ services:
       NODE_PREFIX: q5_projection
       ID: '3'
       TOTAL_WORKERS: '4'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q5_projection_03.txt
       CAMPOS: Timestamp,Payment Currency,Receiving Currency,Payment Format,Amount Received
   q5_projection_04:
@@ -1273,6 +1319,7 @@ services:
       NODE_PREFIX: q5_projection
       ID: '4'
       TOTAL_WORKERS: '4'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q5_projection_04.txt
       CAMPOS: Timestamp,Payment Currency,Receiving Currency,Payment Format,Amount Received
   q5_filter_period_01:
@@ -1298,6 +1345,7 @@ services:
       NODE_PREFIX: q5_filter_period
       ID: '1'
       TOTAL_WORKERS: '4'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q5_filter_period_01.txt
       FILTER_FIELD: Timestamp
       FILTER_VALUE: 2022/09/01, 2022/09/05
@@ -1325,6 +1373,7 @@ services:
       NODE_PREFIX: q5_filter_period
       ID: '2'
       TOTAL_WORKERS: '4'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q5_filter_period_02.txt
       FILTER_FIELD: Timestamp
       FILTER_VALUE: 2022/09/01, 2022/09/05
@@ -1352,6 +1401,7 @@ services:
       NODE_PREFIX: q5_filter_period
       ID: '3'
       TOTAL_WORKERS: '4'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q5_filter_period_03.txt
       FILTER_FIELD: Timestamp
       FILTER_VALUE: 2022/09/01, 2022/09/05
@@ -1379,6 +1429,7 @@ services:
       NODE_PREFIX: q5_filter_period
       ID: '4'
       TOTAL_WORKERS: '4'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q5_filter_period_04.txt
       FILTER_FIELD: Timestamp
       FILTER_VALUE: 2022/09/01, 2022/09/05
@@ -1406,6 +1457,7 @@ services:
       NODE_PREFIX: q5_filter_format
       ID: '1'
       TOTAL_WORKERS: '2'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q5_filter_format_01.txt
       FILTER_FIELD: Payment Format
       FILTER_VALUE: Wire, ACH
@@ -1433,6 +1485,7 @@ services:
       NODE_PREFIX: q5_filter_format
       ID: '2'
       TOTAL_WORKERS: '2'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q5_filter_format_02.txt
       FILTER_FIELD: Payment Format
       FILTER_VALUE: Wire, ACH
@@ -1460,6 +1513,7 @@ services:
       NODE_PREFIX: q5_converter
       ID: '1'
       TOTAL_WORKERS: '2'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q5_converter_01.txt
       START_DATE: '2022-09-01'
       END_DATE: '2022-09-05'
@@ -1486,6 +1540,7 @@ services:
       NODE_PREFIX: q5_converter
       ID: '2'
       TOTAL_WORKERS: '2'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q5_converter_02.txt
       START_DATE: '2022-09-01'
       END_DATE: '2022-09-05'
@@ -1512,4 +1567,5 @@ services:
       NODE_PREFIX: q5_counter
       ID: '1'
       TOTAL_WORKERS: '1'
+      LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q5_counter_01.txt

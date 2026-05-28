@@ -121,7 +121,6 @@ class MessageRouter:
             es_eof = payload.get("EOF", False) or payload.get("CLIENT_DISCONNECT", False)
             client_id = payload.get("client_id")
 
-            logger.info(f"[ROUTER DEBUG] Enviando {len(mensaje)} bytes a {len(self.output_queues_direct)} colas directas.")
 
             # 1. ENVIAR A COLAS SIMPLES
             for q in self.output_queues_direct:
