@@ -6,7 +6,7 @@ from pathlib import Path
 
 CANTIDAD_EJECUCIONES = 1
 ACTUAL_TEMPLATE = "output/q{q}_solucion.csv"
-EXPECTED_TEMPLATE = "solutions/Hi-Large-30/q{q}_solucion.csv"
+EXPECTED_TEMPLATE = "solutions/small/q{q}_solucion.csv"
 
 TRANSACTIONS_FILE = "datasets/HI-Large_Trans_sample_30.csv"
 ACCOUNTS_FILE = "datasets/HI-Large_accounts.csv"
