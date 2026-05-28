@@ -45,8 +45,8 @@ class RabbitMQBase:
                port=port,
                virtual_host=virtual_host,
                credentials=pika.PlainCredentials(user, password),
-               heartbeat=60,
-               blocked_connection_timeout=300,
+               heartbeat=300,
+               blocked_connection_timeout=600,
            )
         )
         self.channel = self.connection.channel()
