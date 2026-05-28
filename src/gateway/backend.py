@@ -70,7 +70,6 @@ class BackendListener:
                     header = batch["header"]
                     schema = header["schema"]
                     records = batch["payload"]
-                    # Enviar todos los registros del batch en un único REPORTE
                     resultado_lista = [
                         {**dict(zip(schema, record_values)), "eof": False}
                         for record_values in records
@@ -93,7 +92,6 @@ class BackendListener:
                     "resultado": transaccion
                 }
                 payload_str = json.dumps(payload)
-
                 with lock:
                     message_protocol.external.send_msg(
                         sock,
@@ -103,6 +101,10 @@ class BackendListener:
             ack()
         except json.JSONDecodeError:
             logger.error("JSON invalido")
+            ack()
+        except (BrokenPipeError, ConnectionResetError, OSError) as e:
+            logger.warning(f"Cliente {client_id} desconectado, descartando resultado: {e}")
+            self.state.remover_cliente(client_id)
             ack()
         except Exception as e:
             logger.error(f"Error procesando respuesta: {e}", exc_info=True)

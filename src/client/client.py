@@ -1,9 +1,11 @@
+import signal
 import socket
 import threading
 import logging
 import sys
 import uuid
 import time
+import json
 from common import message_protocol
 from common.logging_setup import setup_logging
 from config import SERVER_HOST, SERVER_PORT, TRANSACTIONS_FILE, ACCOUNTS_FILE
@@ -15,12 +17,11 @@ LOG_FORMAT = "%(levelname)s: %(message)s"
 def main():
     setup_logging("client")
     inicio_cliente = time.perf_counter()
-    
+
     sock = _conectar_socket()
     if not sock:
         return 1
 
-    # Leer la configuración de queries enviada por el gateway al conectar
     try:
         msg_type, payload = message_protocol.external.recv_msg(sock)
         if msg_type == message_protocol.external.MsgType.CONFIG_QUERIES:
@@ -37,13 +38,17 @@ def main():
     logging.info(f"Cliente iniciado con ID: {client_id}")
 
     socket_lock = threading.Lock()
-    hilo_receptor, hilos_envio = _iniciar_hilos(sock, socket_lock, client_id, queries, inicio_cliente)
-    
+    shutdown_event = threading.Event()
+    hilo_receptor, hilos_envio = _iniciar_hilos(sock, socket_lock, client_id, queries, inicio_cliente, shutdown_event)
+
     _esperar_envios(hilos_envio)
-    _enviar_fin_registros(sock, socket_lock, client_id)
+
+    if not shutdown_event.is_set():
+        _enviar_fin_registros(sock, socket_lock, client_id)
+
     _finalizar_conexion(hilo_receptor, sock)
     logging.info(f"Cliente finalizado en {time.perf_counter() - inicio_cliente:.3f} s")
-    
+
     return 0
 
 ## --------------------
@@ -60,8 +65,7 @@ def _conectar_socket():
         logging.error(f"No se pudo conectar al servidor: {e}")
         return None
 
-import json
-def _iniciar_hilos(sock, lock, client_id, queries, inicio_envio):
+def _iniciar_hilos(sock, lock, client_id, queries, inicio_envio, shutdown_event):
     hilo_receptor = threading.Thread(
         target=escuchar_respuesta,
         args=(sock, queries, inicio_envio),
@@ -70,12 +74,12 @@ def _iniciar_hilos(sock, lock, client_id, queries, inicio_envio):
 
     hilo_transacciones = threading.Thread(
         target=enviar_archivo,
-        args=(TRANSACTIONS_FILE, message_protocol.external.MsgType.LOTE_TRANSACCIONES, sock, lock, client_id)
+        args=(TRANSACTIONS_FILE, message_protocol.external.MsgType.LOTE_TRANSACCIONES, sock, lock, client_id, shutdown_event)
     )
 
     hilo_bancos = threading.Thread(
         target=enviar_archivo,
-        args=(ACCOUNTS_FILE, message_protocol.external.MsgType.LOTE_BANCOS, sock, lock, client_id)
+        args=(ACCOUNTS_FILE, message_protocol.external.MsgType.LOTE_BANCOS, sock, lock, client_id, shutdown_event)
     )
 
     hilo_receptor.start()
@@ -99,7 +103,10 @@ def _enviar_fin_registros(sock, lock, client_id):
 
 def _finalizar_conexion(hilo_receptor, sock):
     hilo_receptor.join()
-    sock.close()
+    try:
+        sock.close()
+    except Exception:
+        pass
     logging.info("Proceso terminado.")
 
 if __name__ == "__main__":

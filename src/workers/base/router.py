@@ -1,5 +1,6 @@
 import json
 import logging
+import threading
 from common import middleware, sharding
 
 logger = logging.getLogger(__name__)
@@ -12,6 +13,7 @@ class MessageRouter:
         self.output_queues_direct = []
         self.output_queues_sharded = []
         self.output_queues_conditional = []
+        self._send_lock = threading.Lock()
         self._setup_queues()
 
     def _setup_queues(self):
@@ -101,6 +103,10 @@ class MessageRouter:
         return "|".join(parts) if parts else "default"
 
     def enviar(self, mensaje: bytes, payload: dict | None = None):
+        with self._send_lock:
+            self._enviar_locked(mensaje, payload)
+
+    def _enviar_locked(self, mensaje: bytes, payload: dict | None = None):
         try:
             if mensaje is None:
                 return
@@ -112,8 +118,10 @@ class MessageRouter:
                     payload = {}
             assert payload is not None
 
-            es_eof = payload.get("EOF", False)
+            es_eof = payload.get("EOF", False) or payload.get("CLIENT_DISCONNECT", False)
             client_id = payload.get("client_id")
+
+            logger.info(f"[ROUTER DEBUG] Enviando {len(mensaje)} bytes a {len(self.output_queues_direct)} colas directas.")
 
             # 1. ENVIAR A COLAS SIMPLES
             for q in self.output_queues_direct:

@@ -15,7 +15,6 @@ class ClientHandler:
         self.state = state
 
     def atender(self, client_socket):
-        # Enviar configuración de queries al conectar
         try:
             queries = []
             for q in self.config.input_queues:
@@ -42,17 +41,17 @@ class ClientHandler:
             for i in range(1, total_workers + 1):
                 colas_bancos[i] = middleware.MessageMiddlewareQueueRabbitMQ(self.config.mom_host, f"{prefix}_{i}")
         
+        eof_enviado = False
         try:
             while True:
                 msg_type, payload = message_protocol.external.recv_msg(client_socket)
-                
+
                 if msg_type == message_protocol.external.MsgType.LOTE_TRANSACCIONES:
                     header = payload["header"]
                     msg_client_id = header["client_id"]
                     schema = header["schema"]
                     records = payload["payload"]
 
-                    # Renombrar columnas duplicadas en la cabecera (ej: Account -> Account.1)
                     clean_schema = []
                     counts = {}
                     for col in schema:
@@ -70,7 +69,6 @@ class ClientHandler:
                         self.state.registrar_cliente(client_id, client_socket)
                         logger.info(f"Cliente {client_id} conectado")
 
-                    # Construct internal batch message
                     internal_msg = {
                         "client_id": client_id,
                         "batches": [
@@ -88,14 +86,13 @@ class ClientHandler:
                     if lock:
                         with lock:
                             message_protocol.external.send_msg(client_socket, message_protocol.external.MsgType.ACK)
-                            
+
                 elif msg_type == message_protocol.external.MsgType.LOTE_BANCOS:
                     header = payload["header"]
                     msg_client_id = header["client_id"]
                     schema = header["schema"]
                     records = payload["payload"]
 
-                    # Renombrar columnas duplicadas en la cabecera
                     clean_schema = []
                     counts = {}
                     for col in schema:
@@ -128,7 +125,6 @@ class ClientHandler:
                     else:
                         hash_idx = None
 
-                    # Group records by shard_id
                     records_by_shard = {}
                     for record_values in records:
                         bank_val = record_values[hash_idx] if hash_idx is not None else "default"
@@ -137,7 +133,6 @@ class ClientHandler:
                             records_by_shard[shard_id] = []
                         records_by_shard[shard_id].append(record_values)
 
-                    # Send a batch to each shard
                     for shard_id, shard_records in records_by_shard.items():
                         shard_batch = {
                             "client_id": client_id,
@@ -158,7 +153,7 @@ class ClientHandler:
                     if lock:
                         with lock:
                             message_protocol.external.send_msg(client_socket, message_protocol.external.MsgType.ACK)
-                            
+
                 elif msg_type == message_protocol.external.MsgType.END_OF_RECODS:
                     if client_id is None:
                         client_id = payload or str(uuid.uuid4())
@@ -170,6 +165,7 @@ class ClientHandler:
                         q.send(eof_msg)
                     for q in colas_bancos.values():
                         q.send(eof_msg)
+                    eof_enviado = True
                     logger.info(f"EOF enviado para {client_id}")
                     break
         except socket.error:
@@ -177,7 +173,24 @@ class ClientHandler:
         except Exception as e:
             logger.error(f"Error con cliente {client_id or 'Desconocido'}: {e}", exc_info=True)
         finally:
+            if not eof_enviado:
+                self._enviar_disconnect(client_id, colas_tx, colas_bancos)
+                self.state.remover_cliente(client_id)
             for q in colas_tx:
                 q.close()
             for q in colas_bancos.values():
                 q.close()
+
+    def _enviar_disconnect(self, client_id, colas_tx, colas_bancos):
+        disconnect_msg = json.dumps({"client_id": client_id, "CLIENT_DISCONNECT": True}).encode("utf-8")
+        logger.info(f"Enviando CLIENT_DISCONNECT para {client_id}")
+        for q in colas_tx:
+            try:
+                q.send(disconnect_msg)
+            except Exception as e:
+                logger.warning(f"No se pudo enviar CLIENT_DISCONNECT a cola tx: {e}")
+        for q in colas_bancos.values():
+            try:
+                q.send(disconnect_msg)
+            except Exception as e:
+                logger.warning(f"No se pudo enviar CLIENT_DISCONNECT a cola bancos: {e}")

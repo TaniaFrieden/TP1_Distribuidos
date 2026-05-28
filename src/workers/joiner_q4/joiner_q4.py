@@ -146,6 +146,12 @@ class JoinerQ4Worker(BaseWorker):
 
         logger.info(f"[JoinerQ4] Flush completo para client_id={client_id}. Registros emitidos: {enviados}.")
 
+    def al_desconectar_cliente(self, client_id: str):
+        with self._lock:
+            self._scatter.pop(client_id, None)
+            self._txns.pop(client_id, None)
+        logger.info(f"[JoinerQ4] Estado descartado para {client_id}.")
+
     def al_cerrar(self):
         logger.info("[JoinerQ4] Apagado.")
 

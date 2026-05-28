@@ -94,6 +94,13 @@ class BaseWorker(ABC):
             if not client_id:
                 return ack()
 
+            if mensaje_json.get("CLIENT_DISCONNECT"):
+                logger.info(f"[{self.__class__.__name__}] CLIENT_DISCONNECT para {client_id}. Limpiando estado.")
+                self.al_desconectar_cliente(client_id)
+                self.coordinator.limpiar_cliente(client_id)
+                self._enviar(mensaje, mensaje_json)
+                return ack()
+
             if mensaje_json.get("EOF"):
                 # Novedad: Permitir que la subclase intercepte y maneje el EOF por cola
                 if self.interceptar_eof(queue_name, client_id, mensaje_json, mensaje):
@@ -168,4 +175,7 @@ class BaseWorker(ABC):
         pass
 
     def al_completar_cliente(self, client_id: str):
+        pass
+
+    def al_desconectar_cliente(self, client_id: str):
         pass
