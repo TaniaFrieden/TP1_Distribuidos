@@ -7,25 +7,15 @@ import requests
 from datetime import date, timedelta
 from pathlib import Path
 
-# =====================================================================
-# CONFIGURACIÓN EDITABLE
-# =====================================================================
-# Rutas y nombres de los datasets de entrada por defecto
 RUTA_DATASETS = "datasets"
 DATASET_TRANS = "HI-Large_Trans_sample_30.csv"
 DATASET_ACCOUNTS = "HI-Large_accounts.csv"
 
-# Directorio de salida por defecto
 RUTA_SALIDAS = "output/Hi-Large-30"
-# =====================================================================
+
 
 def main():
-    # Encontrar la raíz del proyecto para asegurar rutas correctas
     project_root = Path(__file__).resolve().parents[1]
-    
-    # Procesar argumentos si se pasan
-    # args[0]: dataset a leer (ej: datasets/HI-Large_Trans_sample_30.csv)
-    # args[1]: carpeta de destino de soluciones (ej: solutions/Hi-Large-30)
     args = sys.argv[1:]
     
     if len(args) >= 1:
@@ -53,7 +43,6 @@ def main():
     else:
         out_dir = project_root / RUTA_SALIDAS
         
-    # Borrar carpeta de salida si ya existe
     if out_dir.exists():
         print(f"Borrando carpeta de destino existente: {out_dir}")
         if out_dir.is_dir():
@@ -61,10 +50,8 @@ def main():
         else:
             out_dir.unlink()
             
-    # Crear carpeta de salida
     out_dir.mkdir(parents=True, exist_ok=True)
     
-    # Generar mapeo de archivos de salida
     outputs = {q: out_dir / f"q{q}_solucion.csv" for q in range(1, 6)}
     
     print(f"--- Cargando Datasets ---")
@@ -82,23 +69,17 @@ def main():
     accounts_df = pd.read_csv(input_accounts)
     print(f"Tamaño de cuentas (filas, columnas): {accounts_df.shape}")
 
-    # Rango de Timestamps
     if "Timestamp" in trans_df.columns:
         print(f"Rango de Timestamps: [{trans_df['Timestamp'].min()}, {trans_df['Timestamp'].max()}]")
     else:
         print("Advertencia: No se encontró la columna 'Timestamp' en las transacciones.")
 
-    # Filtrar transacciones que no sean en USD
     print("\nFiltrando transacciones que no son en dólares (US Dollar)...")
     trans_usd_df = trans_df[trans_df['Payment Currency'] == "US Dollar"]
     print(f"Cantidad de transacciones USD: {trans_usd_df.shape[0]}")
 
-    # Filtrar transacciones USD en el primer período (01 al 06 de Septiembre de 2022)
     trans_usd_sept_1st_df = trans_usd_df[(trans_usd_df["Timestamp"] >= '2022/09/01') & (trans_usd_df["Timestamp"] <= '2022/09/06')]
     
-    # -----------------------------------------------------------------
-    # QUERY 1
-    # -----------------------------------------------------------------
     print("\nProcesando Query 1...")
     low_profile_transactions = trans_usd_df[trans_usd_df['Amount Paid'] < 50]
     low_profile_transactions = low_profile_transactions[['From Bank', 'Account', 'To Bank', 'Account.1', 'Amount Paid']]
@@ -106,9 +87,6 @@ def main():
     low_profile_transactions.to_csv(q1_path, index=False)
     print(f"Query 1 guardada en: {q1_path} ({low_profile_transactions.shape[0]} filas)")
 
-    # -----------------------------------------------------------------
-    # QUERY 2
-    # -----------------------------------------------------------------
     print("\nProcesando Query 2...")
     max_amount_trans_usd_idx = trans_usd_df.groupby(["From Bank"])["Amount Paid"].idxmax()
     max_amount_trans_usd = trans_usd_df.loc[max_amount_trans_usd_idx]
@@ -118,9 +96,6 @@ def main():
     q2_solucion.to_csv(q2_path, index=False)
     print(f"Query 2 guardada en: {q2_path} ({q2_solucion.shape[0]} filas)")
 
-    # -----------------------------------------------------------------
-    # QUERY 3
-    # -----------------------------------------------------------------
     print("\nProcesando Query 3...")
     avg_amounts_per_type = trans_usd_sept_1st_df.groupby(["Payment Format"])["Amount Paid"].mean().reset_index()
     trans_usd_sept_2nd_df = trans_usd_df[(trans_usd_df["Timestamp"] >= '2022/09/06') & (trans_usd_df["Timestamp"] <= '2022/09/15')]
@@ -134,9 +109,6 @@ def main():
     q3_solucion.to_csv(q3_path, index=False)
     print(f"Query 3 guardada en: {q3_path} ({q3_solucion.shape[0]} filas)")
 
-    # -----------------------------------------------------------------
-    # QUERY 4
-    # -----------------------------------------------------------------
     print("\nProcesando Query 4...")
     ranged_trans_usd_sept_df = trans_usd_sept_1st_df\
         .groupby(["From Bank", "Account"])\
@@ -169,9 +141,6 @@ def main():
     unique_accounts.to_csv(q4_path, index=False)
     print(f"Query 4 guardada en: {q4_path} ({unique_accounts.shape[0]} filas)")
 
-    # -----------------------------------------------------------------
-    # QUERY 5
-    # -----------------------------------------------------------------
     print("\nProcesando Query 5...")
     CURRENCY_MAP_Q5 = {
         "US Dollar": "USD", "Euro": "EUR", "UK Pound": "GBP", "Yen": "JPY",
@@ -228,7 +197,7 @@ def main():
     q5_path = outputs[5]
     q5_solucion.to_csv(q5_path, index=False)
     print(f"Query 5 guardada en: {q5_path} (Valor: {trans_sept_1st_wire_or_ach_filtered.shape[0]})")
-    print("\n¡Ejecución de queries completada con éxito!") éxito!")
+    print("\n¡Ejecución de queries completada con éxito!")
 
 if __name__ == "__main__":
     main()

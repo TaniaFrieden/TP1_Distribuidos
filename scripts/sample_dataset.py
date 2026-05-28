@@ -20,18 +20,16 @@ def sample_dataset(input_path: Path, output_path: Path, percentage: float, metho
     random.seed(seed)
     prob = percentage / 100.0
 
-    # Si elegimos el método 'first', primero necesitamos el conteo de líneas.
     total_lines = None
     target_lines = None
     if method == "first":
         print("Contando líneas totales para el método 'first' (esto puede tardar)...")
         with open(input_path, "r", encoding="utf-8") as f:
-            total_lines = sum(1 for _ in f) - 1 # Excluyendo cabecera
+            total_lines = sum(1 for _ in f) - 1
         target_lines = int(total_lines * prob)
         print(f"Líneas de datos totales: {total_lines}, Objetivo: {target_lines}")
 
     with open(input_path, "r", encoding="utf-8") as f_in, open(output_path, "w", encoding="utf-8") as f_out:
-        # Copiar cabecera
         header = f_in.readline()
         if not header:
             print("Error: El archivo de entrada está vacío.", file=sys.stderr)
@@ -48,8 +46,6 @@ def sample_dataset(input_path: Path, output_path: Path, percentage: float, metho
                     f_out.write(line)
                     written_count += 1
             elif method == "uniform":
-                # Muestreo determinista distribuido uniformemente (ej. 3 de cada 10 si prob=0.3)
-                # Usamos una variable flotante acumuladora para manejar cualquier porcentaje
                 if (total_processed * percentage) // 100 > ((total_processed - 1) * percentage) // 100:
                     f_out.write(line)
                     written_count += 1
@@ -60,7 +56,6 @@ def sample_dataset(input_path: Path, output_path: Path, percentage: float, metho
                 else:
                     break
             
-            # Progreso simple cada 10M de líneas
             if total_processed % 10_000_000 == 0:
                 print(f"Procesadas {total_processed} líneas... Escritas {written_count}")
 
