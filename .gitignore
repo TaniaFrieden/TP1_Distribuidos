@@ -1,7 +1,6 @@
 # Datasets y archivos de csv de notebooks
 *.csv
 datasets
-scripts
 logs/*.txt
 
 # Byte-compiled / optimized / DLL files
