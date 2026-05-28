@@ -22,9 +22,7 @@ class JoinerQ4Worker(BaseWorker):
     """
     def __init__(self):
         super().__init__()
-        # { client_id: { b_key: [(a_bank, a_account)] } }
         self._scatter: dict = {}
-        # { client_id: { b_key: set((c_bank, c_account)) } }
         self._txns: dict = {}
         self._lock = threading.Lock()
 

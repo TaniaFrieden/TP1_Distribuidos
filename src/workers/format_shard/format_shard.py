@@ -9,7 +9,6 @@ logger = logging.getLogger(__name__)
 class FormatShardWorker(BaseWorker):
     def __init__(self):
         super().__init__()
-        # Máquina de estados centralizada por client_id
         self.estado_clientes = {}
         self.lock = threading.Lock()
         logger.info("[FormatShard] Worker inicializado con coordinación en dos fases (temprano/tardío).")
@@ -51,7 +50,6 @@ class FormatShardWorker(BaseWorker):
                                 estado["datos_temprano"][formato]["suma"] += monto
                                 estado["datos_temprano"][formato]["count"] += 1
                         elif "tardio" in queue_name:
-                            # Almacenamos tuplas (schema, record_values) en la cache
                             for record_values in records:
                                 estado["cache_tardio"].append((schema, record_values))
             else:
@@ -87,11 +85,9 @@ class FormatShardWorker(BaseWorker):
 
         with self.lock:
             estado = self._get_estado(client_id)
-            # Guardamos un EOF válido para usarlo en la barrera cuando sea el momento
             if not estado["eof_mensaje"]:
                 estado["eof_mensaje"] = mensaje_original
 
-            # Resolvemos qué fase acaba de llegar
             if "temprano" in queue_name:
                 logger.info(f"[Q3] EOF Temprano recibido para {client_id}. Calculando promedios...")
                 estado["temprano_cerrado"] = True
@@ -101,19 +97,18 @@ class FormatShardWorker(BaseWorker):
                 logger.info(f"[Q3] EOF Tardío recibido para {client_id}. Cerrando fase de caché...")
                 estado["tardio_cerrado"] = True
 
-            # Si ambas fases están completas y aún no procesamos, ejecutamos el cierre local
             if estado["temprano_cerrado"] and estado["tardio_cerrado"] and not estado["cache_procesado"]:
                 logger.info(f"[Q3] Ambas fases cerradas para {client_id}. Procesando caché tardío ({len(estado['cache_tardio'])} items).")
                 self._procesar_cache_tardio(client_id, estado)
                 estado["cache_procesado"] = True
                 disparar_flush = True
 
-        # Importante: Disparamos la barrera fuera del lock para no bloquear colas
+        # Disparamos la barrera fuera del lock para evitar deadlock con las colas de entrada
         if disparar_flush:
             logger.info(f"[Q3] Caché procesado. Delegando al coordinador para iniciar barrera distribuida.")
             self.coordinator.iniciar_barrera(client_id, estado["eof_mensaje"])
 
-        return True  # Le avisamos a base.py que no haga nada más
+        return True
 
     def _calcular_promedios(self, estado: dict):
         for formato, stats in estado["datos_temprano"].items():
@@ -122,9 +117,9 @@ class FormatShardWorker(BaseWorker):
         estado["promedios_listos"] = True
 
     def _procesar_cache_tardio(self, client_id: str, estado: dict):
+        """Emite transacciones tardías cuyo monto es inferior al 1% del promedio de su formato."""
         promedios = estado["promedios"]
-        
-        # Agrupamos las salidas en un único lote final
+
         records = []
         for schema, record_values in estado["cache_tardio"]:
             from_bank_idx = schema.index("From Bank") if "From Bank" in schema else None
@@ -160,7 +155,6 @@ class FormatShardWorker(BaseWorker):
             }
             self._enviar(json.dumps(output_payload).encode('utf-8'), payload=output_payload)
         
-        # Vaciamos la memoria inmediatamente después de procesar
         estado["cache_tardio"].clear()
         estado["datos_temprano"].clear()
 

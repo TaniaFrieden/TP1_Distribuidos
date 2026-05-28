@@ -36,8 +36,7 @@ class ProjectionWorker(BaseWorker):
                     header = batch["header"]
                     schema = header["schema"]
                     records = batch["payload"]
-                    
-                    # Target schema columns that exist in the original schema
+
                     new_schema = [col for col in self.campos if col in schema]
                     col_indices = {col: i for i, col in enumerate(schema)}
                     
@@ -72,7 +71,6 @@ class ProjectionWorker(BaseWorker):
                     msg_bytes = json.dumps(output_payload).encode("utf-8")
                     self._enviar(msg_bytes, payload=output_payload)
             else:
-                # Fallback para formato de registro unico anterior
                 proyectado = {"client_id": payload.get("client_id", client_id)}
                 for campo in self.campos:
                     if campo in payload:

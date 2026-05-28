@@ -17,14 +17,12 @@ class MessageRouter:
         self._setup_queues()
 
     def _setup_queues(self):
-        # Entradas
         for cola in self.config.input_queues:
             nombre_cola = cola.replace("{id}", str(self.config.node_id))
             self.input_queues[nombre_cola] = middleware.MessageMiddlewareQueueRabbitMQ(
                 self.config.mom_host, nombre_cola
             )
 
-        # Salidas
         for item in self.config.output_queues:
             if isinstance(item, str):
                 self.output_queues_direct.append(
@@ -59,7 +57,7 @@ class MessageRouter:
                     total = int(item.get("total_workers") or 0)
                     if total <= 0:
                         continue
-                    # Soporta hash_fields (lista) o hash_field (string único, compat. hacia atrás)
+                    # Acepta hash_fields (lista) o hash_field (string único) por compatibilidad
                     raw = item.get("hash_fields") or ([item.get("hash_field")] if item.get("hash_field") else [])
                     hash_fields = [f for f in raw if f]
                     shard_queues = {
@@ -121,18 +119,13 @@ class MessageRouter:
             es_eof = payload.get("EOF", False) or payload.get("CLIENT_DISCONNECT", False)
             client_id = payload.get("client_id")
 
-
-            # 1. ENVIAR A COLAS SIMPLES
             for q in self.output_queues_direct:
                 q.send(mensaje)
 
-            # Check if this is a batch message
             if "batches" in payload and not es_eof:
-                # 2. ENVIAR A SHARDS (BATCH)
                 for shard_meta in self.output_queues_sharded:
                     hash_fields = shard_meta.get("hash_fields", [])
-                    
-                    # Group records by target shard_id
+
                     records_by_shard = {}
                     original_schema = None
                     for batch in payload["batches"]:
@@ -167,13 +160,11 @@ class MessageRouter:
                         }
                         shard_meta["queues"][shard_id].send(json.dumps(shard_payload).encode("utf-8"))
 
-                # 3. ENVIAR A CONDICIONALES (BATCH)
                 for cond_meta in self.output_queues_conditional:
                     condition_field = cond_meta["condition_field"]
-                    
-                    # Group records by target queue (case index, shard_id)
-                    records_by_queue = {}  # queue_object -> (original_schema, list_of_records)
-                    
+
+                    records_by_queue = {}
+
                     for batch in payload["batches"]:
                         header = batch["header"]
                         original_schema = header["schema"]
@@ -183,7 +174,6 @@ class MessageRouter:
                         
                         for record_values in records:
                             valor_campo = str(record_values[cond_idx])[:10] if cond_idx is not None else ""
-                            # Find matching case
                             for case in cond_meta["cases"]:
                                 if self._evaluar_between(valor_campo, case["value"]):
                                     hash_field = case["hash_field"]
@@ -214,7 +204,6 @@ class MessageRouter:
                         target_queue.send(json.dumps(q_payload).encode("utf-8"))
                         
             else:
-                # 2. ENVIAR A SHARDS (SINGLE RECORD OR EOF)
                 for shard_meta in self.output_queues_sharded:
                     if es_eof:
                         for q in shard_meta["queues"].values():
@@ -225,7 +214,6 @@ class MessageRouter:
                         target_id = sharding.obtener_id_shard(valor_hash, shard_meta["total_workers"])
                         shard_meta["queues"][target_id].send(mensaje)
 
-                # 3. ENVIAR A CONDICIONALES (SINGLE RECORD OR EOF)
                 for cond_meta in self.output_queues_conditional:
                     if es_eof:
                         for case in cond_meta["cases"]:

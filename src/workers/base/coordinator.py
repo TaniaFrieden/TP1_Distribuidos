@@ -30,8 +30,7 @@ class DistributedCoordinator:
         self._coordinacion_lock = threading.Lock()
         self._vuelo_lock = threading.Lock()
         self._control_send_lock = threading.Lock()
-        
-        # Canal de Control
+
         self.control_exchange = middleware.FanoutExchangeRabbitMQ(
             config.mom_host, f"control_{config.node_prefix}_exchange"
         )
@@ -40,7 +39,6 @@ class DistributedCoordinator:
             self.control_exchange.exchange_name
         )
 
-    # --- Tracking de mensajes (Vuelo) ---
     def registrar_vuelo(self, client_id):
         with self._vuelo_lock:
             self._mensajes_en_vuelo[client_id] = self._mensajes_en_vuelo.get(client_id, 0) + 1
@@ -53,23 +51,22 @@ class DistributedCoordinator:
                     del self._mensajes_en_vuelo[client_id]
 
     def _esperar_vuelo_cero(self, client_id):
+        """Espera hasta que no haya mensajes en vuelo para client_id, confirmado durante 1 segundo continuo."""
         confirmado_cero_desde = None
         while True:
             with self._vuelo_lock:
                 vuelo = self._mensajes_en_vuelo.get(client_id, 0)
-            
+
             if vuelo == 0:
                 if confirmado_cero_desde is None:
                     confirmado_cero_desde = time.perf_counter()
                 elif time.perf_counter() - confirmado_cero_desde >= 1.0:
-                    # El contador de vuelos ha permanecido en cero durante 1.0 segundo de forma continua
                     break
             else:
                 confirmado_cero_desde = None
-                
+
             time.sleep(0.05)
 
-    # --- Tracking Local de EOFs ---
     def registrar_eof_local(self, client_id, queue_name, total_esperados) -> bool:
         with self._coordinacion_lock:
             if client_id not in self._eofs_locales_recibidos:
@@ -82,7 +79,6 @@ class DistributedCoordinator:
             if client_id in self._eofs_locales_recibidos:
                 del self._eofs_locales_recibidos[client_id]
 
-    # --- Ejecutar Flush y Notificar ---
     def _ejecutar_flush_y_notificar(self, client_id: str, originator: str):
         logger.info(f"[Coordinator] EOF local y de control recibidos para {client_id}. Esperando vuelos a cero antes de flush.")
         self._esperar_vuelo_cero(client_id)
@@ -115,7 +111,6 @@ class DistributedCoordinator:
         with self._vuelo_lock:
             self._mensajes_en_vuelo.pop(client_id, None)
 
-    # --- Barrera Distribuida ---
     def iniciar_barrera(self, client_id: str, mensaje_original: bytes):
         ejecutar_flush_inmediato = False
         originator_para_flush = None
@@ -123,15 +118,14 @@ class DistributedCoordinator:
         with self._coordinacion_lock:
             self._local_eof_completed.add(client_id)
             originator = self._originadores_reconocidos.get(client_id)
-            
+
             if originator is not None:
-                # La barrera de control ya fue activada por otro worker.
-                # Como nuestro EOF local ya está listo, podemos ejecutar el flush.
+                # La barrera ya fue activada por otro worker; como nuestro EOF local ya está listo, podemos flushear.
                 logger.info(f"[Coordinator] Barrera ya activa para {client_id} (originador: {originator}). Disparando flush diferido.")
                 ejecutar_flush_inmediato = True
                 originator_para_flush = originator
             else:
-                # Somos el primer worker en completar el EOF local, nos autodeclaramos originador
+                # Primer worker en completar el EOF local: nos autodeclaramos originador y difundimos.
                 self._originadores_reconocidos[client_id] = self.config.node_id
                 self._coordinaciones_eof[client_id] = {
                     "workers": set(),
@@ -168,26 +162,22 @@ class DistributedCoordinator:
             originator = msg_dict.get("originator")
 
             if msg_type == "EOF_RECEIVED":
-                # --- RESOLUCIÓN DE COLISIONES ---
+                # Resolución de colisiones: si dos workers se autodeclaran originador simultáneamente,
+                # gana el de menor ID para evitar duplicar el reenvío del EOF final.
                 with self._coordinacion_lock:
                     originador_actual = self._originadores_reconocidos.get(client_id)
-                    
+
                     if originador_actual is not None:
-                        # Si hay un conflicto de originadores, gana el nodo con el ID menor
                         if originator < originador_actual:
                             logger.info(f"[Coordinator] Colisión de barrera: cediendo originador de {originador_actual} a {originator}")
                             self._originadores_reconocidos[client_id] = originator
                             if originador_actual == self.config.node_id:
-                                # Yo era el originador perdedor, elimino mi estado de recolección
                                 self._coordinaciones_eof.pop(client_id, None)
                         elif originator > originador_actual:
-                            # Recibí un mensaje de un originador que perdió, lo ignoro
                             return
                     else:
-                        # No había originador previo, acepto este
                         self._originadores_reconocidos[client_id] = originator
 
-                # AHORA: Verificamos si ya completamos nuestro EOF local
                 with self._coordinacion_lock:
                     local_completo = (client_id in self._local_eof_completed) or not self._tiene_cola_sharded
                     originator_final = self._originadores_reconocidos[client_id]
@@ -209,13 +199,12 @@ class DistributedCoordinator:
                         if len(self._coordinaciones_eof[client_id]["workers"]) >= self.config.total_workers:
                             msg_original = self._coordinaciones_eof[client_id]["mensaje_original"]
                             del self._coordinaciones_eof[client_id]
-                            
+
                             logger.info(f"[Coordinator] Barrera completa para client_id={client_id}. Difundiendo BARRIER_COMPLETE.")
                             self._enviar_control({
                                 "type": "BARRIER_COMPLETE",
                                 "client_id": client_id
                             })
-                            # Reenviar el EOF final a la siguiente etapa
                             self.on_sync_complete(client_id, msg_original)
 
             elif msg_type == "BARRIER_COMPLETE":
@@ -230,9 +219,7 @@ class DistributedCoordinator:
         finally:
             ack()
 
-    # --- Lifecycle ---
     def start_consuming(self):
-        # NOTA: Asegúrate de pasar el callback con lambda o directo para soportar ack/nack según tu middleware
         self.control_queue.start_consuming(self._process_control_message)
 
     def stop_consuming(self):

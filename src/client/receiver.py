@@ -56,13 +56,11 @@ def _procesar_resultado(payload, archivos, cabeceras, tiempos_inicio, inicio_env
         tiempos_inicio[q_id] = inicio_envio
         logging.info(f"[QUERY {q_id}] Inicio de recepción de resultados.")
 
-    # Lógica dinámica: Crear archivo si es la primera vez que vemos este q_id
     if q_id not in archivos:
         path = os.path.join(OUTPUT_DIR, OUTPUT_FILE_NAME.format(q_id=q_id))
         archivos[q_id] = open(path, "w", encoding="utf-8")
         cabeceras[q_id] = False
 
-    # resultado puede ser un dict (registro único / EOF) o una lista de dicts (batch)
     items = resultado if isinstance(resultado, list) else [resultado]
 
     for item in items:
@@ -95,7 +93,6 @@ def _procesar_resultado(payload, archivos, cabeceras, tiempos_inicio, inicio_env
                 logging.info(f"[QUERY {q_id}] EOF recibido sin inicio registrado")
             break  # EOF cierra el archivo; no procesar más ítems del batch
 
-## --- Funciones auxiliares mantenidas ---
 def _es_eof(resultado):
     return isinstance(resultado, dict) and resultado.get(KEY_EOF) is True
 

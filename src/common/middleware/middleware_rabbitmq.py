@@ -38,7 +38,6 @@ class MessageMiddlewareQueueRabbitMQ(RabbitMQBase):
 
     @handle_pika_errors("enviar a la cola")
     def send(self, message):
-        # El default exchange ('') manda directo a la cola que coincida con la routing_key
         self.channel.basic_publish(
             exchange='',
             routing_key=self.queue_name,
@@ -53,8 +52,7 @@ class MessageMiddlewareQueueRabbitMQ(RabbitMQBase):
                 lambda: ch.basic_ack(delivery_tag=method.delivery_tag),
                 lambda: ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True),
             )
-        internal_callback = internal_callback
-        
+
         self.channel.basic_consume(
             queue=self.queue_name,
             on_message_callback=internal_callback,

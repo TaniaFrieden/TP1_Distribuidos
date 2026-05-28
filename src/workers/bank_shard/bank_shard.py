@@ -10,20 +10,15 @@ logger = logging.getLogger(__name__)
 class AgregadorBancarioWorker(BaseWorker):
     def __init__(self):
         super().__init__()
-        # Estructura: { "client_id": { "bank_id": {"bank_name": str, "max_amount": float, "account": str} } }
         self.estado_agregador = {}
-        # Estructura para el control de EOFs en dos fases: { "client_id": {...} }
         self.estado_eof = {}
         self.lock_estado = threading.Lock()
         logger.info("[AgregadorBancario] Worker inicializado con coordinación estricta de dos fases.")
 
     def procesar_payload(self, queue_name: str, client_id: str, payload: dict, mensaje_original: bytes, ack, nack):
-        logger.debug(f"[MENSAJE ENTRANTE] Cola: '{queue_name}' | Cliente: {client_id}")
-
         try:
             if "batches" in payload:
                 with self.lock_estado:
-                    # 1. Inicialización segura del estado del cliente
                     if client_id not in self.estado_agregador:
                         logger.info(f"[CLIENTE NUEVO] Inicializando estado para {client_id}")
                         self.estado_agregador[client_id] = {}
@@ -87,7 +82,6 @@ class AgregadorBancarioWorker(BaseWorker):
                                 if account_number_idx is not None and self.estado_agregador[client_id][bank_id]["account"] == "Desconocida":
                                     self.estado_agregador[client_id][bank_id]["account"] = record_values[account_number_idx]
             else:
-                # 1. Extraemos y normalizamos el Bank ID dependiendo del origen (Fallback)
                 if "transactions" in queue_name:
                     bank_id = normalizar_valor_hash(payload.get("From Bank"))
                 elif "banks" in queue_name:
@@ -97,11 +91,10 @@ class AgregadorBancarioWorker(BaseWorker):
                     return
 
                 with self.lock_estado:
-                    # 2. Inicialización segura del estado del cliente y del banco
                     if client_id not in self.estado_agregador:
                         logger.info(f"[CLIENTE NUEVO] Inicializando estado para {client_id}")
                         self.estado_agregador[client_id] = {}
-                    
+
                     if bank_id not in self.estado_agregador[client_id]:
                         self.estado_agregador[client_id][bank_id] = {
                             "bank_name": "Desconocido",
@@ -109,7 +102,6 @@ class AgregadorBancarioWorker(BaseWorker):
                             "account": "Desconocida"
                         }
 
-                    # 3. Lógica de actualización según la cola de origen
                     if "banks" in queue_name:
                         self.estado_agregador[client_id][bank_id]["bank_name"] = payload.get("Bank Name", "Desconocido")
                         if self.estado_agregador[client_id][bank_id]["account"] == "Desconocida":
@@ -173,7 +165,6 @@ class AgregadorBancarioWorker(BaseWorker):
             if client_id in self.estado_agregador:
                 records = []
                 for bank_id, datos in self.estado_agregador[client_id].items():
-                    # Criterios de descarte
                     if datos["max_amount"] <= 0.0:
                         continue
                     if datos["bank_name"] == "Desconocido":
@@ -200,13 +191,10 @@ class AgregadorBancarioWorker(BaseWorker):
                     self._enviar(mensaje_bytes, payload=batch_payload)
 
                 logger.info(f"[BARRERA CONTROL] Envío finalizado con éxito para cliente {client_id}.")
-                
-                # Liberamos la memoria del cliente
                 del self.estado_agregador[client_id]
             else:
                 logger.warning(f"[BARRERA CONTROL] Se disparó al_completar_cliente para {client_id} sin datos locales registrados.")
-            
-            # Limpiamos también el estado de control de los EOFs
+
             if client_id in self.estado_eof:
                 del self.estado_eof[client_id]
 
