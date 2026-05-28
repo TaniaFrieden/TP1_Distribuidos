@@ -53,8 +53,8 @@ def _procesar_resultado(payload, archivos, cabeceras, tiempos_inicio, inicio_env
         return
 
     if q_id not in tiempos_inicio:
-        tiempos_inicio[q_id] = inicio_envio
-        logging.info(f"[QUERY {q_id}] Inicio de recepción de resultados.")
+        logging.warning(f"[QUERY {q_id}] Resultado tardío recibido después del EOF. Descartando.")
+        return
 
     if q_id not in archivos:
         path = os.path.join(OUTPUT_DIR, OUTPUT_FILE_NAME.format(q_id=q_id))

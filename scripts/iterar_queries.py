@@ -9,11 +9,11 @@ from pathlib import Path
 # =====================================================================
 CANTIDAD_EJECUCIONES = 2
 ACTUAL_TEMPLATE = "output/output_{q}.csv"
-EXPECTED_TEMPLATE = "notebook/solucion-medium-sg/q{q}_solucion.csv"
+EXPECTED_TEMPLATE = "notebook/q{q}_solucion.csv"
 
 # Archivos de datasets a pasar al cliente
-TRANSACTIONS_FILE = "datasets/HI-Medium_Trans_sg.csv"
-ACCOUNTS_FILE = "datasets/HI-Medium_accounts.csv"
+TRANSACTIONS_FILE = "datasets/transacciones_sample.csv"
+ACCOUNTS_FILE = "datasets/LI-Small_accounts.csv"
 # =====================================================================
 
 def main():
