@@ -9,7 +9,7 @@ KEY_QUERY = 'query'
 KEY_RESULT = 'resultado'
 KEY_EOF = 'eof'
 
-OUTPUT_FILE_NAME = "output_{q_id}.csv"
+OUTPUT_FILE_NAME = "q{q_id}_solucion.csv"
 
 def escuchar_respuesta(sock, queries, inicio_envio):
     logging.info("Hilo receptor activo: Esperando reportes...")

@@ -8,7 +8,7 @@ from pathlib import Path
 # CONFIGURACIÓN POR DEFECTO
 # =====================================================================
 CANTIDAD_EJECUCIONES = 2
-ACTUAL_TEMPLATE = "output/output_{q}.csv"
+ACTUAL_TEMPLATE = "output/q{q}_solucion.csv"
 EXPECTED_TEMPLATE = "notebook/solucion-medium-sg/q{q}_solucion.csv"
 
 # Archivos de datasets a pasar al cliente
