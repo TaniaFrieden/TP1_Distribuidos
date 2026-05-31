@@ -4,7 +4,7 @@
     {
       "type": "filter",
       "prefix": "q3_filter_fechas",
-      "replicas": 4,
+      "replicas": "$CANT_Q3_FILTER_FECHAS",
       "input_queue": "q3_usd_filtered",
       "output_queue": [
         {
@@ -16,7 +16,7 @@
               "value": "2022/09/01,2022/09/05",
               "routing": {
                 "queue_shard_prefix": "q3_temprano",
-                "total_workers": 2,
+                "total_workers": "$CANT_Q3_FORMAT_SHARD",
                 "hash_field": "Payment Format"
               }
             },
@@ -25,7 +25,7 @@
               "value": "2022/09/06,2022/09/14 23:59:59",
               "routing": {
                 "queue_shard_prefix": "q3_tardio",
-                "total_workers": 2,
+                "total_workers": "$CANT_Q3_FORMAT_SHARD",
                 "hash_field": "Payment Format"
               }
             }
@@ -41,7 +41,7 @@
     {
       "type": "format_shard",
       "prefix": "q3_format_shard",
-      "replicas": 2,
+      "replicas": "$CANT_Q3_FORMAT_SHARD",
       "input_queue": ["q3_temprano_{id}", "q3_tardio_{id}"],
       "output_queue": "q3_results"
     }

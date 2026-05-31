@@ -4,7 +4,7 @@
     {
       "type": "projection",
       "prefix": "q1_projection",
-      "replicas": 2,
+      "replicas": "$CANT_Q1_PROJECTION",
       "input_queue": "q1_pre_projection",
       "output_queue": "q1_usd_to_minor_50",
       "extra_env": {
@@ -15,7 +15,7 @@
     {
       "type": "filter",
       "prefix": "q1_minor_than_50",
-      "replicas": 3,
+      "replicas": "$CANT_Q1_FILTER",
       "input_queue": "q1_usd_to_minor_50",
       "output_queue": "q1_results",
       "extra_env": {

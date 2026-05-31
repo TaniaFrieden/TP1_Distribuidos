@@ -4,7 +4,7 @@
     {
       "type": "projection",
       "prefix": "q4_projection",
-      "replicas": 2,
+      "replicas": "$CANT_Q4_PROJECTION",
       "input_queue": "q4_pre_projection",
       "output_queue": "q4_projected",
       "extra_env": {
@@ -15,11 +15,11 @@
     {
       "type": "filter",
       "prefix": "q4_filter_period",
-      "replicas": 2,
+      "replicas": "$CANT_Q4_FILTER",
       "input_queue": "q4_projected",
       "output_queue": [
-        {"queue_shard_prefix": "q4_to_sumador", "total_workers": 3, "hash_fields": ["From Bank", "Account"]},
-        {"queue_shard_prefix": "q4_to_joiner", "total_workers": 3, "hash_fields": ["From Bank", "Account"]}
+        {"queue_shard_prefix": "q4_to_sumador", "total_workers": "$CANT_Q4_SHARDS", "hash_fields": ["From Bank", "Account"]},
+        {"queue_shard_prefix": "q4_to_joiner", "total_workers": "$CANT_Q4_SHARDS", "hash_fields": ["From Bank", "Account"]}
       ],
       "extra_env": {
         "FILTER_FIELD": "Timestamp",
@@ -30,9 +30,9 @@
     {
       "type": "group_distinct_counter",
       "prefix": "q4_sumador",
-      "replicas": 3,
+      "replicas": "$CANT_Q4_SHARDS",
       "input_queue": "q4_to_sumador_{id}",
-      "output_queue": [{"queue_shard_prefix": "q4_scatter_edges", "total_workers": 3, "hash_fields": ["to_bank", "to_account"]}],
+      "output_queue": [{"queue_shard_prefix": "q4_scatter_edges", "total_workers": "$CANT_Q4_SHARDS", "hash_fields": ["to_bank", "to_account"]}],
       "extra_env": {
         "GROUP_FIELDS": "From Bank,Account",
         "GROUP_OUTPUT_FIELDS": "from_bank,from_account",
@@ -46,14 +46,14 @@
     {
       "type": "joiner_q4",
       "prefix": "q4_joiner",
-      "replicas": 3,
+      "replicas": "$CANT_Q4_SHARDS",
       "input_queue": ["q4_scatter_edges_{id}", "q4_to_joiner_{id}"],
-      "output_queue": [{"queue_shard_prefix": "q4_paths", "total_workers": 3, "hash_fields": ["a_bank", "a_account", "c_bank", "c_account"]}]
+      "output_queue": [{"queue_shard_prefix": "q4_paths", "total_workers": "$CANT_Q4_SHARDS", "hash_fields": ["a_bank", "a_account", "c_bank", "c_account"]}]
     },
     {
       "type": "group_distinct_counter",
       "prefix": "q4_contador",
-      "replicas": 3,
+      "replicas": "$CANT_Q4_SHARDS",
       "input_queue": "q4_paths_{id}",
       "output_queue": "q4_results",
       "extra_env": {

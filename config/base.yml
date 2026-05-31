@@ -46,92 +46,24 @@ services:
       - "5672:5672"
       - "15672:15672"
 
-  shared_filter_usd_01:
+  client:
     build:
       context: ./src
-      dockerfile: workers/filter/Dockerfile
-    container_name: shared_filter_usd_01
+      dockerfile: client/Dockerfile
+    profiles:
+      - clients
     depends_on:
-      rabbitmq:
-        condition: service_healthy
       gateway:
         condition: service_started
     volumes:
-      - ./logs:/app/logs
+      - ./datasets:/app/datasets
+      - ./output:/app/output
     environment:
       PYTHONUNBUFFERED: '1'
-      LOG_LEVEL: INFO
-      MOM_HOST: rabbitmq
-      MOM_PORT: '5672'
-      MOM_USER: distributed
-      MOM_PASSWORD: distributed
-      MOM_VHOST: /
-      INPUT_QUEUES: raw_data
-      OUTPUT_QUEUES: '["q1_pre_projection", "q2_pre_projection", "q3_usd_filtered", "q4_pre_projection"]'
-      NODE_PREFIX: shared_filter_usd
-      ID: '1'
-      TOTAL_WORKERS: '3'
-      LOG_FILE: /app/logs/shared_filter_usd_01.txt
-      FILTER_FIELD: Payment Currency
-      FILTER_VALUE: US Dollar
-      FILTER_OPERATOR: eq
-
-  shared_filter_usd_02:
-    build:
-      context: ./src
-      dockerfile: workers/filter/Dockerfile
-    container_name: shared_filter_usd_02
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      gateway:
-        condition: service_started
-    volumes:
-      - ./logs:/app/logs
-    environment:
-      PYTHONUNBUFFERED: '1'
-      LOG_LEVEL: INFO
-      MOM_HOST: rabbitmq
-      MOM_PORT: '5672'
-      MOM_USER: distributed
-      MOM_PASSWORD: distributed
-      MOM_VHOST: /
-      INPUT_QUEUES: raw_data
-      OUTPUT_QUEUES: '["q1_pre_projection", "q2_pre_projection", "q3_usd_filtered", "q4_pre_projection"]'
-      NODE_PREFIX: shared_filter_usd
-      ID: '2'
-      TOTAL_WORKERS: '3'
-      LOG_FILE: /app/logs/shared_filter_usd_02.txt
-      FILTER_FIELD: Payment Currency
-      FILTER_VALUE: US Dollar
-      FILTER_OPERATOR: eq
-
-  shared_filter_usd_03:
-    build:
-      context: ./src
-      dockerfile: workers/filter/Dockerfile
-    container_name: shared_filter_usd_03
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      gateway:
-        condition: service_started
-    volumes:
-      - ./logs:/app/logs
-    environment:
-      PYTHONUNBUFFERED: '1'
-      LOG_LEVEL: INFO
-      MOM_HOST: rabbitmq
-      MOM_PORT: '5672'
-      MOM_USER: distributed
-      MOM_PASSWORD: distributed
-      MOM_VHOST: /
-      INPUT_QUEUES: raw_data
-      OUTPUT_QUEUES: '["q1_pre_projection", "q2_pre_projection", "q3_usd_filtered", "q4_pre_projection"]'
-      NODE_PREFIX: shared_filter_usd
-      ID: '3'
-      TOTAL_WORKERS: '3'
-      LOG_FILE: /app/logs/shared_filter_usd_03.txt
-      FILTER_FIELD: Payment Currency
-      FILTER_VALUE: US Dollar
-      FILTER_OPERATOR: eq
+      SERVER_HOST: gateway
+      SERVER_PORT: '5678'
+      TRANSACTIONS_FILE: /app/datasets/transacciones_sample.csv
+      ACCOUNTS_FILE: /app/datasets/accounts_sample.csv
+      OUTPUT_DIR: /app/output
+      OUTPUT_APPEND_HOSTNAME: 'true'
+      BATCH_SIZE: '2500'

@@ -7,6 +7,7 @@ import os
 CONFIG_BASE = 'config/base.yml'
 CONFIG_QUERIES = 'config/queries/*.json'
 WORKER_TYPES_FILE = 'config/worker_types.json'
+WORKERS_CONFIG_FILE = 'config/workers.json'
 
 
 def _serializar_valor_env(valor):
@@ -34,6 +35,62 @@ def _expandir_input_queues(input_queue, worker_id):
     return input_queue
 
 
+def _resolver_variables(obj, workers_config):
+    if isinstance(obj, str) and obj.startswith('$'):
+        key = obj[1:]
+        if key not in workers_config:
+            print(f"[WARN] Variable '{key}' no encontrada en workers.json, usando 1")
+        return workers_config.get(key, 1)
+    if isinstance(obj, dict):
+        return {k: _resolver_variables(v, workers_config) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_resolver_variables(item, workers_config) for item in obj]
+    return obj
+
+
+def _generar_servicio(node, worker_config, workers_config, compose_data):
+    node = _resolver_variables(node, workers_config)
+
+    worker_type = node['type']
+    base_config = worker_config.get(worker_type, {})
+    prefix = node['prefix']
+    replicas = node.get('replicas', 1)
+
+    for i in range(1, replicas + 1):
+        worker_id = str(i)
+        worker_name = f"{prefix}_{i:02d}"
+
+        env = base_config.get('default_env', {}).copy()
+        env.update({
+            'MOM_HOST': 'rabbitmq',
+            'MOM_PORT': '5672',
+            'MOM_USER': 'distributed',
+            'MOM_PASSWORD': 'distributed',
+            'MOM_VHOST': '/',
+            'INPUT_QUEUES': _serializar_valor_env(
+                _expandir_input_queues(node['input_queue'], worker_id)
+            ),
+            'OUTPUT_QUEUES': _serializar_valor_env(node['output_queue']),
+            'NODE_PREFIX': prefix,
+            'ID': worker_id,
+            'TOTAL_WORKERS': str(replicas),
+            'LOG_LEVEL': 'WARNING',
+            'LOG_FILE': f'/app/logs/{worker_name}.txt'
+        })
+        env.update(node.get('extra_env', {}))
+
+        compose_data['services'][worker_name] = {
+            'build': {'context': './src', 'dockerfile': base_config['dockerfile']},
+            'container_name': worker_name,
+            'depends_on': {
+                'rabbitmq': {'condition': 'service_healthy'},
+                'gateway': {'condition': 'service_started'}
+            },
+            'volumes': ['./logs:/app/logs'],
+            'environment': env
+        }
+
+
 def generar_compose():
     args = sys.argv[1:]
 
@@ -43,9 +100,16 @@ def generar_compose():
     with open(WORKER_TYPES_FILE, 'r') as f:
         worker_config = json.load(f)
 
+    with open(WORKERS_CONFIG_FILE, 'r') as f:
+        workers_config = json.load(f)
+
     input_queues = []
-    output_queues = []  # puede tener duplicados si varias queries comparten cola
+    output_queues = []
     bank_queue_config = None
+
+    # Shared workers — siempre se generan
+    for node in workers_config.get('shared_workers', []):
+        _generar_servicio(node, worker_config, workers_config, compose_data)
 
     query_files = sorted(glob.glob(CONFIG_QUERIES))
 
@@ -58,7 +122,6 @@ def generar_compose():
         with open(q_file, 'r') as f:
             data = json.load(f)
 
-        # Cola de entrada al gateway para esta query — override con "gateway_queue"
         gateway_out = data.get('gateway_queue', f"q{query_number}_raw_data")
         if gateway_out not in output_queues:
             output_queues.append(gateway_out)
@@ -66,49 +129,13 @@ def generar_compose():
         input_queues.append(f"q{query_number}_results")
 
         if bank_queue_config is None:
-            bank_queue_config = data.get('bank_queue') or data.get('banks_shard')
+            raw = data.get('bank_queue') or data.get('banks_shard')
+            if raw is not None:
+                bank_queue_config = _resolver_variables(raw, workers_config)
 
         for node in data.get('workers', []):
-            worker_type = node['type']
-            base_config = worker_config.get(worker_type, {})
-            prefix = node['prefix']
-            replicas = node.get('replicas', 1)
+            _generar_servicio(node, worker_config, workers_config, compose_data)
 
-            for i in range(1, replicas + 1):
-                worker_id = str(i)
-                worker_name = f"{prefix}_{i:02d}"
-
-                env = base_config.get('default_env', {}).copy()
-                env.update({
-                    'MOM_HOST': 'rabbitmq',
-                    'MOM_PORT': '5672',
-                    'MOM_USER': 'distributed',
-                    'MOM_PASSWORD': 'distributed',
-                    'MOM_VHOST': '/',
-                    'INPUT_QUEUES': _serializar_valor_env(
-                        _expandir_input_queues(node['input_queue'], worker_id)
-                    ),
-                    'OUTPUT_QUEUES': _serializar_valor_env(node['output_queue']),
-                    'NODE_PREFIX': prefix,
-                    'ID': worker_id,
-                    'TOTAL_WORKERS': str(replicas),
-                    'LOG_LEVEL': 'INFO',
-                    'LOG_FILE': f'/app/logs/{worker_name}.txt'
-                })
-                env.update(node.get('extra_env', {}))
-
-                compose_data['services'][worker_name] = {
-                    'build': {'context': './src', 'dockerfile': base_config['dockerfile']},
-                    'container_name': worker_name,
-                    'depends_on': {
-                        'rabbitmq': {'condition': 'service_healthy'},
-                        'gateway': {'condition': 'service_started'}
-                    },
-                    'volumes': ['./logs:/app/logs'],
-                    'environment': env
-                }
-
-    # Actualizar Gateway
     if 'gateway' in compose_data['services']:
         env = compose_data['services']['gateway']['environment']
         env['OUTPUTS_QUEUE'] = ", ".join(output_queues)

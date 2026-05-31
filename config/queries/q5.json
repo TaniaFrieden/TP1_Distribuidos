@@ -3,7 +3,7 @@
     {
       "type": "projection",
       "prefix": "q5_projection",
-      "replicas": 4,
+      "replicas": "$CANT_Q5_PROJECTION",
       "input_queue": "q5_raw_data",
       "output_queue": "q5_projected_data",
       "extra_env": {
@@ -13,7 +13,7 @@
     {
       "type": "filter",
       "prefix": "q5_filter_period",
-      "replicas": 4,
+      "replicas": "$CANT_Q5_FILTER_PERIOD",
       "input_queue": "q5_projected_data",
       "output_queue": "q5_period_to_format",
       "extra_env": {
@@ -25,7 +25,7 @@
     {
       "type": "filter",
       "prefix": "q5_filter_format",
-      "replicas": 2,
+      "replicas": "$CANT_Q5_FILTER_FORMAT",
       "input_queue": "q5_period_to_format",
       "output_queue": "q5_format_to_convert",
       "extra_env": {
@@ -37,7 +37,7 @@
     {
       "type": "converter",
       "prefix": "q5_converter",
-      "replicas": 2,
+      "replicas": "$CANT_Q5_CONVERTER",
       "input_queue": "q5_format_to_convert",
       "output_queue": "q5_filtered",
       "extra_env": {
@@ -48,7 +48,7 @@
     {
       "type": "counter",
       "prefix": "q5_counter",
-      "replicas": 1,
+      "replicas": "$CANT_Q5_COUNTER",
       "input_queue": "q5_filtered",
       "output_queue": "q5_results"
     }
