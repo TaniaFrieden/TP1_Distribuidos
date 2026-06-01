@@ -41,7 +41,8 @@ class MessageMiddlewareQueueRabbitMQ(RabbitMQBase):
         self.channel.basic_publish(
             exchange='',
             routing_key=self.queue_name,
-            body=message
+            body=message,
+            properties=pika.BasicProperties(delivery_mode=2)
         )
 
     @handle_pika_errors("empezar a consumir")
@@ -87,7 +88,8 @@ class MessageMiddlewareExchangeRabbitMQ(RabbitMQBase):
         self.channel.basic_publish(
             exchange=self.exchange_name,
             routing_key=routing_key,
-            body=message
+            body=message,
+            properties=pika.BasicProperties(delivery_mode=2)
         )
 
 class DefaultExchangeRabbitMQ(RabbitMQBase):    
@@ -99,7 +101,8 @@ class DefaultExchangeRabbitMQ(RabbitMQBase):
         self.channel.basic_publish(
             exchange='',
             routing_key=routing_key,
-            body=message
+            body=message,
+            properties=pika.BasicProperties(delivery_mode=2)
         )
 
 class DirectQueueRabbitMQ(MessageMiddlewareQueueRabbitMQ):
