@@ -8,6 +8,9 @@ class WorkerConfig:
         self.node_prefix = os.getenv("NODE_PREFIX", "node")
         self.node_id = int(os.getenv("ID", "0"))
         self.total_workers = int(os.getenv("TOTAL_WORKERS", "1"))
+        self.heartbeat_interval_seconds = float(
+            os.getenv("HEARTBEAT_INTERVAL_SECONDS", "5")
+        )
         
         self.input_queues = self._parse_json_env("INPUT_QUEUES")
         self.output_queues = self._parse_json_env("OUTPUT_QUEUES")
