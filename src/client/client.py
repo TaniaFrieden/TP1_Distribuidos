@@ -20,20 +20,24 @@ def main():
     if not sock:
         return 1
 
+    client_id = None
     try:
         msg_type, payload = message_protocol.external.recv_msg(sock)
         if msg_type == message_protocol.external.MsgType.CONFIG_QUERIES:
-            queries = json.loads(payload)
-            logging.info(f"Queries configuradas en el sistema: {queries}")
+            config_data = json.loads(payload)
+            queries = config_data.get("queries", [])
+            client_id = config_data.get("client_id")
+            logging.info(f"Queries configuradas: {queries}, ID Asignado por Gateway: {client_id}")
         else:
-            logging.warning("No se recibió la configuración de queries esperada del gateway. Usando lista vacía.")
+            logging.warning("No se recibió la configuración esperada del gateway. Usando valores vacíos.")
             queries = []
     except Exception as e:
-        logging.error(f"Error recibiendo configuración de queries: {e}")
+        logging.error(f"Error recibiendo configuración del gateway: {e}")
         queries = []
 
-    client_id = str(uuid.uuid4())
-    logging.info(f"Cliente iniciado con ID: {client_id}")
+    if not client_id:
+        client_id = str(uuid.uuid4())
+        logging.warning(f"No se recibió ID del gateway. Generando fallback local: {client_id}")
 
     socket_lock = threading.Lock()
     shutdown_event = threading.Event()
@@ -62,7 +66,7 @@ def _conectar_socket():
 def _iniciar_hilos(sock, lock, client_id, queries, inicio_envio, shutdown_event):
     hilo_receptor = threading.Thread(
         target=escuchar_respuesta,
-        args=(sock, queries, inicio_envio),
+        args=(sock, queries, inicio_envio, client_id),
         daemon=True
     )
 

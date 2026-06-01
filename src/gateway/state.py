@@ -6,7 +6,14 @@ class GatewayState:
         self.clientes_locks = {}
         self.clientes_eof_status = {}
         self.servidor_corriendo = True
+        self.proximo_client_id = 0
         self.state_lock = threading.Lock()
+
+    def generar_siguiente_id(self):
+        with self.state_lock:
+            client_id = str(self.proximo_client_id)
+            self.proximo_client_id += 1
+            return client_id
 
     def registrar_cliente(self, client_id, socket_cliente):
         with self.state_lock:

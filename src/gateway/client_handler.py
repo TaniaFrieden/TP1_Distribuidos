@@ -15,6 +15,10 @@ class ClientHandler:
         self.state = state
 
     def atender(self, client_socket):
+        client_id = self.state.generar_siguiente_id()
+        self.state.registrar_cliente(client_id, client_socket)
+        logger.info(f"Cliente {client_id} conectado e inicializado en Gateway")
+
         try:
             queries = []
             for q in self.config.input_queues:
@@ -24,13 +28,14 @@ class ClientHandler:
                 except (IndexError, ValueError):
                     pass
             queries.sort()
-            config_payload = json.dumps(queries)
-            logger.info(f"Enviando configuración de queries al cliente: {config_payload}")
+            config_payload = json.dumps({
+                "queries": queries,
+                "client_id": client_id
+            })
+            logger.info(f"Enviando configuración de queries e ID al cliente: {config_payload}")
             message_protocol.external.send_msg(client_socket, message_protocol.external.MsgType.CONFIG_QUERIES, config_payload)
         except Exception as e:
-            logger.error(f"Error enviando configuración de queries al cliente: {e}")
-
-        client_id = None
+            logger.error(f"Error enviando configuración al cliente: {e}")
         
         colas_tx = [middleware.MessageMiddlewareQueueRabbitMQ(self.config.mom_host, q) for q in self.config.output_queues]
         colas_bancos = {}
