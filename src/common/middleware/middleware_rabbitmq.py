@@ -1,5 +1,5 @@
 import pika
-from .rabbitmq_base import RabbitMQBase, handle_pika_errors
+from .rabbitmq_base import RabbitMQBase, handle_pika_errors, handle_pika_send_errors
 
 MAX_MESSAGES_PER_WORKER = 150
 DIRECT_EXCHANGE_TYPE = 'direct'
@@ -9,10 +9,18 @@ class MessageMiddlewareQueueRabbitMQ(RabbitMQBase):
     def __init__(self, host, queue_name, exchange_name=None, exchange_type=DIRECT_EXCHANGE_TYPE):
         super().__init__(host)
         self.queue_name = queue_name
+        self._exchange_name = exchange_name
+        self._exchange_type = exchange_type
         self._declare_queue()
         if exchange_name:
             self._declare_exchange(exchange_name, exchange_type)
             self._bind_queue(exchange_name)
+
+    def _setup(self):
+        self._declare_queue()
+        if self._exchange_name:
+            self._declare_exchange(self._exchange_name, self._exchange_type)
+            self._bind_queue(self._exchange_name)
 
     @handle_pika_errors("declarar exchange")
     def _declare_exchange(self, exchange_name, exchange_type):
@@ -36,7 +44,7 @@ class MessageMiddlewareQueueRabbitMQ(RabbitMQBase):
         )
         self.channel.basic_qos(prefetch_count=MAX_MESSAGES_PER_WORKER)
 
-    @handle_pika_errors("enviar a la cola")
+    @handle_pika_send_errors("enviar a la cola")
     def send(self, message):
         self.channel.basic_publish(
             exchange='',
@@ -69,21 +77,24 @@ class MessageMiddlewareQueueRabbitMQ(RabbitMQBase):
 
 class MessageMiddlewareExchangeRabbitMQ(RabbitMQBase):
     """Clase base para Exchanges. Hereda lógica de conexión y de publicación."""
-    
+
     def __init__(self, host, exchange_name, exchange_type):
         super().__init__(host)
         self.exchange_name = exchange_name
         self.exchange_type = exchange_type
         self._declare_exchange()
 
+    def _setup(self):
+        self._declare_exchange()
+
     @handle_pika_errors("declarar exchange")
     def _declare_exchange(self):
         self.channel.exchange_declare(
-            exchange=self.exchange_name, 
+            exchange=self.exchange_name,
             exchange_type=self.exchange_type
         )
 
-    @handle_pika_errors("enviar mensaje")
+    @handle_pika_send_errors("enviar mensaje")
     def send(self, message, routing_key=""):
         self.channel.basic_publish(
             exchange=self.exchange_name,
@@ -92,11 +103,11 @@ class MessageMiddlewareExchangeRabbitMQ(RabbitMQBase):
             properties=pika.BasicProperties(delivery_mode=2)
         )
 
-class DefaultExchangeRabbitMQ(RabbitMQBase):    
+class DefaultExchangeRabbitMQ(RabbitMQBase):
     def __init__(self, host):
         super().__init__(host)
 
-    @handle_pika_errors("enviar mensaje (default exchange)")
+    @handle_pika_send_errors("enviar mensaje (default exchange)")
     def send(self, message, routing_key):
         self.channel.basic_publish(
             exchange='',
