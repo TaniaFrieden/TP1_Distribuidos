@@ -127,7 +127,11 @@ class BaseWorker(ABC):
                     self.coordinator.descontar_vuelo(client_id)
                     nack()
 
-                self.procesar_payload(queue_name, client_id, mensaje_json, mensaje, ack_wrapper, nack_wrapper)
+                try:
+                    self.procesar_payload(queue_name, client_id, mensaje_json, mensaje, ack_wrapper, nack_wrapper)
+                except Exception as e:
+                    self.coordinator.descontar_vuelo(client_id)
+                    raise e
 
         except json.JSONDecodeError:
             logger.warning("Mensaje no JSON omitido.")
@@ -146,7 +150,10 @@ class BaseWorker(ABC):
             self.al_completar_cliente(client_id)
         else:
             logger.info(f"[{self.__class__.__name__}] Barrera completa, reenviando EOF para client_id={client_id}.")
-            self._enviar(mensaje_original)
+            try:
+                self._enviar(mensaje_original)
+            except Exception as e:
+                logger.warning(f"[{self.__class__.__name__}] Error al reenviar EOF al downstream (puede que el downstream ya esté cerrado o la conexión se haya reseteado): {e}")
 
     def interceptar_eof(self, queue_name: str, client_id: str, payload: dict, mensaje_original: bytes) -> bool:
         """

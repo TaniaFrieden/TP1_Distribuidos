@@ -3,6 +3,9 @@ PIP := $(PYTHON) -m pip
 PYTEST := PYTHONPATH=src $(PYTHON) -m pytest
 START_VERBOSE := $(if $(filter --verbose,$(MAKECMDGOALS)),1,0)
 
+# Detección automática de Docker Compose (v1 o v2)
+DOCKER_COMPOSE := $(shell docker compose version >/dev/null 2>&1 && echo "docker compose" || echo "docker-compose")
+
 # Variables del cliente
 OUTPUT_DIR ?= output
 SERVER_HOST ?= 127.0.0.1
@@ -74,7 +77,7 @@ test-worker-base:
 clean:
 	-@$(MAKE) free-ports
 	-@$(MAKE) down
-	-docker compose down --vols --remove-orphans 2>/dev/null || true
+	-$(DOCKER_COMPOSE) down --vols --remove-orphans 2>/dev/null || true
 	-docker network prune -f 2>/dev/null || true
 	rm -rf .pytest_cache
 	find . -type d -name '__pycache__' -prune -exec rm -rf {} +
@@ -115,7 +118,7 @@ client:
 
 
 run-clients:
-	docker compose --profile clients up --build --scale client=$(SCALE)
+	$(DOCKER_COMPOSE) --profile clients up --build --scale client=$(SCALE)
 
 gateway:
 	@if command -v fuser >/dev/null 2>&1; then fuser -k $(SERVER_PORT)/tcp >/dev/null 2>&1 || true; fi
@@ -128,13 +131,13 @@ gateway:
 
 start:
 	@if [ "$(START_VERBOSE)" = "1" ]; then \
-		docker compose up --build; \
+		$(DOCKER_COMPOSE) up --build; \
 	else \
-		docker compose up -d --build; \
+		$(DOCKER_COMPOSE) up -d --build; \
 	fi
 
 down:
-	docker compose down
+	$(DOCKER_COMPOSE) down
 
 generar:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
@@ -153,7 +156,7 @@ log:
 		echo "Ejemplo: make log gateway"; \
 		exit 1; \
 	fi
-	docker compose logs -f $(filter-out $@,$(MAKECMDGOALS))
+	$(DOCKER_COMPOSE) logs -f $(filter-out $@,$(MAKECMDGOALS))
 
 iterar:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \

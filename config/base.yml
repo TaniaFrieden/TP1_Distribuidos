@@ -14,7 +14,7 @@ services:
       - ./logs:/app/logs
     environment:
       PYTHONUNBUFFERED: '1'
-      LOG_LEVEL: WARNING
+      LOG_LEVEL: INFO
       LOG_FILE: /app/logs/gateway.txt
       SERVER_HOST: gateway
       SERVER_PORT: '5678'
@@ -82,7 +82,7 @@ services:
       - ./logs:/app/logs
     environment:
       PYTHONUNBUFFERED: '1'
-      LOG_LEVEL: WARNING
+      LOG_LEVEL: INFO
       MOM_HOST: rabbitmq
       MOM_PORT: '5672'
       MOM_USER: distributed
@@ -112,7 +112,7 @@ services:
       - ./logs:/app/logs
     environment:
       PYTHONUNBUFFERED: '1'
-      LOG_LEVEL: WARNING
+      LOG_LEVEL: INFO
       MOM_HOST: rabbitmq
       MOM_PORT: '5672'
       MOM_USER: distributed
@@ -142,7 +142,7 @@ services:
       - ./logs:/app/logs
     environment:
       PYTHONUNBUFFERED: '1'
-      LOG_LEVEL: WARNING
+      LOG_LEVEL: INFO
       MOM_HOST: rabbitmq
       MOM_PORT: '5672'
       MOM_USER: distributed

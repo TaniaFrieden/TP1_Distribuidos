@@ -69,6 +69,7 @@ class BackendListener:
                     header = batch["header"]
                     schema = header["schema"]
                     records = batch["payload"]
+                    logger.info(f"Resultado recibido para {cola_nombre} a {client_id} con {len(records)} registros.")
                     resultado_lista = [
                         {**dict(zip(schema, record_values)), "eof": False}
                         for record_values in records

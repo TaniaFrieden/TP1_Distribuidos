@@ -49,6 +49,7 @@ class GenericFilterWorker(BaseWorker):
                     header = batch["header"]
                     schema = header["schema"]
                     records = batch["payload"]
+                    logger.info(f"[{self.__class__.__name__}] Recibidos {len(records)} registros para filtrar del cliente {client_id}")
                     
                     filtered_records = []
                     for record_values in records:

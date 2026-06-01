@@ -6,7 +6,7 @@ import signal
 import pytest
 from unittest.mock import MagicMock, patch, call
 
-from common.worker_base.base import BaseWorker
+from workers.base.base import BaseWorker
 
 
 # ------------------------------------------------------------------
@@ -21,8 +21,8 @@ class WorkerDePrueba(BaseWorker):
         self._al_cerrar_llamado = False
         super().__init__()
 
-    def procesar_mensaje(self, mensaje: bytes, ack, nack):
-        self._mensajes_procesados.append(mensaje)
+    def procesar_payload(self, queue_name: str, client_id: str, payload: dict, mensaje_original: bytes, ack, nack):
+        self._mensajes_procesados.append(mensaje_original)
         ack()
 
     def al_cerrar(self):
@@ -36,16 +36,16 @@ class WorkerDePrueba(BaseWorker):
 @pytest.fixture(autouse=True)
 def mock_middleware():
     """Parchea las 3 conexiones al middleware para todos los tests."""
-    with patch("common.worker_base.base.middleware.MessageMiddlewareQueueRabbitMQ") as mock_queue_cls, \
-         patch("common.worker_base.base.middleware.FanoutExchangeRabbitMQ") as mock_exchange_cls:
+    with patch("common.middleware.MessageMiddlewareQueueRabbitMQ") as mock_queue_cls, \
+         patch("common.middleware.FanoutQueueRabbitMQ") as mock_fanout_queue_cls, \
+         patch("common.middleware.FanoutExchangeRabbitMQ") as mock_exchange_cls:
 
         mock_input_queue   = MagicMock()
         mock_control_queue = MagicMock()
         mock_exchange      = MagicMock()
 
-        # El constructor llama a MessageMiddlewareQueueRabbitMQ dos veces:
-        # primera vez → input_queue, segunda vez → control_queue
-        mock_queue_cls.side_effect = [mock_input_queue, mock_control_queue]
+        mock_queue_cls.return_value = mock_input_queue
+        mock_fanout_queue_cls.return_value = mock_control_queue
         mock_exchange_cls.return_value = mock_exchange
 
         yield {
@@ -53,6 +53,7 @@ def mock_middleware():
             "control_queue": mock_control_queue,
             "exchange":      mock_exchange,
             "queue_cls":     mock_queue_cls,
+            "fanout_queue_cls": mock_fanout_queue_cls,
             "exchange_cls":  mock_exchange_cls,
         }
 
@@ -194,7 +195,7 @@ class TestCallbackInterno:
 
     def test_excepcion_en_procesar_mensaje_llama_nack(self, mock_middleware):
         class WorkerQueExplota(BaseWorker):
-            def procesar_mensaje(self, mensaje, ack, nack):
+            def procesar_payload(self, queue_name: str, client_id: str, payload: dict, mensaje_original: bytes, ack, nack):
                 raise ValueError("error de negocio")
             def al_cerrar(self):
                 pass
@@ -211,7 +212,7 @@ class TestCallbackInterno:
 
     def test_excepcion_en_procesar_mensaje_no_tira_el_worker(self, mock_middleware):
         class WorkerQueExplota(BaseWorker):
-            def procesar_mensaje(self, mensaje, ack, nack):
+            def procesar_payload(self, queue_name: str, client_id: str, payload: dict, mensaje_original: bytes, ack, nack):
                 raise ValueError("error de negocio")
             def al_cerrar(self):
                 pass
@@ -240,7 +241,7 @@ class TestAlCerrar:
         orden = []
 
         class WorkerConOrden(BaseWorker):
-            def procesar_mensaje(self, mensaje, ack, nack):
+            def procesar_payload(self, queue_name: str, client_id: str, payload: dict, mensaje_original: bytes, ack, nack):
                 ack()
             def al_cerrar(self):
                 orden.append("al_cerrar")
@@ -257,7 +258,7 @@ class TestAlCerrar:
 
     def test_excepcion_en_al_cerrar_no_impide_cerrar_middleware(self, mock_middleware):
         class WorkerAlCerrarFalla(BaseWorker):
-            def procesar_mensaje(self, mensaje, ack, nack):
+            def procesar_payload(self, queue_name: str, client_id: str, payload: dict, mensaje_original: bytes, ack, nack):
                 ack()
             def al_cerrar(self):
                 raise RuntimeError("fallo en cleanup")

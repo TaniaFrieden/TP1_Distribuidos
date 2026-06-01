@@ -50,6 +50,7 @@ class RabbitMQBase:
            )
         )
         self.channel = self.connection.channel()
+        self.channel.confirm_delivery()
 
     def __enter__(self):
         return self

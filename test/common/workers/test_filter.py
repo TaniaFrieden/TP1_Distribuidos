@@ -18,7 +18,7 @@ def _cargar_modulo_filter(filter_type: str):
     }
 
     with patch.dict(os.environ, env, clear=False):
-        base_module = "common.worker_base.base"
+        base_module = "workers.base.base"
         filter_module = "workers.filter.main"
 
         if base_module in sys.modules:
@@ -49,10 +49,10 @@ def _crear_worker(filter_type: str):
     control_exchange.close = MagicMock()
 
     with patch(
-        "common.worker_base.base.middleware.MessageMiddlewareQueueRabbitMQ",
+        "workers.base.base.middleware.MessageMiddlewareQueueRabbitMQ",
         side_effect=[input_queue, control_queue],
     ), patch(
-        "common.worker_base.base.middleware.FanoutExchangeRabbitMQ",
+        "workers.base.base.middleware.FanoutExchangeRabbitMQ",
         return_value=control_exchange,
     ):
         worker = module.FilterWorker()
@@ -66,9 +66,9 @@ class TestInicializacion:
         module = _cargar_modulo_filter("INVALIDO")
 
         with patch(
-            "common.worker_base.base.middleware.MessageMiddlewareQueueRabbitMQ"
+            "workers.base.base.middleware.MessageMiddlewareQueueRabbitMQ"
         ), patch(
-            "common.worker_base.base.middleware.FanoutExchangeRabbitMQ"
+            "workers.base.base.middleware.FanoutExchangeRabbitMQ"
         ):
             with pytest.raises(ValueError, match="no reconocido"):
                 module.FilterWorker()
