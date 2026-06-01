@@ -2,7 +2,9 @@ import signal
 import logging
 import threading
 import json
+import time
 from abc import ABC, abstractmethod
+from common import middleware
 
 try:
     from config import WorkerConfig          # Docker runtime (archivos copiados al root)
@@ -23,8 +25,12 @@ class BaseWorker(ABC):
     def __init__(self):
         self._cierre_solicitado = False
         self.condicion_pendiente = threading.Condition(threading.Lock())
+        self._heartbeat_stop_event = threading.Event()
+        self._heartbeat_thread = None
 
         self.config = WorkerConfig()
+        self._heartbeat_queue_name = f"heartbeat.{self.config.node_prefix}"
+        self._heartbeat_instance_id = f"{self.config.node_id:02d}"
         self.router = MessageRouter(self.config)
         self.coordinator = DistributedCoordinator(
             self.config, 
@@ -40,6 +46,7 @@ class BaseWorker(ABC):
     def _manejar_senal_cierre(self, num_senal, frame):
         logger.info(f"[{self.__class__.__name__}] Señal recibida. Cierre graceful…")
         self._cierre_solicitado = True
+        self._heartbeat_stop_event.set()
         
         with self.condicion_pendiente:
             self.condicion_pendiente.notify_all()
@@ -47,10 +54,70 @@ class BaseWorker(ABC):
         self.router.stop_consuming()
         self.coordinator.stop_consuming()
 
+    def _iniciar_heartbeat(self):
+        if self.config.heartbeat_interval_seconds <= 0:
+            logger.info(
+                f"[{self.__class__.__name__}] Heartbeat deshabilitado "
+                f"(intervalo={self.config.heartbeat_interval_seconds})."
+            )
+            return
+
+        self._heartbeat_stop_event.clear()
+        self._heartbeat_thread = threading.Thread(
+            target=self._heartbeat_loop,
+            name=f"{self.__class__.__name__}-heartbeat",
+            daemon=True,
+        )
+        self._heartbeat_thread.start()
+
+    def _heartbeat_loop(self):
+        heartbeat_queue = None
+
+        try:
+            while not self._heartbeat_stop_event.is_set():
+                try:
+                    if heartbeat_queue is None:
+                        heartbeat_queue = middleware.MessageMiddlewareQueueRabbitMQ(
+                            self.config.mom_host,
+                            self._heartbeat_queue_name,
+                        )
+
+                    payload = {
+                        "etapa": self.config.node_prefix,
+                        "instancia": self._heartbeat_instance_id,
+                        "timestamp": time.time(),
+                    }
+                    heartbeat_queue.send(json.dumps(payload).encode("utf-8"))
+                except Exception as e:
+                    if heartbeat_queue is not None:
+                        try:
+                            heartbeat_queue.close()
+                        except Exception:
+                            pass
+                        heartbeat_queue = None
+
+                    if not self._cierre_solicitado:
+                        logger.warning(
+                            f"[{self.__class__.__name__}] Error enviando heartbeat: {e}",
+                            exc_info=True,
+                        )
+
+                if self._heartbeat_stop_event.wait(self.config.heartbeat_interval_seconds):
+                    break
+        finally:
+            if heartbeat_queue is not None:
+                try:
+                    heartbeat_queue.close()
+                except Exception as e:
+                    logger.warning(
+                        f"[{self.__class__.__name__}] Error cerrando heartbeat: {e}"
+                    )
+
     def iniciar(self):
         logger.info(f"[{self.__class__.__name__}] Arrancando worker…")
         try:
             input_threads = []
+            self._iniciar_heartbeat()
             
             for nombre_cola, iq in self.router.input_queues.items():
                 t = threading.Thread(
@@ -75,6 +142,8 @@ class BaseWorker(ABC):
             self._cerrar()
 
     def _cerrar(self):
+        self._heartbeat_stop_event.set()
+
         try:
             self.al_cerrar()
         except Exception as e:
