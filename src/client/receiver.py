@@ -11,14 +11,16 @@ KEY_EOF = 'eof'
 
 OUTPUT_FILE_NAME = "q{q_id}_solucion.csv"
 
-def escuchar_respuesta(sock, queries, inicio_envio):
+def escuchar_respuesta(sock, queries, inicio_envio, client_id):
     logging.info("Hilo receptor activo: Esperando reportes...")
     archivos_salida = {}
     cabeceras_escritas = {}
     tiempos_inicio = {q_id: inicio_envio for q_id in queries}
     q4_accounts = set()
     
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    # Crea siempre el output en la subcarpeta con el ID asignado por el gateway
+    output_path = os.path.join(OUTPUT_DIR, client_id)
+    os.makedirs(output_path, exist_ok=True)
 
     try:
         while True:
@@ -29,7 +31,7 @@ def escuchar_respuesta(sock, queries, inicio_envio):
                 break
 
             if msg_type == message_protocol.external.MsgType.REPORTE:
-                _procesar_resultado(payload, archivos_salida, cabeceras_escritas, tiempos_inicio, inicio_envio, q4_accounts)
+                _procesar_resultado(payload, archivos_salida, cabeceras_escritas, tiempos_inicio, inicio_envio, q4_accounts, output_path)
 
             elif msg_type == message_protocol.external.MsgType.END_OF_RECODS:
                 elapsed = time.perf_counter() - inicio_envio
@@ -40,7 +42,7 @@ def escuchar_respuesta(sock, queries, inicio_envio):
         for f in archivos_salida.values():
             f.close()
 
-def _procesar_resultado(payload, archivos, cabeceras, tiempos_inicio, inicio_envio, q4_accounts):
+def _procesar_resultado(payload, archivos, cabeceras, tiempos_inicio, inicio_envio, q4_accounts, output_path):
     try:
         data = json.loads(payload) if isinstance(payload, str) else payload
     except json.JSONDecodeError:
@@ -57,7 +59,7 @@ def _procesar_resultado(payload, archivos, cabeceras, tiempos_inicio, inicio_env
         logging.info(f"[QUERY {q_id}] Inicio de recepción de resultados.")
 
     if q_id not in archivos:
-        path = os.path.join(OUTPUT_DIR, OUTPUT_FILE_NAME.format(q_id=q_id))
+        path = os.path.join(output_path, OUTPUT_FILE_NAME.format(q_id=q_id))
         archivos[q_id] = open(path, "w", encoding="utf-8")
         cabeceras[q_id] = False
 

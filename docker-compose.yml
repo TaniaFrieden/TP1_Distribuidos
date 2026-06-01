@@ -46,27 +46,6 @@ services:
     ports:
     - 5672:5672
     - 15672:15672
-  client:
-    build:
-      context: ./src
-      dockerfile: client/Dockerfile
-    profiles:
-    - clients
-    depends_on:
-      gateway:
-        condition: service_started
-    volumes:
-    - ./datasets:/app/datasets
-    - ./output:/app/output
-    environment:
-      PYTHONUNBUFFERED: '1'
-      SERVER_HOST: gateway
-      SERVER_PORT: '5678'
-      TRANSACTIONS_FILE: /app/datasets/transacciones_sample.csv
-      ACCOUNTS_FILE: /app/datasets/accounts_sample.csv
-      OUTPUT_DIR: /app/output
-      OUTPUT_APPEND_HOSTNAME: 'true'
-      BATCH_SIZE: '2500'
   shared_filter_usd_01:
     build:
       context: ./src

@@ -80,7 +80,9 @@ def main():
             continue
 
         for query in queries:
-            actual_csv = project_root / ACTUAL_TEMPLATE.format(q=query)
+            # Dado que el gateway asigna IDs secuenciales empezando en 0, para la iteración i el ID es i - 1
+            client_id = str(indice - 1)
+            actual_csv = project_root / "output" / client_id / f"q{query}_solucion.csv"
             expected_csv = project_root / expected_template.format(q=query)
 
             son_iguales, mensaje = comparar_csv_sin_orden(actual_csv, expected_csv)

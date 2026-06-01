@@ -108,13 +108,26 @@ client:
 	TX=$$(echo $$ARGS | cut -d' ' -f1); \
 	ACC=$$(echo $$ARGS | cut -d' ' -f2); \
 	OUT=$$(echo $$ARGS | cut -d' ' -f3); \
-	TRANSACTIONS_FILE=$${TRANSACTIONS_FILE:-$$TX} \
-	ACCOUNTS_FILE=$${ACCOUNTS_FILE:-$$ACC} \
-	OUTPUT_DIR=$${OUTPUT_DIR:-$${OUT:-$(OUTPUT_DIR)}} \
-	SERVER_HOST=$(SERVER_HOST) \
-	SERVER_PORT=$(SERVER_PORT) \
-	BATCH_SIZE=$(BATCH_SIZE) \
-	PYTHONPATH=src $(PYTHON) src/client/client.py
+	TX_FILE=$${TRANSACTIONS_FILE:-$$TX}; \
+	ACC_FILE=$${ACCOUNTS_FILE:-$$ACC}; \
+	OUT_DIR=$${OUTPUT_DIR:-$${OUT:-$(OUTPUT_DIR)}}; \
+	docker build -q -t client-image -f src/client/Dockerfile src 2>/dev/null && \
+	docker rm -f client 2>/dev/null || true; \
+	docker run --rm \
+		--name client \
+		--network host \
+		-v "$(shell pwd)/datasets:/app/datasets" \
+		-v "$(shell pwd)/$$OUT_DIR:/app/$$OUT_DIR" \
+		-v "$(shell pwd)/logs:/app/logs" \
+		-e LOG_FILE="/app/logs/client.txt" \
+		-e OUTPUT_APPEND_HOSTNAME="false" \
+		-e TRANSACTIONS_FILE="$$TX_FILE" \
+		-e ACCOUNTS_FILE="$$ACC_FILE" \
+		-e OUTPUT_DIR="$$OUT_DIR" \
+		-e SERVER_HOST="$(SERVER_HOST)" \
+		-e SERVER_PORT="$(SERVER_PORT)" \
+		-e BATCH_SIZE="$(BATCH_SIZE)" \
+		client-image
 
 
 run-clients:
