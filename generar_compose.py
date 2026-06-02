@@ -164,6 +164,30 @@ def generar_compose():
         },
     }
 
+    # Actuador — consume cola "caidas" y reinicia containers via Docker socket
+    compose_data['services']['actuador'] = {
+        'build': {'context': './src', 'dockerfile': 'watchdog/DockerfileActuador'},
+        'container_name': 'actuador',
+        'restart': 'always',
+        'depends_on': {
+            'rabbitmq': {'condition': 'service_healthy'},
+        },
+        'volumes': [
+            '/var/run/docker.sock:/var/run/docker.sock',
+            './logs:/app/logs',
+        ],
+        'environment': {
+            'MOM_HOST': 'rabbitmq',
+            'MOM_PORT': '5672',
+            'MOM_USER': 'distributed',
+            'MOM_PASSWORD': 'distributed',
+            'MOM_VHOST': '/',
+            'CAIDAS_QUEUE': 'caidas',
+            'LOG_LEVEL': 'INFO',
+            'LOG_FILE': '/app/logs/actuador.txt',
+        },
+    }
+
     with open('docker-compose.yml', 'w') as f:
         yaml.dump(compose_data, f, sort_keys=False, default_flow_style=False, width=1000)
 
