@@ -8,6 +8,10 @@ CONFIG_BASE = 'config/base.yml'
 CONFIG_QUERIES = 'config/queries/*.json'
 WORKER_TYPES_FILE = 'config/worker_types.json'
 
+HEARTBEAT_INTERVAL_SECONDS = 5   # workers envían cada N segundos; watchdog usa el mismo valor para calcular timeout
+WATCHDOG_MISSED_THRESHOLD = 3    # misses antes de declarar caída → timeout = HEARTBEAT_INTERVAL × MISSED_THRESHOLD
+WATCHDOG_CHECK_INTERVAL_SECONDS = 5  # con qué frecuencia el hilo revisor del watchdog escanea
+
 
 def _serializar_valor_env(valor):
     if isinstance(valor, (list, dict)):
@@ -46,6 +50,7 @@ def generar_compose():
     input_queues = []
     output_queues = []  # puede tener duplicados si varias queries comparten cola
     bank_queue_config = None
+    watchdog_stages = []  # prefixes de todos los workers para monitorear
 
     query_files = sorted(glob.glob(CONFIG_QUERIES))
 
@@ -92,10 +97,14 @@ def generar_compose():
                     'NODE_PREFIX': prefix,
                     'ID': worker_id,
                     'TOTAL_WORKERS': str(replicas),
+                    'HEARTBEAT_INTERVAL_SECONDS': str(HEARTBEAT_INTERVAL_SECONDS),
                     'LOG_LEVEL': 'INFO',
                     'LOG_FILE': f'/app/logs/{worker_name}.txt'
                 })
                 env.update(node.get('extra_env', {}))
+
+                if prefix not in watchdog_stages:
+                    watchdog_stages.append(prefix)
 
                 compose_data['services'][worker_name] = {
                     'build': {'context': './src', 'dockerfile': base_config['dockerfile']},
@@ -129,6 +138,31 @@ def generar_compose():
         compose_data['services']['rabbitmq'].setdefault('ports', [])
         if '15672:15672' not in compose_data['services']['rabbitmq']['ports']:
             compose_data['services']['rabbitmq']['ports'].append('15672:15672')
+
+    # Watchdog — detecta caídas via heartbeats y publica en cola "caidas"
+    compose_data['services']['watchdog'] = {
+        'build': {'context': './src', 'dockerfile': 'watchdog/Dockerfile'},
+        'container_name': 'watchdog',
+        'depends_on': {
+            'rabbitmq': {'condition': 'service_healthy'},
+            'gateway': {'condition': 'service_started'},
+        },
+        'volumes': ['./logs:/app/logs'],
+        'environment': {
+            'MOM_HOST': 'rabbitmq',
+            'MOM_PORT': '5672',
+            'MOM_USER': 'distributed',
+            'MOM_PASSWORD': 'distributed',
+            'MOM_VHOST': '/',
+            'WATCHDOG_STAGES': json.dumps(watchdog_stages),
+            'HEARTBEAT_INTERVAL_SECONDS': str(HEARTBEAT_INTERVAL_SECONDS),
+            'MISSED_HEARTBEATS_THRESHOLD': str(WATCHDOG_MISSED_THRESHOLD),
+            'CHECK_INTERVAL_SECONDS': str(WATCHDOG_CHECK_INTERVAL_SECONDS),
+            'CAIDAS_QUEUE': 'caidas',
+            'LOG_LEVEL': 'INFO',
+            'LOG_FILE': '/app/logs/watchdog.txt',
+        },
+    }
 
     with open('docker-compose.yml', 'w') as f:
         yaml.dump(compose_data, f, sort_keys=False, default_flow_style=False, width=1000)
