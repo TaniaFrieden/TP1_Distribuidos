@@ -76,8 +76,9 @@ test-worker-base:
 clean:
 	-@$(MAKE) free-ports
 	-@$(MAKE) down
-	-$(DOCKER_COMPOSE) down --vols --remove-orphans 2>/dev/null || true
+	-$(DOCKER_COMPOSE) down -v --remove-orphans 2>/dev/null || true
 	-docker network prune -f 2>/dev/null || true
+	-docker system prune -f --volumes 2>/dev/null || true
 	rm -rf .pytest_cache
 	find . -type d -name '__pycache__' -prune -exec rm -rf {} +
 	rm -f /tmp/client_output.txt
