@@ -16,4 +16,4 @@ SERVER_HOST = os.environ.get("SERVER_HOST", "localhost")
 SERVER_PORT = int(os.environ.get("SERVER_PORT", 8080))
 LOTE_SIZE = int(os.environ.get("BATCH_SIZE", 100))
 
-OUTPUT_DIR = "output"
+OUTPUT_DIR = os.environ.get("OUTPUT_DIR", "output")

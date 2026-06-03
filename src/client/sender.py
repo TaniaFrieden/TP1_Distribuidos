@@ -22,15 +22,15 @@ def _leer_registros_dinamico(filepath):
     return headers, _gen()
 
 def enviar_archivo(filepath, tipo_mensaje, sock, lock, client_id, shutdown_event=None):
-    logging.info(f"Iniciando envío dinámico desde {filepath} para client_id {client_id}")
+    logging.info(f"Enviando {filepath}...")
     try:
         headers, registros = _leer_registros_dinamico(filepath)
         if headers is not None:
             _enviar_lotes(headers, registros, tipo_mensaje, sock, lock, client_id, shutdown_event)
             if shutdown_event and shutdown_event.is_set():
-                logging.info(f"Envío de {filepath} interrumpido por cierre.")
+                logging.info(f"Envío de {filepath} interrumpido.")
             else:
-                logging.info(f"Envío de {filepath} finalizado.")
+                logging.info(f"Envío de {filepath} completado.")
     except Exception as e:
         logging.error(f"Error al procesar {filepath}: {e}")
 

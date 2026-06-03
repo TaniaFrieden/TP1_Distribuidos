@@ -12,7 +12,6 @@ KEY_EOF = 'eof'
 OUTPUT_FILE_NAME = "q{q_id}_solucion.csv"
 
 def escuchar_respuesta(sock, queries, inicio_envio, client_id):
-    logging.info("Hilo receptor activo: Esperando reportes...")
     archivos_salida = {}
     cabeceras_escritas = {}
     tiempos_inicio = {q_id: inicio_envio for q_id in queries}
@@ -21,7 +20,7 @@ def escuchar_respuesta(sock, queries, inicio_envio, client_id):
     # Crea siempre el output en la subcarpeta con el ID asignado por el gateway
     output_path = os.path.join(OUTPUT_DIR, client_id)
     os.makedirs(output_path, exist_ok=True)
-
+    
     try:
         while True:
             try:
@@ -35,7 +34,7 @@ def escuchar_respuesta(sock, queries, inicio_envio, client_id):
 
             elif msg_type == message_protocol.external.MsgType.END_OF_RECODS:
                 elapsed = time.perf_counter() - inicio_envio
-                logging.info(f"[TIMER] Todas las queries completadas en {elapsed:.2f}s")
+                logging.info(f"Todas las queries completadas en {elapsed:.2f}s")
                 break
 
     finally:
@@ -56,7 +55,6 @@ def _procesar_resultado(payload, archivos, cabeceras, tiempos_inicio, inicio_env
 
     if q_id not in tiempos_inicio:
         tiempos_inicio[q_id] = inicio_envio
-        logging.info(f"[QUERY {q_id}] Inicio de recepción de resultados.")
 
     if q_id not in archivos:
         path = os.path.join(output_path, OUTPUT_FILE_NAME.format(q_id=q_id))
@@ -93,6 +91,7 @@ def _procesar_resultado(payload, archivos, cabeceras, tiempos_inicio, inicio_env
                 logging.info(f"[QUERY {q_id}] Finalizada en {time.perf_counter() - inicio_query:.3f} s")
             else:
                 logging.info(f"[QUERY {q_id}] EOF recibido sin inicio registrado")
+            tiempos_inicio.pop(q_id, None)
             break  # EOF cierra el archivo; no procesar más ítems del batch
 
 def _es_eof(resultado):
@@ -124,7 +123,7 @@ def _escribir_datos(q_id, resultado, archivos, cabeceras):
 
 
 def _cerrar_archivo(q_id, archivos):
-    logging.info(f"EOF recibido para query {q_id}")
+    logging.info(f"Resultados de Query {q_id} recibidos por completo.")
     if q_id in archivos:
         archivos[q_id].close()
         del archivos[q_id]

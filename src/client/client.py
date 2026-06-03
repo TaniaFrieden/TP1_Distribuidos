@@ -27,7 +27,9 @@ def main():
             config_data = json.loads(payload)
             queries = config_data.get("queries", [])
             client_id = config_data.get("client_id")
-            logging.info(f"Queries configuradas: {queries}, ID Asignado por Gateway: {client_id}")
+            logging.info(f"Conectado al Gateway")
+            logging.info(f"ID Cliente: {client_id}")
+            logging.info(f"Queries: {queries}")
         else:
             logging.warning("No se recibió la configuración esperada del gateway. Usando valores vacíos.")
             queries = []
@@ -49,15 +51,12 @@ def main():
         _enviar_fin_registros(sock, socket_lock, client_id)
 
     _finalizar_conexion(hilo_receptor, sock)
-    logging.info(f"Cliente finalizado en {time.perf_counter() - inicio_cliente:.3f} s")
-
     return 0
 
 def _conectar_socket():
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         sock.connect((SERVER_HOST, SERVER_PORT))
-        logging.info(f"Conectado a {SERVER_HOST}:{SERVER_PORT}")
         return sock
     except Exception as e:
         logging.error(f"No se pudo conectar al servidor: {e}")
@@ -97,7 +96,6 @@ def _enviar_fin_registros(sock, lock, client_id):
             message_protocol.external.MsgType.END_OF_RECODS,
             client_id
         )
-    logging.info("Señal global de END_OF_RECODS enviada.")
 
 def _finalizar_conexion(hilo_receptor, sock):
     hilo_receptor.join()
@@ -105,7 +103,6 @@ def _finalizar_conexion(hilo_receptor, sock):
         sock.close()
     except Exception:
         pass
-    logging.info("Proceso terminado.")
 
 if __name__ == "__main__":
     sys.exit(main())

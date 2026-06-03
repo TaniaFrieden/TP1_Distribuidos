@@ -1,3 +1,4 @@
+MAKEFLAGS += --no-print-directory
 PYTHON := .venv/bin/python
 PIP := $(PYTHON) -m pip
 PYTEST := PYTHONPATH=src $(PYTHON) -m pytest
@@ -109,15 +110,15 @@ client:
 	TX_FILE=$${TRANSACTIONS_FILE:-$$TX}; \
 	ACC_FILE=$${ACCOUNTS_FILE:-$$ACC}; \
 	OUT_DIR=$${OUTPUT_DIR:-$${OUT:-$(OUTPUT_DIR)}}; \
-	docker build -q -t client-image -f src/client/Dockerfile src 2>/dev/null && \
-	docker rm -f client 2>/dev/null || true; \
+	CLIENT_SUFFIX=$$(date +%s); \
+	docker build -q -t client-image -f src/client/Dockerfile src >/dev/null 2>&1 && \
 	docker run --rm \
-		--name client \
+		--name client_$$CLIENT_SUFFIX \
 		--network host \
 		-v "$(shell pwd)/datasets:/app/datasets" \
 		-v "$(shell pwd)/$$OUT_DIR:/app/$$OUT_DIR" \
 		-v "$(shell pwd)/logs:/app/logs" \
-		-e LOG_FILE="/app/logs/client.txt" \
+		-e LOG_FILE="/app/logs/client_$$CLIENT_SUFFIX.txt" \
 		-e OUTPUT_APPEND_HOSTNAME="false" \
 		-e TRANSACTIONS_FILE="$$TX_FILE" \
 		-e ACCOUNTS_FILE="$$ACC_FILE" \

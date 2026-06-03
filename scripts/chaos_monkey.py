@@ -26,13 +26,22 @@ def run_chaos_monkey(intervalo_min=10, intervalo_max=20):
             print(f"\nSiguiente ataque en {delay:.1f} segundos...")
             time.sleep(delay)
 
-            # Obtener lista de contenedores corriendo en el proyecto
-            contenedores = client.containers.list(filters={"status": "running"})
+            # Obtener lista de contenedores corriendo en el proyecto, tolerando condiciones de carrera
+            contenedores = []
+            for _ in range(3):
+                try:
+                    contenedores = client.containers.list(filters={"status": "running"})
+                    break
+                except docker.errors.NotFound:
+                    time.sleep(0.1)
+                except Exception as e:
+                    print(f"Error al listar contenedores: {e}")
+                    break
             
-            # Filtrar para obtener solo workers (excluyendo bases y servicios de control)
+            # Filtrar para obtener solo workers (excluyendo bases y servicios de control/clientes)
             workers = [
                 c for c in contenedores
-                if c.name not in SERVICIOS_CRITICOS and not any(crit in c.name for crit in SERVICIOS_CRITICOS)
+                if not (c.name.startswith("client") or any(crit in c.name for crit in SERVICIOS_CRITICOS))
             ]
 
             if not workers:
