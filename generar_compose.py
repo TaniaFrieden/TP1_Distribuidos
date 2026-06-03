@@ -67,6 +67,7 @@ def _generar_servicio(node, worker_config, workers_config, compose_data):
             'MOM_USER': 'distributed',
             'MOM_PASSWORD': 'distributed',
             'MOM_VHOST': '/',
+            'PYTHONMALLOC': 'malloc',
             'INPUT_QUEUES': _serializar_valor_env(
                 _expandir_input_queues(node['input_queue'], worker_id)
             ),
@@ -152,7 +153,7 @@ def generar_compose():
     if 'rabbitmq' in compose_data['services']:
         compose_data['services']['rabbitmq'].setdefault('environment', {})
         rabbit_env = compose_data['services']['rabbitmq']['environment']
-        rabbit_env['RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS'] = '-rabbit vm_memory_high_watermark 0.4'
+        rabbit_env['RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS'] = '-rabbit vm_memory_high_watermark 0.4 +MBas aobf +MBacul 10'
         compose_data['services']['rabbitmq'].setdefault('ports', [])
         if '15672:15672' not in compose_data['services']['rabbitmq']['ports']:
             compose_data['services']['rabbitmq']['ports'].append('15672:15672')

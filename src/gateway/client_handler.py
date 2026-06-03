@@ -4,6 +4,8 @@ import json
 import logging
 from common import message_protocol, middleware, sharding
 from config import GatewayConfig
+import gc
+import ctypes
 
 logger = logging.getLogger(__name__)
 
@@ -185,6 +187,12 @@ class ClientHandler:
                 q.close()
             for q in colas_bancos.values():
                 q.close()
+            try:
+                gc.collect()
+                ctypes.cdll.LoadLibrary("libc.so.6").malloc_trim(0)
+            except Exception:
+                pass
+            
 
     def _enviar_disconnect(self, client_id, colas_tx, colas_bancos):
         disconnect_msg = json.dumps({"client_id": client_id, "CLIENT_DISCONNECT": True}).encode("utf-8")

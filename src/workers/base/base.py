@@ -4,6 +4,8 @@ import threading
 import json
 import time
 from abc import ABC, abstractmethod
+import ctypes
+import gc
 from common import middleware
 
 try:
@@ -217,6 +219,11 @@ class BaseWorker(ABC):
         if mensaje_original is None:
             logger.info(f"[{self.__class__.__name__}] Flusheando datos para client_id={client_id}.")
             self.al_completar_cliente(client_id)
+            try:
+                gc.collect()
+                ctypes.cdll.LoadLibrary("libc.so.6").malloc_trim(0)
+            except Exception:
+                pass
         else:
             logger.info(f"[{self.__class__.__name__}] Barrera completa, reenviando EOF para client_id={client_id}.")
             try:

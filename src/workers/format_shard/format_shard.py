@@ -3,6 +3,8 @@ import json
 import threading
 from base import BaseWorker
 from common.logging_setup import setup_logging
+import gc
+import ctypes
 
 logger = logging.getLogger(__name__)
 
@@ -155,8 +157,10 @@ class FormatShardWorker(BaseWorker):
             }
             self._enviar(json.dumps(output_payload).encode('utf-8'), payload=output_payload)
         
-        estado["cache_tardio"].clear()
-        estado["datos_temprano"].clear()
+        estado["cache_tardio"] = []
+        estado["datos_temprano"] = {}
+        estado["promedios"] = {}
+
 
     def al_completar_cliente(self, client_id: str):
         """Hook llamado por base.py tras finalizar TODO el flush distribuido."""
