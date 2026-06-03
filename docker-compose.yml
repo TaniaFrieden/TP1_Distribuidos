@@ -70,6 +70,8 @@ services:
       NODE_PREFIX: shared_filter_usd
       ID: '1'
       TOTAL_WORKERS: '3'
+      PREFETCH_COUNT: '10'
+      HEARTBEAT_INTERVAL_SECONDS: '5'
       LOG_FILE: /app/logs/shared_filter_usd_01.txt
       FILTER_FIELD: Payment Currency
       FILTER_VALUE: US Dollar
@@ -99,6 +101,8 @@ services:
       NODE_PREFIX: shared_filter_usd
       ID: '2'
       TOTAL_WORKERS: '3'
+      PREFETCH_COUNT: '10'
+      HEARTBEAT_INTERVAL_SECONDS: '5'
       LOG_FILE: /app/logs/shared_filter_usd_02.txt
       FILTER_FIELD: Payment Currency
       FILTER_VALUE: US Dollar
@@ -128,10 +132,58 @@ services:
       NODE_PREFIX: shared_filter_usd
       ID: '3'
       TOTAL_WORKERS: '3'
+      PREFETCH_COUNT: '10'
+      HEARTBEAT_INTERVAL_SECONDS: '5'
       LOG_FILE: /app/logs/shared_filter_usd_03.txt
       FILTER_FIELD: Payment Currency
       FILTER_VALUE: US Dollar
       FILTER_OPERATOR: eq
+  watchdog:
+    build:
+      context: ./src
+      dockerfile: watchdog/Dockerfile
+    container_name: watchdog
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    volumes:
+    - ./logs:/app/logs
+    environment:
+      MOM_HOST: rabbitmq
+      MOM_PORT: '5672'
+      MOM_USER: distributed
+      MOM_PASSWORD: distributed
+      MOM_VHOST: /
+      WATCHDOG_STAGES: '["shared_filter_usd", "q1_projection", "q1_minor_than_50"]'
+      HEARTBEAT_INTERVAL_SECONDS: '5'
+      MISSED_HEARTBEATS_THRESHOLD: '6'
+      CHECK_INTERVAL_SECONDS: '5'
+      CAIDAS_QUEUE: caidas
+      LOG_LEVEL: INFO
+      LOG_FILE: /app/logs/watchdog.txt
+  actuador:
+    build:
+      context: ./src
+      dockerfile: watchdog/DockerfileActuador
+    container_name: actuador
+    restart: always
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+    - /var/run/docker.sock:/var/run/docker.sock
+    - ./logs:/app/logs
+    environment:
+      MOM_HOST: rabbitmq
+      MOM_PORT: '5672'
+      MOM_USER: distributed
+      MOM_PASSWORD: distributed
+      MOM_VHOST: /
+      CAIDAS_QUEUE: caidas
+      LOG_LEVEL: INFO
+      LOG_FILE: /app/logs/actuador.txt
   q1_projection_01:
     build:
       context: ./src
@@ -156,6 +208,7 @@ services:
       ID: '1'
       TOTAL_WORKERS: '2'
       HEARTBEAT_INTERVAL_SECONDS: '5'
+      PREFETCH_COUNT: '10'
       LOG_LEVEL: INFO
       LOG_FILE: /app/logs/q1_projection_01.txt
       CAMPOS: From Bank,Account,To Bank,Account.1,Amount Paid
@@ -184,6 +237,7 @@ services:
       ID: '2'
       TOTAL_WORKERS: '2'
       HEARTBEAT_INTERVAL_SECONDS: '5'
+      PREFETCH_COUNT: '10'
       LOG_LEVEL: INFO
       LOG_FILE: /app/logs/q1_projection_02.txt
       CAMPOS: From Bank,Account,To Bank,Account.1,Amount Paid
@@ -212,6 +266,7 @@ services:
       ID: '1'
       TOTAL_WORKERS: '3'
       HEARTBEAT_INTERVAL_SECONDS: '5'
+      PREFETCH_COUNT: '10'
       LOG_LEVEL: INFO
       LOG_FILE: /app/logs/q1_minor_than_50_01.txt
       FILTER_FIELD: Amount Paid
@@ -241,6 +296,7 @@ services:
       ID: '2'
       TOTAL_WORKERS: '3'
       HEARTBEAT_INTERVAL_SECONDS: '5'
+      PREFETCH_COUNT: '10'
       LOG_LEVEL: INFO
       LOG_FILE: /app/logs/q1_minor_than_50_02.txt
       FILTER_FIELD: Amount Paid
@@ -270,54 +326,9 @@ services:
       ID: '3'
       TOTAL_WORKERS: '3'
       HEARTBEAT_INTERVAL_SECONDS: '5'
+      PREFETCH_COUNT: '10'
       LOG_LEVEL: INFO
       LOG_FILE: /app/logs/q1_minor_than_50_03.txt
       FILTER_FIELD: Amount Paid
       FILTER_VALUE: '50'
       FILTER_OPERATOR: lt
-  watchdog:
-    build:
-      context: ./src
-      dockerfile: watchdog/Dockerfile
-    container_name: watchdog
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      gateway:
-        condition: service_started
-    volumes:
-    - ./logs:/app/logs
-    environment:
-      MOM_HOST: rabbitmq
-      MOM_PORT: '5672'
-      MOM_USER: distributed
-      MOM_PASSWORD: distributed
-      MOM_VHOST: /
-      WATCHDOG_STAGES: '["q1_projection", "q1_minor_than_50", "shared_filter_usd"]'
-      HEARTBEAT_INTERVAL_SECONDS: '2'
-      MISSED_HEARTBEATS_THRESHOLD: '3'
-      CHECK_INTERVAL_SECONDS: '2'
-      CAIDAS_QUEUE: caidas
-      LOG_LEVEL: INFO
-      LOG_FILE: /app/logs/watchdog.txt
-  actuador:
-    build:
-      context: ./src
-      dockerfile: watchdog/DockerfileActuador
-    container_name: actuador
-    restart: always
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    volumes:
-    - /var/run/docker.sock:/var/run/docker.sock
-    - ./logs:/app/logs
-    environment:
-      MOM_HOST: rabbitmq
-      MOM_PORT: '5672'
-      MOM_USER: distributed
-      MOM_PASSWORD: distributed
-      MOM_VHOST: /
-      CAIDAS_QUEUE: caidas
-      LOG_LEVEL: INFO
-      LOG_FILE: /app/logs/actuador.txt

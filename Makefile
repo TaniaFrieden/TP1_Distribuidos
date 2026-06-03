@@ -18,7 +18,7 @@ MOM_HOST ?= localhost
 INPUT_QUEUE ?= input_queue
 OUTPUT_QUEUE ?= output_queue
 
-.PHONY: help venv install test test-worker-base clean free-ports client run-clients test-server gateway start down docker-logs iterar solucionar generar log generar-sample
+.PHONY: help venv install test test-worker-base clean free-ports client run-clients test-server gateway start down docker-logs iterar solucionar generar log generar-sample caos
 
 help:
 	@echo "Targets disponibles:"
@@ -37,9 +37,7 @@ help:
 	@echo "  make iterar [iteraciones] [transacciones] [cuentas] [soluciones] - Itera queries pasándole número iteraciones, datasets y carpeta de soluciones"
 	@echo "  make solucionar <dataset> <cuentas> [dir] - Ejecuta la solución del notebook con el dataset de transacciones, el de cuentas y opcionalmente el directorio de destino"
 	@echo "  make client <trans> <cuentas> [dir] - Corre un cliente enviando transacciones y cuentas, guardando resultados en el directorio de salida indicado"
-
-
-
+	@echo "  make caos [min] [max]            - Corre el script de Chaos Monkey para derribar workers aleatoriamente"
 	@echo "  make generar-sample <dataset> <porcentaje> - Genera una muestra de un dataset con el porcentaje indicado (default: 30)"
 
 venv:
@@ -151,6 +149,10 @@ start:
 
 down:
 	$(DOCKER_COMPOSE) down
+
+caos:
+	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
+	$(PYTHON) scripts/chaos_monkey.py $$ARGS
 
 generar:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \

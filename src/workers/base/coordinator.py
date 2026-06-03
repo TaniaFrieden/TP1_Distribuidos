@@ -7,9 +7,10 @@ logger = logging.getLogger(__name__)
 
 class DistributedCoordinator:
     """Maneja la barrera de sincronización global para los EOFs."""
-    def __init__(self, config, on_sync_complete_cb):
+    def __init__(self, config, on_sync_complete_cb, on_barrier_complete_cb=None):
         self.config = config
         self.on_sync_complete = on_sync_complete_cb
+        self.on_barrier_complete = on_barrier_complete_cb
         
         self._coordinaciones_eof = {}
         self._eofs_locales_recibidos = {}
@@ -17,6 +18,7 @@ class DistributedCoordinator:
         self._clientes_flusheados = set()  
         self._originadores_reconocidos = {}  
         self._local_eof_completed = set()
+        self._clientes_finalizados = set()
         
         if config.total_workers > 1:
             self._tiene_cola_sharded = any(
@@ -156,6 +158,19 @@ class DistributedCoordinator:
             originator = msg_dict.get("originator")
 
             if msg_type == "EOF_RECEIVED":
+                with self._coordinacion_lock:
+                    ya_finalizado = client_id in self._clientes_finalizados or client_id in self._clientes_flusheados
+                
+                if ya_finalizado:
+                    logger.info(f"[Coordinator] EOF_RECEIVED recibido para cliente {client_id} ya finalizado. Respondiendo WORKER_FINISHED de todas formas.")
+                    self._enviar_control({
+                        "type": "WORKER_FINISHED",
+                        "client_id": client_id,
+                        "originator": originator,
+                        "worker_id": self.config.node_id
+                    })
+                    return
+
                 # Resolución de colisiones: si dos workers se autodeclaran originador simultáneamente,
                 # gana el de menor ID para evitar duplicar el reenvío del EOF final.
                 with self._coordinacion_lock:
@@ -206,7 +221,10 @@ class DistributedCoordinator:
                     self._clientes_flusheados.discard(client_id)
                     self._originadores_reconocidos.pop(client_id, None)
                     self._local_eof_completed.discard(client_id)
+                    self._clientes_finalizados.add(client_id)
                 logger.info(f"[Coordinator] Barrera completa liberada globalmente para client_id={client_id}.")
+                if self.on_barrier_complete:
+                    self.on_barrier_complete(client_id)
 
         except Exception as e:
             logger.error(f"[Coordinator] Error en control: {e}", exc_info=True)

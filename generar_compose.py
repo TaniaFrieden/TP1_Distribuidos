@@ -9,7 +9,7 @@ CONFIG_QUERIES = 'config/queries/*.json'
 WORKER_TYPES_FILE = 'config/worker_types.json'
 
 HEARTBEAT_INTERVAL_SECONDS = 5   # workers envían cada N segundos; watchdog usa el mismo valor para calcular timeout
-WATCHDOG_MISSED_THRESHOLD = 3    # misses antes de declarar caída → timeout = HEARTBEAT_INTERVAL × MISSED_THRESHOLD
+WATCHDOG_MISSED_THRESHOLD = 6    # misses antes de declarar caída → timeout = HEARTBEAT_INTERVAL × MISSED_THRESHOLD
 WATCHDOG_CHECK_INTERVAL_SECONDS = 5  # con qué frecuencia el hilo revisor del watchdog escanea
 
 
@@ -98,13 +98,11 @@ def generar_compose():
                     'ID': worker_id,
                     'TOTAL_WORKERS': str(replicas),
                     'HEARTBEAT_INTERVAL_SECONDS': str(HEARTBEAT_INTERVAL_SECONDS),
+                    'PREFETCH_COUNT': '10',
                     'LOG_LEVEL': 'INFO',
                     'LOG_FILE': f'/app/logs/{worker_name}.txt'
                 })
                 env.update(node.get('extra_env', {}))
-
-                if prefix not in watchdog_stages:
-                    watchdog_stages.append(prefix)
 
                 compose_data['services'][worker_name] = {
                     'build': {'context': './src', 'dockerfile': base_config['dockerfile']},
@@ -138,6 +136,14 @@ def generar_compose():
         compose_data['services']['rabbitmq'].setdefault('ports', [])
         if '15672:15672' not in compose_data['services']['rabbitmq']['ports']:
             compose_data['services']['rabbitmq']['ports'].append('15672:15672')
+
+    # Recolectar dinámicamente los NODE_PREFIX de todos los servicios para monitorear
+    watchdog_stages = []
+    for s_name, s_data in compose_data.get('services', {}).items():
+        if isinstance(s_data, dict) and 'environment' in s_data:
+            prefix = s_data['environment'].get('NODE_PREFIX')
+            if prefix and prefix not in watchdog_stages:
+                watchdog_stages.append(prefix)
 
     # Watchdog — detecta caídas via heartbeats y publica en cola "caidas"
     compose_data['services']['watchdog'] = {
