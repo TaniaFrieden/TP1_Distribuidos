@@ -1,3 +1,4 @@
+MAKEFLAGS += --no-print-directory
 PYTHON := .venv/bin/python
 PIP := $(PYTHON) -m pip
 PYTEST := PYTHONPATH=src $(PYTHON) -m pytest
@@ -18,7 +19,7 @@ MOM_HOST ?= localhost
 INPUT_QUEUE ?= input_queue
 OUTPUT_QUEUE ?= output_queue
 
-.PHONY: help venv install test test-worker-base clean free-ports client run-clients test-server gateway start down docker-logs iterar solucionar generar log generar-sample
+.PHONY: help venv install test test-worker-base clean free-ports client run-clients test-server gateway start down docker-logs iterar solucionar generar log generar-sample caos
 
 help:
 	@echo "Targets disponibles:"
@@ -37,9 +38,7 @@ help:
 	@echo "  make iterar [iteraciones] [transacciones] [cuentas] [soluciones] - Itera queries pasándole número iteraciones, datasets y carpeta de soluciones"
 	@echo "  make solucionar <dataset> <cuentas> [dir] - Ejecuta la solución del notebook con el dataset de transacciones, el de cuentas y opcionalmente el directorio de destino"
 	@echo "  make client <trans> <cuentas> [dir] - Corre un cliente enviando transacciones y cuentas, guardando resultados en el directorio de salida indicado"
-
-
-
+	@echo "  make caos [min] [max]            - Corre el script de Chaos Monkey para derribar workers aleatoriamente"
 	@echo "  make generar-sample <dataset> <porcentaje> - Genera una muestra de un dataset con el porcentaje indicado (default: 30)"
 
 venv:
@@ -77,8 +76,9 @@ test-worker-base:
 clean:
 	-@$(MAKE) free-ports
 	-@$(MAKE) down
-	-$(DOCKER_COMPOSE) down --vols --remove-orphans 2>/dev/null || true
+	-$(DOCKER_COMPOSE) down -v --remove-orphans 2>/dev/null || true
 	-docker network prune -f 2>/dev/null || true
+	-docker system prune -f --volumes 2>/dev/null || true
 	rm -rf .pytest_cache
 	find . -type d -name '__pycache__' -prune -exec rm -rf {} +
 	rm -f /tmp/client_output.txt
@@ -111,15 +111,15 @@ client:
 	TX_FILE=$${TRANSACTIONS_FILE:-$$TX}; \
 	ACC_FILE=$${ACCOUNTS_FILE:-$$ACC}; \
 	OUT_DIR=$${OUTPUT_DIR:-$${OUT:-$(OUTPUT_DIR)}}; \
-	docker build -q -t client-image -f src/client/Dockerfile src 2>/dev/null && \
-	docker rm -f client 2>/dev/null || true; \
+	CLIENT_SUFFIX=$$(date +%s); \
+	docker build -q -t client-image -f src/client/Dockerfile src >/dev/null 2>&1 && \
 	docker run --rm \
-		--name client \
+		--name client_$$CLIENT_SUFFIX \
 		--network host \
 		-v "$(shell pwd)/datasets:/app/datasets" \
 		-v "$(shell pwd)/$$OUT_DIR:/app/$$OUT_DIR" \
 		-v "$(shell pwd)/logs:/app/logs" \
-		-e LOG_FILE="/app/logs/client.txt" \
+		-e LOG_FILE="/app/logs/client_$$CLIENT_SUFFIX.txt" \
 		-e OUTPUT_APPEND_HOSTNAME="false" \
 		-e TRANSACTIONS_FILE="$$TX_FILE" \
 		-e ACCOUNTS_FILE="$$ACC_FILE" \
@@ -151,6 +151,10 @@ start:
 
 down:
 	$(DOCKER_COMPOSE) down
+
+caos:
+	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
+	$(PYTHON) scripts/chaos_monkey.py $$ARGS
 
 generar:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \

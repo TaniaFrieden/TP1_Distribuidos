@@ -113,6 +113,32 @@ make iterar [iteraciones] [transacciones] [cuentas] [soluciones]
 make iterar 5 HI-Large_Trans_sample_30 HI-Large_accounts Hi-Large-30
 ```
 
+## Tolerancia a Fallos y Pruebas de Caos
+
+El sistema cuenta con un mecanismo de tolerancia a fallos autocurativo y herramientas para simular caídas:
+
+### Componentes del Sistema (Objetos)
+* **Gateway**: Punto de entrada que recibe las transacciones y cuentas del cliente, distribuye batches a la cola de entrada de RabbitMQ, consolida los resultados de las queries en archivos temporales por cliente y realiza deduplicación de lotes duplicados mediante hash MD5.
+* **Workers**: Nodos de procesamiento del pipeline (filtros, conversores de monedas, proyecciones, agregadores y acumuladores) configurados de forma dinámica y con logs detallados de inicialización.
+* **Coordinador Distribuido**: Gestiona las barreras de sincronización EOF a nivel de etapa a través de colas de control dedicadas, garantizando una finalización ordenada incluso ante caídas de workers.
+* **Watchdog**: Monitorea de forma centralizada la llegada de heartbeats de cada worker y reporta fallos al actuador ante la pérdida reiterada de señales.
+* **Actuador**: Escucha reportes del watchdog e interactúa con el daemon de Docker (`docker.sock`) para reiniciar automáticamente las réplicas caídas.
+
+### Simulación de Caos (Chaos Monkey)
+Para validar la tolerancia a fallos, se dispone de un script Chaos Monkey que apaga de forma aleatoria contenedores de workers durante el procesamiento.
+
+Para ejecutar la simulación de caos:
+```bash
+make caos [min] [max]
+```
+* **`[min]`**: Tiempo mínimo en segundos entre apagados aleatorios (opcional, default `10`).
+* **`[max]`**: Tiempo máximo en segundos entre apagados aleatorios (opcional, default `30`).
+
+*Ejemplo:*
+```bash
+make caos 5 15   # Apaga un worker aleatorio cada 5 a 15 segundos
+```
+
 ## Limpiar todo
 
 ```bash

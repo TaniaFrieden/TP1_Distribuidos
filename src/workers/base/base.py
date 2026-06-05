@@ -29,6 +29,7 @@ class BaseWorker(ABC):
         self.condicion_pendiente = threading.Condition(threading.Lock())
         self._heartbeat_stop_event = threading.Event()
         self._heartbeat_thread = None
+        self._eofs_pendientes_ack = {}  # {client_id: [ack_callbacks]}
 
         self.config = WorkerConfig()
         self._heartbeat_queue_name = f"heartbeat.{self.config.node_prefix}"
@@ -36,7 +37,15 @@ class BaseWorker(ABC):
         self.router = MessageRouter(self.config)
         self.coordinator = DistributedCoordinator(
             self.config, 
-            on_sync_complete_cb=self._al_completar_sincronizacion_global
+            on_sync_complete_cb=self._al_completar_sincronizacion_global,
+            on_barrier_complete_cb=self._al_completar_barrera
+        )
+
+        logger.info(
+            f"[{self.__class__.__name__}] Inicializando worker: "
+            f"etapa={self.config.node_prefix}, id={self.config.node_id}, "
+            f"total_workers={self.config.total_workers}, input_queues={self.config.input_queues}, "
+            f"output_queues={self.config.output_queues}"
         )
 
         self._registrar_senales()
@@ -167,6 +176,7 @@ class BaseWorker(ABC):
 
             if mensaje_json.get("CLIENT_DISCONNECT"):
                 logger.info(f"[{self.__class__.__name__}] CLIENT_DISCONNECT para {client_id}. Limpiando estado.")
+                self._eofs_pendientes_ack.pop(client_id, None)
                 self.al_desconectar_cliente(client_id)
                 self.coordinator.limpiar_cliente(client_id)
                 self._enviar(mensaje, mensaje_json)
@@ -177,6 +187,11 @@ class BaseWorker(ABC):
                     return ack()
 
                 logger.info(f"[{self.__class__.__name__}] EOF interceptado en la cola {queue_name}. Esperando a {len(self.router.input_queues)} colas locales.")
+                
+                if client_id not in self._eofs_pendientes_ack:
+                    self._eofs_pendientes_ack[client_id] = []
+                self._eofs_pendientes_ack[client_id].append(ack)
+
                 termino_local = self.coordinator.registrar_eof_local(
                     client_id, queue_name, len(self.router.input_queues)
                 )
@@ -186,7 +201,6 @@ class BaseWorker(ABC):
                     self.al_completar_eof_local(client_id)
                     self.coordinator.iniciar_barrera(client_id, mensaje)
                     self.coordinator.limpiar_eof_local(client_id)
-                ack()
             else:
                 self.coordinator.registrar_vuelo(client_id)
                     
@@ -230,6 +244,15 @@ class BaseWorker(ABC):
                 self._enviar(mensaje_original)
             except Exception as e:
                 logger.warning(f"[{self.__class__.__name__}] Error al reenviar EOF al downstream (puede que el downstream ya esté cerrado o la conexión se haya reseteado): {e}")
+
+    def _al_completar_barrera(self, client_id: str):
+        logger.info(f"[{self.__class__.__name__}] Barrera completada. Confirmando ACKs de EOFs acumulados para {client_id}.")
+        acks = self._eofs_pendientes_ack.pop(client_id, [])
+        for ack_cb in acks:
+            try:
+                ack_cb()
+            except Exception as e:
+                logger.warning(f"[{self.__class__.__name__}] Error al ejecutar ACK diferido: {e}")
 
     def interceptar_eof(self, queue_name: str, client_id: str, payload: dict, mensaje_original: bytes) -> bool:
         """

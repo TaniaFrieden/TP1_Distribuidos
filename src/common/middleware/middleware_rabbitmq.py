@@ -1,7 +1,8 @@
+import os
 import pika
 from .rabbitmq_base import RabbitMQBase, handle_pika_errors, handle_pika_send_errors
 
-MAX_MESSAGES_PER_WORKER = 150
+MAX_MESSAGES_PER_WORKER = int(os.getenv("PREFETCH_COUNT", "150"))
 DIRECT_EXCHANGE_TYPE = 'direct'
 FANOUT_EXCHANGE_TYPE = 'fanout'
 
@@ -56,10 +57,21 @@ class MessageMiddlewareQueueRabbitMQ(RabbitMQBase):
     @handle_pika_errors("empezar a consumir")
     def start_consuming(self, on_message_callback):
         def internal_callback(ch, method, properties, body):
+            def safe_ack():
+                if self.connection and self.connection.is_open:
+                    self.connection.add_callback_threadsafe(
+                        lambda: ch.basic_ack(delivery_tag=method.delivery_tag)
+                    )
+            def safe_nack():
+                if self.connection and self.connection.is_open:
+                    self.connection.add_callback_threadsafe(
+                        lambda: ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
+                    )
+
             on_message_callback(
                 body,
-                lambda: ch.basic_ack(delivery_tag=method.delivery_tag),
-                lambda: ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True),
+                safe_ack,
+                safe_nack,
             )
 
         self.channel.basic_consume(

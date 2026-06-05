@@ -13,6 +13,7 @@ class BackendListener:
     def __init__(self, config: GatewayConfig, state):
         self.config = config
         self.state = state
+        self._processed_hashes = {}  # {client_id: set(batch_hashes)}
 
     def escuchar(self, cola_nombre: str):
         match = re.search(self.QUERY_PATTERN, cola_nombre)
@@ -60,15 +61,29 @@ class BackendListener:
                             sock,
                             message_protocol.external.MsgType.END_OF_RECODS
                         )
+                    self._processed_hashes.pop(client_id, None)
                     self.state.remover_cliente(client_id)
                 ack()
                 return
 
             if "batches" in transaccion:
+                import hashlib
                 for batch in transaccion["batches"]:
                     header = batch["header"]
                     schema = header["schema"]
                     records = batch["payload"]
+                    
+                    batch_key = (query_id, json.dumps(records, sort_keys=True))
+                    batch_hash = hashlib.md5(str(batch_key).encode("utf-8")).hexdigest()
+                    
+                    if client_id not in self._processed_hashes:
+                        self._processed_hashes[client_id] = set()
+                    
+                    if batch_hash in self._processed_hashes[client_id]:
+                        logger.info(f"Ignorando batch duplicado en {cola_nombre} para {client_id}")
+                        continue
+                    self._processed_hashes[client_id].add(batch_hash)
+
                     logger.info(f"Resultado recibido para {cola_nombre} a {client_id} con {len(records)} registros.")
                     resultado_lista = [
                         {**dict(zip(schema, record_values)), "eof": False}
@@ -104,6 +119,7 @@ class BackendListener:
             ack()
         except (BrokenPipeError, ConnectionResetError, OSError) as e:
             logger.warning(f"Cliente {client_id} desconectado, descartando resultado: {e}")
+            self._processed_hashes.pop(client_id, None)
             self.state.remover_cliente(client_id)
             ack()
         except Exception as e:
