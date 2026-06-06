@@ -13,6 +13,12 @@ HEARTBEAT_INTERVAL_SECONDS = 5   # workers envían cada N segundos; watchdog usa
 WATCHDOG_MISSED_THRESHOLD = 6    # misses antes de declarar caída → timeout = HEARTBEAT_INTERVAL × MISSED_THRESHOLD
 WATCHDOG_CHECK_INTERVAL_SECONDS = 5  # con qué frecuencia el hilo revisor del watchdog escanea
 
+NUM_WATCHDOGS = 3                        # instancias del watchdog (anillo de elección)
+LEADER_HEARTBEAT_INTERVAL = 5            # con qué frecuencia el líder envía heartbeat a los standby
+LEADER_TIMEOUT_SECONDS = 20              # tiempo sin heartbeat antes de que un standby inicie elección
+ELECTION_STARTUP_DELAY_MAX = 3           # jitter máximo en segundos al arrancar antes de iniciar elección
+CHECK_LEADER_INTERVAL = 5               # frecuencia del hilo que chequea timeout del líder
+
 
 def _serializar_valor_env(valor):
     if isinstance(valor, (list, dict)):
@@ -269,30 +275,39 @@ def generar_compose():
             if prefix and prefix not in watchdog_stages:
                 watchdog_stages.append(prefix)
 
-    # Watchdog — detecta caídas via heartbeats y publica en cola "caidas"
-    compose_data['services']['watchdog'] = {
-        'build': {'context': './src', 'dockerfile': 'watchdog/Dockerfile'},
-        'container_name': 'watchdog',
-        'depends_on': {
-            'rabbitmq': {'condition': 'service_healthy'},
-            'gateway': {'condition': 'service_started'},
-        },
-        'volumes': ['./logs:/app/logs'],
-        'environment': {
-            'MOM_HOST': 'rabbitmq',
-            'MOM_PORT': '5672',
-            'MOM_USER': 'distributed',
-            'MOM_PASSWORD': 'distributed',
-            'MOM_VHOST': '/',
-            'WATCHDOG_STAGES': json.dumps(watchdog_stages),
-            'HEARTBEAT_INTERVAL_SECONDS': str(HEARTBEAT_INTERVAL_SECONDS),
-            'MISSED_HEARTBEATS_THRESHOLD': str(WATCHDOG_MISSED_THRESHOLD),
-            'CHECK_INTERVAL_SECONDS': str(WATCHDOG_CHECK_INTERVAL_SECONDS),
-            'CAIDAS_QUEUE': 'caidas',
-            'LOG_LEVEL': 'INFO',
-            'LOG_FILE': '/app/logs/watchdog.txt',
-        },
-    }
+    # Watchdog — 3 instancias con elección en anillo; sólo el líder activa el detector de caídas
+    for wid in range(1, NUM_WATCHDOGS + 1):
+        service_name = f"watchdog_{wid}"
+        compose_data['services'][service_name] = {
+            'build': {'context': './src', 'dockerfile': 'watchdog/Dockerfile'},
+            'container_name': service_name,
+            'restart': 'on-failure',
+            'depends_on': {
+                'rabbitmq': {'condition': 'service_healthy'},
+                'gateway': {'condition': 'service_started'},
+            },
+            'volumes': ['./logs:/app/logs'],
+            'environment': {
+                'MOM_HOST': 'rabbitmq',
+                'MOM_PORT': '5672',
+                'MOM_USER': 'distributed',
+                'MOM_PASSWORD': 'distributed',
+                'MOM_VHOST': '/',
+                'WATCHDOG_STAGES': json.dumps(watchdog_stages),
+                'HEARTBEAT_INTERVAL_SECONDS': str(HEARTBEAT_INTERVAL_SECONDS),
+                'MISSED_HEARTBEATS_THRESHOLD': str(WATCHDOG_MISSED_THRESHOLD),
+                'CHECK_INTERVAL_SECONDS': str(WATCHDOG_CHECK_INTERVAL_SECONDS),
+                'CAIDAS_QUEUE': 'caidas',
+                'WATCHDOG_ID': str(wid),
+                'NUM_WATCHDOGS': str(NUM_WATCHDOGS),
+                'LEADER_HEARTBEAT_INTERVAL': str(LEADER_HEARTBEAT_INTERVAL),
+                'LEADER_TIMEOUT_SECONDS': str(LEADER_TIMEOUT_SECONDS),
+                'ELECTION_STARTUP_DELAY_MAX': str(ELECTION_STARTUP_DELAY_MAX),
+                'CHECK_LEADER_INTERVAL': str(CHECK_LEADER_INTERVAL),
+                'LOG_LEVEL': 'INFO',
+                'LOG_FILE': f'/app/logs/watchdog_{wid}.txt',
+            },
+        }
 
     # Actuador — consume cola "caidas" y reinicia containers via Docker socket
     compose_data['services']['actuador'] = {
