@@ -3,8 +3,6 @@ import json
 import threading
 from base import BaseWorker
 from common.logging_setup import setup_logging
-import gc
-import ctypes
 
 logger = logging.getLogger(__name__)
 

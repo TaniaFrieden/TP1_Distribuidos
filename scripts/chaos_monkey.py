@@ -54,16 +54,16 @@ def run_chaos_monkey(intervalo_min=10, intervalo_max=20):
             # Decidir método de ataque (50% stop normal / 50% kill abrupto)
             metodo = random.choice(["stop", "kill"])
 
-            print(f"[Chaos Monkey] 💥 ATACANDO a '{victima.name}' usando método '{metodo}'...")
+            print(f"[Chaos Monkey] ATACANDO a '{victima.name}' usando método '{metodo}'...")
             
             try:
                 if metodo == "stop":
                     victima.stop(timeout=2)
                 else:
                     victima.kill()
-                print(f"[Chaos Monkey] ✅ '{victima.name}' fue derribado exitosamente.")
+                print(f"[Chaos Monkey] '{victima.name}' fue derribado exitosamente.")
             except Exception as e:
-                print(f"[Chaos Monkey] ❌ Error derribando a '{victima.name}': {e}")
+                print(f"[Chaos Monkey] Error derribando a '{victima.name}': {e}")
 
     except KeyboardInterrupt:
         print("\n=== Chaos Monkey Finalizado ===")

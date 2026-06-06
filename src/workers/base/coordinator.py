@@ -100,6 +100,7 @@ class DistributedCoordinator:
             self._originadores_reconocidos.pop(client_id, None)
             self._eofs_locales_recibidos.pop(client_id, None)
             self._clientes_flusheados.discard(client_id)
+            self._clientes_finalizados.discard(client_id)
         with self._vuelo_lock:
             self._mensajes_en_vuelo.pop(client_id, None)
 

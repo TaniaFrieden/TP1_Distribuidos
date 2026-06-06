@@ -161,26 +161,6 @@ def _generar_servicio(node, worker_config, workers_config, compose_data):
         worker_id = str(i)
         worker_name = f"{prefix}_{i:02d}"
 
-                env = base_config.get('default_env', {}).copy()
-                env.update({
-                    'MOM_HOST': 'rabbitmq',
-                    'MOM_PORT': '5672',
-                    'MOM_USER': 'distributed',
-                    'MOM_PASSWORD': 'distributed',
-                    'MOM_VHOST': '/',
-                    'INPUT_QUEUES': _serializar_valor_env(
-                        _expandir_input_queues(node['input_queue'], worker_id)
-                    ),
-                    'OUTPUT_QUEUES': _serializar_valor_env(node['output_queue']),
-                    'NODE_PREFIX': prefix,
-                    'ID': worker_id,
-                    'TOTAL_WORKERS': str(replicas),
-                    'HEARTBEAT_INTERVAL_SECONDS': str(HEARTBEAT_INTERVAL_SECONDS),
-                    'PREFETCH_COUNT': '10',
-                    'LOG_LEVEL': 'INFO',
-                    'LOG_FILE': f'/app/logs/{worker_name}.txt'
-                })
-                env.update(node.get('extra_env', {}))
         env = base_config.get('default_env', {}).copy()
         env.update({
             'MOM_HOST': 'rabbitmq',
@@ -196,6 +176,8 @@ def _generar_servicio(node, worker_config, workers_config, compose_data):
             'NODE_PREFIX': prefix,
             'ID': worker_id,
             'TOTAL_WORKERS': str(replicas),
+            'HEARTBEAT_INTERVAL_SECONDS': str(HEARTBEAT_INTERVAL_SECONDS),
+            'PREFETCH_COUNT': '10',
             'LOG_LEVEL': 'WARNING',
             'LOG_FILE': f'/app/logs/{worker_name}.txt'
         })

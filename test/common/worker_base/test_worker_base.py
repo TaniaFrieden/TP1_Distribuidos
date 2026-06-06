@@ -8,6 +8,18 @@ from unittest.mock import MagicMock, patch, call
 
 from workers.base.base import BaseWorker
 
+TEST_ENV = {
+    "MOM_HOST": "rabbitmq",
+    "NODE_PREFIX": "test",
+    "ID": "1",
+    "TOTAL_WORKERS": "1",
+    "INPUT_QUEUES": '["q_test_in"]',
+    "OUTPUT_QUEUES": "[]",
+    "HEARTBEAT_INTERVAL_SECONDS": "0",
+}
+
+INPUT_QUEUE_NAME = "q_test_in"
+
 
 # ------------------------------------------------------------------
 # Worker concreto mínimo para poder instanciar BaseWorker en tests
@@ -35,8 +47,9 @@ class WorkerDePrueba(BaseWorker):
 
 @pytest.fixture(autouse=True)
 def mock_middleware():
-    """Parchea las 3 conexiones al middleware para todos los tests."""
-    with patch("common.middleware.MessageMiddlewareQueueRabbitMQ") as mock_queue_cls, \
+    """Parchea env vars y las 3 conexiones al middleware para todos los tests."""
+    with patch.dict("os.environ", TEST_ENV, clear=False), \
+         patch("common.middleware.MessageMiddlewareQueueRabbitMQ") as mock_queue_cls, \
          patch("common.middleware.FanoutQueueRabbitMQ") as mock_fanout_queue_cls, \
          patch("common.middleware.FanoutExchangeRabbitMQ") as mock_exchange_cls:
 
@@ -44,17 +57,17 @@ def mock_middleware():
         mock_control_queue = MagicMock()
         mock_exchange      = MagicMock()
 
-        mock_queue_cls.return_value = mock_input_queue
+        mock_queue_cls.return_value      = mock_input_queue
         mock_fanout_queue_cls.return_value = mock_control_queue
-        mock_exchange_cls.return_value = mock_exchange
+        mock_exchange_cls.return_value   = mock_exchange
 
         yield {
-            "input_queue":   mock_input_queue,
-            "control_queue": mock_control_queue,
-            "exchange":      mock_exchange,
-            "queue_cls":     mock_queue_cls,
-            "fanout_queue_cls": mock_fanout_queue_cls,
-            "exchange_cls":  mock_exchange_cls,
+            "input_queue":        mock_input_queue,
+            "control_queue":      mock_control_queue,
+            "exchange":           mock_exchange,
+            "queue_cls":          mock_queue_cls,
+            "fanout_queue_cls":   mock_fanout_queue_cls,
+            "exchange_cls":       mock_exchange_cls,
         }
 
 
@@ -70,50 +83,45 @@ def worker():
 class TestCicloDeVida:
 
     def test_iniciar_llama_start_consuming_en_input_queue(self, worker, mock_middleware):
-        """Al iniciar, se debe consumir de la input_queue con el callback interno."""
+        """Al iniciar, se debe consumir de la input_queue."""
         worker.iniciar()
-        worker.input_queue.start_consuming.assert_called_once_with(worker._callback_interno)
+        worker.router.input_queues[INPUT_QUEUE_NAME].start_consuming.assert_called_once()
 
     def test_iniciar_llama_start_consuming_en_control_queue(self, worker, mock_middleware):
-        """Al iniciar, se debe consumir de la control_queue en un thread separado."""
+        """Al iniciar, se debe consumir de la control_queue."""
         worker.iniciar()
-        worker.control_queue.start_consuming.assert_called_once_with(worker._process_control_message)
+        worker.coordinator.control_queue.start_consuming.assert_called_once_with(
+            worker.coordinator._process_control_message
+        )
 
     def test_iniciar_cierra_input_queue_al_terminar(self, worker, mock_middleware):
         """La input_queue siempre se cierra al finalizar."""
         worker.iniciar()
-        worker.input_queue.close.assert_called_once()
+        worker.router.input_queues[INPUT_QUEUE_NAME].close.assert_called_once()
 
     def test_iniciar_cierra_control_queue_al_terminar(self, worker, mock_middleware):
         """La control_queue siempre se cierra al finalizar."""
         worker.iniciar()
-        worker.control_queue.close.assert_called_once()
+        worker.coordinator.control_queue.close.assert_called_once()
 
     def test_iniciar_cierra_control_exchange_al_terminar(self, worker, mock_middleware):
         """El control_exchange siempre se cierra al finalizar."""
         worker.iniciar()
-        worker.control_exchange.close.assert_called_once()
+        worker.coordinator.control_exchange.close.assert_called_once()
 
     def test_iniciar_llama_al_cerrar(self, worker, mock_middleware):
         """El hook al_cerrar() se ejecuta al finalizar."""
         worker.iniciar()
         assert worker._al_cerrar_llamado is True
 
+    @pytest.mark.filterwarnings("ignore::pytest.PytestUnhandledThreadExceptionWarning")
     def test_cierre_ocurre_aunque_start_consuming_lance_excepcion(self, worker, mock_middleware):
-        """Si start_consuming lanza, el middleware igual se cierra."""
-        worker.input_queue.start_consuming.side_effect = RuntimeError("fallo de red")
+        """Si start_consuming en el thread lanza, el middleware igual se cierra."""
+        worker.router.input_queues[INPUT_QUEUE_NAME].start_consuming.side_effect = RuntimeError("fallo de red")
 
-        with pytest.raises(RuntimeError):
-            worker.iniciar()
+        worker.iniciar()  # excepción en thread — no se propaga al caller
 
-        worker.input_queue.close.assert_called_once()
-
-    def test_excepcion_inesperada_se_propaga(self, worker, mock_middleware):
-        """Errores no relacionados con cierre deben propagarse al caller."""
-        worker.input_queue.start_consuming.side_effect = RuntimeError("error inesperado")
-
-        with pytest.raises(RuntimeError, match="error inesperado"):
-            worker.iniciar()
+        worker.router.input_queues[INPUT_QUEUE_NAME].close.assert_called_once()
 
 
 # ------------------------------------------------------------------
@@ -132,11 +140,11 @@ class TestShutdownGraceful:
 
     def test_sigterm_llama_stop_consuming_en_input_queue(self, worker):
         worker._manejar_senal_cierre(signal.SIGTERM, None)
-        worker.input_queue.stop_consuming.assert_called_once()
+        worker.router.input_queues[INPUT_QUEUE_NAME].stop_consuming.assert_called_once()
 
     def test_sigterm_llama_stop_consuming_en_control_queue(self, worker):
         worker._manejar_senal_cierre(signal.SIGTERM, None)
-        worker.control_queue.stop_consuming.assert_called_once()
+        worker.coordinator.control_queue.stop_consuming.assert_called_once()
 
     def test_sigterm_notifica_condicion_pendiente(self, worker):
         """SIGTERM debe notificar a threads que esperan en condicion_pendiente."""
@@ -155,13 +163,14 @@ class TestShutdownGraceful:
 
         assert notificado == [True]
 
+    @pytest.mark.filterwarnings("ignore::pytest.PytestUnhandledThreadExceptionWarning")
     def test_iniciar_no_propaga_excepcion_si_cierre_fue_solicitado(self, worker, mock_middleware):
         """Si start_consuming lanza porque el cierre lo interrumpió, no se propaga."""
         def simular_consumo_interrumpido(callback):
             worker._cierre_solicitado = True
             raise Exception("consumo interrumpido por cierre")
 
-        worker.input_queue.start_consuming.side_effect = simular_consumo_interrumpido
+        worker.router.input_queues[INPUT_QUEUE_NAME].start_consuming.side_effect = simular_consumo_interrumpido
         worker.iniciar()  # no debe lanzar
 
 
@@ -174,9 +183,9 @@ class TestCallbackInterno:
     def test_mensaje_normal_llama_a_procesar_mensaje(self, worker):
         ack  = MagicMock()
         nack = MagicMock()
-        mensaje = b'{"monto": 10}'
+        mensaje = b'{"client_id": "c1", "monto": 10}'
 
-        worker._callback_interno(mensaje, ack, nack)
+        worker._callback_interno(INPUT_QUEUE_NAME, mensaje, ack, nack)
 
         assert mensaje in worker._mensajes_procesados
         ack.assert_called_once()
@@ -187,7 +196,7 @@ class TestCallbackInterno:
         ack  = MagicMock()
         nack = MagicMock()
 
-        worker._callback_interno(b"mensaje", ack, nack)
+        worker._callback_interno(INPUT_QUEUE_NAME, b'{"client_id": "c1"}', ack, nack)
 
         nack.assert_called_once()
         ack.assert_not_called()
@@ -200,12 +209,11 @@ class TestCallbackInterno:
             def al_cerrar(self):
                 pass
 
-        mock_middleware["queue_cls"].side_effect = [MagicMock(), MagicMock()]
         w   = WorkerQueExplota()
         ack  = MagicMock()
         nack = MagicMock()
 
-        w._callback_interno(b"mensaje", ack, nack)
+        w._callback_interno(INPUT_QUEUE_NAME, b'{"client_id": "c1", "dato": 1}', ack, nack)
 
         nack.assert_called_once()
         ack.assert_not_called()
@@ -217,16 +225,19 @@ class TestCallbackInterno:
             def al_cerrar(self):
                 pass
 
-        mock_middleware["queue_cls"].side_effect = [MagicMock(), MagicMock()]
         w = WorkerQueExplota()
 
-        w._callback_interno(b"mensaje", MagicMock(), MagicMock())  # no debe lanzar
+        w._callback_interno(INPUT_QUEUE_NAME, b'{"client_id": "c1", "dato": 1}', MagicMock(), MagicMock())  # no debe lanzar
 
     def test_multiples_mensajes_se_procesan_en_orden(self, worker):
-        mensajes = [b"msg_1", b"msg_2", b"msg_3"]
+        mensajes = [
+            b'{"client_id": "c1", "seq": 1}',
+            b'{"client_id": "c1", "seq": 2}',
+            b'{"client_id": "c1", "seq": 3}',
+        ]
 
         for msg in mensajes:
-            worker._callback_interno(msg, MagicMock(), MagicMock())
+            worker._callback_interno(INPUT_QUEUE_NAME, msg, MagicMock(), MagicMock())
 
         assert worker._mensajes_procesados == mensajes
 
@@ -246,11 +257,9 @@ class TestAlCerrar:
             def al_cerrar(self):
                 orden.append("al_cerrar")
 
-        mock_middleware["queue_cls"].side_effect = [MagicMock(), MagicMock()]
-        mock_middleware["input_queue"].close.side_effect = lambda: orden.append("close")
-
         w = WorkerConOrden()
-        w.input_queue.close.side_effect = lambda: orden.append("close")
+        for q in w.router.input_queues.values():
+            q.close.side_effect = lambda: orden.append("close")
         w._cerrar()
 
         assert orden[0] == "al_cerrar"
@@ -263,10 +272,10 @@ class TestAlCerrar:
             def al_cerrar(self):
                 raise RuntimeError("fallo en cleanup")
 
-        mock_middleware["queue_cls"].side_effect = [MagicMock(), MagicMock()]
         w = WorkerAlCerrarFalla()
         w._cerrar()
 
-        w.input_queue.close.assert_called_once()
-        w.control_queue.close.assert_called_once()
-        w.control_exchange.close.assert_called_once()
+        for q in w.router.input_queues.values():
+            q.close.assert_called_once()
+        w.coordinator.control_queue.close.assert_called_once()
+        w.coordinator.control_exchange.close.assert_called_once()

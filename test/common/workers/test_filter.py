@@ -1,132 +1,127 @@
-import importlib
+"""
+Tests para GenericFilterWorker
+==============================
+Cubren el filtrado de registros planos con distintos operadores y
+propagación de EOF.
+"""
 import json
-import os
-import sys
+import pytest
 from unittest.mock import MagicMock, patch
 
-import pytest
 
-def _cargar_modulo_filter(filter_type: str):
+def _crear_worker(filter_field: str, filter_value: str, filter_operator: str = "eq"):
     env = {
-        "ID": "1",
-        "NUM_SIBLINGS": "1",
         "MOM_HOST": "rabbitmq",
-        "INPUT_QUEUE": "input_queue",
-        "CONTROL_EXCHANGE": "control_exchange",
-        "NODE_PREFIX": "node",
-        "FILTER_TYPE": filter_type,
+        "NODE_PREFIX": "test_filter",
+        "ID": "1",
+        "TOTAL_WORKERS": "1",
+        "INPUT_QUEUES": '["q_test_in"]',
+        "OUTPUT_QUEUES": "[]",
+        "HEARTBEAT_INTERVAL_SECONDS": "0",
+        "FILTER_FIELD": filter_field,
+        "FILTER_VALUE": filter_value,
+        "FILTER_OPERATOR": filter_operator,
     }
-
-    with patch.dict(os.environ, env, clear=False):
-        base_module = "workers.base.base"
-        filter_module = "workers.filter.main"
-
-        if base_module in sys.modules:
-            importlib.reload(sys.modules[base_module])
-        else:
-            importlib.import_module(base_module)
-
-        if filter_module in sys.modules:
-            return importlib.reload(sys.modules[filter_module])
-
-        return importlib.import_module(filter_module)
+    with patch.dict("os.environ", env), \
+         patch("common.middleware.MessageMiddlewareQueueRabbitMQ"), \
+         patch("common.middleware.FanoutQueueRabbitMQ"), \
+         patch("common.middleware.FanoutExchangeRabbitMQ"):
+        from workers.filter.filter import GenericFilterWorker
+        w = GenericFilterWorker()
+    return w
 
 
-def _crear_worker(filter_type: str):
-    module = _cargar_modulo_filter(filter_type)
+def _make_msg(payload: dict) -> bytes:
+    return json.dumps(payload).encode("utf-8")
 
-    input_queue = MagicMock()
-    input_queue.start_consuming = MagicMock()
-    input_queue.stop_consuming = MagicMock()
-    input_queue.close = MagicMock()
 
-    control_queue = MagicMock()
-    control_queue.start_consuming = MagicMock()
-    control_queue.stop_consuming = MagicMock()
-    control_queue.close = MagicMock()
-
-    control_exchange = MagicMock()
-    control_exchange.close = MagicMock()
-
-    with patch(
-        "workers.base.base.middleware.MessageMiddlewareQueueRabbitMQ",
-        side_effect=[input_queue, control_queue],
-    ), patch(
-        "workers.base.base.middleware.FanoutExchangeRabbitMQ",
-        return_value=control_exchange,
-    ):
-        worker = module.FilterWorker()
-
-    return worker, module, input_queue, control_queue, control_exchange
-
+# ------------------------------------------------------------------
+# Tests: inicialización
+# ------------------------------------------------------------------
 
 class TestInicializacion:
 
-    def test_rechaza_filter_type_invalido(self):
-        module = _cargar_modulo_filter("INVALIDO")
+    def test_falta_filter_field_lanza_error(self):
+        env = {
+            "MOM_HOST": "rabbitmq",
+            "NODE_PREFIX": "test_filter",
+            "ID": "1",
+            "TOTAL_WORKERS": "1",
+            "INPUT_QUEUES": '["q_test_in"]',
+            "OUTPUT_QUEUES": "[]",
+            "HEARTBEAT_INTERVAL_SECONDS": "0",
+            # FILTER_FIELD omitido
+            "FILTER_VALUE": "USD",
+        }
+        with patch.dict("os.environ", env, clear=False), \
+             patch("common.middleware.MessageMiddlewareQueueRabbitMQ"), \
+             patch("common.middleware.FanoutQueueRabbitMQ"), \
+             patch("common.middleware.FanoutExchangeRabbitMQ"):
+            from workers.filter.filter import GenericFilterWorker
+            with pytest.raises(KeyError):
+                GenericFilterWorker()
 
-        with patch(
-            "workers.base.base.middleware.MessageMiddlewareQueueRabbitMQ"
-        ), patch(
-            "workers.base.base.middleware.FanoutExchangeRabbitMQ"
-        ):
-            with pytest.raises(ValueError, match="no reconocido"):
-                module.FilterWorker()
 
+# ------------------------------------------------------------------
+# Tests: filtrado de registros
+# ------------------------------------------------------------------
 
 class TestProcesarMensaje:
 
     @pytest.mark.parametrize(
-        "filter_type,payload,espera_envio",
+        "filter_field,filter_value,filter_operator,payload,espera_envio",
         [
-            ("USD", {"payment_currency": "USD"}, True),
-            ("USD", {"payment_currency": "EUR"}, False),
-            ("QUERY1", {"amount_paid": 30}, True),
-            ("QUERY1", {"amount_paid": 60}, False),
+            ("payment_currency", "USD", "eq",  {"client_id": "c1", "payment_currency": "USD"}, True),
+            ("payment_currency", "USD", "eq",  {"client_id": "c1", "payment_currency": "EUR"}, False),
+            ("amount_paid",      "50",  "lte", {"client_id": "c1", "amount_paid": 30},          True),
+            ("amount_paid",      "50",  "lte", {"client_id": "c1", "amount_paid": 60},          False),
         ],
     )
-    def test_filtro_aplica_segun_tipo(self, filter_type, payload, espera_envio):
-        worker, _, _, _, _ = _crear_worker(filter_type)
-        ack = MagicMock()
+    def test_filtro_aplica_segun_configuracion(self, filter_field, filter_value, filter_operator, payload, espera_envio):
+        worker = _crear_worker(filter_field, filter_value, filter_operator)
+        ack  = MagicMock()
         nack = MagicMock()
-        mensaje = json.dumps(payload).encode("utf-8")
+        msg  = _make_msg(payload)
 
-        with patch.object(worker, "_enviar", create=True) as enviar:
-            worker.procesar_mensaje(mensaje, ack, nack)
+        with patch.object(worker, "_enviar") as enviar:
+            worker.procesar_payload("q_in", payload["client_id"], payload, msg, ack, nack)
 
         if espera_envio:
-            enviar.assert_called_once_with(mensaje)
+            enviar.assert_called_once()
         else:
             enviar.assert_not_called()
 
         ack.assert_called_once()
         nack.assert_not_called()
 
-    def test_json_invalido_se_descarta_con_ack(self):
-        worker, _, _, _, _ = _crear_worker("USD")
-        ack = MagicMock()
+    def test_campo_faltante_se_descarta_con_ack(self):
+        worker = _crear_worker("payment_currency", "USD", "eq")
+        ack  = MagicMock()
         nack = MagicMock()
+        payload = {"client_id": "c1", "otro_campo": "valor"}
+        msg  = _make_msg(payload)
 
-        with patch.object(worker, "_enviar", create=True) as enviar:
-            worker.procesar_mensaje(b"no-json", ack, nack)
+        with patch.object(worker, "_enviar") as enviar:
+            worker.procesar_payload("q_in", "c1", payload, msg, ack, nack)
 
         enviar.assert_not_called()
         ack.assert_called_once()
         nack.assert_not_called()
 
-    def test_eof_se_acepta_sin_enviar(self):
-        worker, _, _, _, _ = _crear_worker("USD")
-        ack = MagicMock()
+    def test_eof_se_reenvia_via_enviar(self):
+        worker = _crear_worker("payment_currency", "USD", "eq")
+        ack  = MagicMock()
         nack = MagicMock()
-        mensaje = json.dumps({"client_id": 7}).encode("utf-8")
+        payload = {"client_id": "c1", "EOF": True}
+        msg  = _make_msg(payload)
 
-        with patch.object(worker, "_enviar", create=True) as enviar:
-            worker.procesar_mensaje(mensaje, ack, nack)
+        with patch.object(worker, "_enviar") as enviar:
+            worker.procesar_payload("q_in", "c1", payload, msg, ack, nack)
 
-        enviar.assert_not_called()
+        enviar.assert_called_once_with(msg)
         ack.assert_called_once()
         nack.assert_not_called()
 
     def test_al_cerrar_no_falla(self):
-        worker, _, _, _, _ = _crear_worker("USD")
+        worker = _crear_worker("payment_currency", "USD", "eq")
         worker.al_cerrar()

@@ -3,7 +3,10 @@ import os
 import operator
 import json
 
-from base import BaseWorker
+try:
+    from base import BaseWorker
+except ImportError:
+    from workers.base.base import BaseWorker
 from common.logging_setup import setup_logging
 
 logger = logging.getLogger(__name__)
