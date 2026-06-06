@@ -19,6 +19,8 @@ LEADER_TIMEOUT_SECONDS = 20              # tiempo sin heartbeat antes de que un 
 ELECTION_STARTUP_DELAY_MAX = 3           # jitter máximo en segundos al arrancar antes de iniciar elección
 CHECK_LEADER_INTERVAL = 5               # frecuencia del hilo que chequea timeout del líder
 
+NUM_ACTUADORES = 2                       # instancias del actuador (consume cola "caidas" en paralelo)
+
 
 def _serializar_valor_env(valor):
     if isinstance(valor, (list, dict)):
@@ -309,29 +311,31 @@ def generar_compose():
             },
         }
 
-    # Actuador — consume cola "caidas" y reinicia containers via Docker socket
-    compose_data['services']['actuador'] = {
-        'build': {'context': './src', 'dockerfile': 'watchdog/DockerfileActuador'},
-        'container_name': 'actuador',
-        'restart': 'always',
-        'depends_on': {
-            'rabbitmq': {'condition': 'service_healthy'},
-        },
-        'volumes': [
-            '/var/run/docker.sock:/var/run/docker.sock',
-            './logs:/app/logs',
-        ],
-        'environment': {
-            'MOM_HOST': 'rabbitmq',
-            'MOM_PORT': '5672',
-            'MOM_USER': 'distributed',
-            'MOM_PASSWORD': 'distributed',
-            'MOM_VHOST': '/',
-            'CAIDAS_QUEUE': 'caidas',
-            'LOG_LEVEL': 'INFO',
-            'LOG_FILE': '/app/logs/actuador.txt',
-        },
-    }
+    # Actuador — múltiples instancias consumen la cola "caidas" en paralelo
+    for aid in range(1, NUM_ACTUADORES + 1):
+        service_name = f"actuador_{aid}"
+        compose_data['services'][service_name] = {
+            'build': {'context': './src', 'dockerfile': 'watchdog/DockerfileActuador'},
+            'container_name': service_name,
+            'restart': 'always',
+            'depends_on': {
+                'rabbitmq': {'condition': 'service_healthy'},
+            },
+            'volumes': [
+                '/var/run/docker.sock:/var/run/docker.sock',
+                './logs:/app/logs',
+            ],
+            'environment': {
+                'MOM_HOST': 'rabbitmq',
+                'MOM_PORT': '5672',
+                'MOM_USER': 'distributed',
+                'MOM_PASSWORD': 'distributed',
+                'MOM_VHOST': '/',
+                'CAIDAS_QUEUE': 'caidas',
+                'LOG_LEVEL': 'INFO',
+                'LOG_FILE': f'/app/logs/actuador_{aid}.txt',
+            },
+        }
 
     with open('docker-compose.yml', 'w') as f:
         yaml.dump(compose_data, f, sort_keys=False, default_flow_style=False, width=1000)
