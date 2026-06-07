@@ -11,7 +11,8 @@ logger = logging.getLogger(__name__)
 class AgregadorBancarioWorker(BaseWorker):
     def __init__(self):
         super().__init__()
-        self.lock_estado = threading.Lock()
+        self.lock_creacion_locks = threading.Lock()
+        self.client_locks = {}
         
         nombre_nodo = f"{self.config.node_prefix}_{self.config.node_id:02d}"
         self.persistidor = PersistidorEstadoShard(nombre_nodo)
@@ -21,10 +22,23 @@ class AgregadorBancarioWorker(BaseWorker):
         
         logger.info(f"[AgregadorBancario] Worker inicializado con arquitectura limpia y modular.")
 
+    def _obtener_lock_cliente(self, client_id: str) -> threading.Lock:
+        cid = str(client_id).strip()
+        with self.lock_creacion_locks:
+            if cid not in self.client_locks:
+                self.client_locks[cid] = threading.Lock()
+            return self.client_locks[cid]
+
+    def _borrar_lock_cliente(self, client_id: str):
+        cid = str(client_id).strip()
+        with self.lock_creacion_locks:
+            self.client_locks.pop(cid, None)
+
     def procesar_payload(self, queue_name: str, client_id: str, payload: dict, mensaje_original: bytes, ack, nack):
         try:
-            with self.lock_estado:
-                estado_agregador, estado_eof = self.persistidor.cargar_estado()
+            lock = self._obtener_lock_cliente(client_id)
+            with lock:
+                estado_agregador, estado_eof = self.persistidor.cargar_estado_cliente(client_id)
 
                 if client_id not in estado_agregador:
                     logger.info(f"[CLIENTE NUEVO] Inicializando estado para {client_id}")
@@ -49,7 +63,9 @@ class AgregadorBancarioWorker(BaseWorker):
                     hubo_cambio = self.procesador.procesar_registro_individual(queue_name, client_id, payload, estado_agregador)
 
                 if hubo_cambio:
-                    self.persistidor.guardar_estado(estado_agregador, estado_eof)
+                    exito = self.persistidor.guardar_estado_cliente(client_id, estado_agregador, estado_eof)
+                    if not exito:
+                        raise RuntimeError(f"Error al guardar estado en disco para cliente {client_id}")
 
             ack()
         except ValueError as e:
@@ -63,8 +79,9 @@ class AgregadorBancarioWorker(BaseWorker):
         disparar_flush = False
         mensaje_barrera = None
 
-        with self.lock_estado:
-            estado_agregador, estado_eof = self.persistidor.cargar_estado()
+        lock = self._obtener_lock_cliente(client_id)
+        with lock:
+            estado_agregador, estado_eof = self.persistidor.cargar_estado_cliente(client_id)
 
             if client_id not in estado_eof:
                 estado_eof[client_id] = {
@@ -92,7 +109,9 @@ class AgregadorBancarioWorker(BaseWorker):
                 disparar_flush = True
                 mensaje_barrera = estado["eof_mensaje"]
             
-            self.persistidor.guardar_estado(estado_agregador, estado_eof)
+            exito = self.persistidor.guardar_estado_cliente(client_id, estado_agregador, estado_eof)
+            if not exito:
+                raise RuntimeError(f"Error al guardar estado de EOF en disco para cliente {client_id}")
 
         if disparar_flush:
             self.coordinator.iniciar_barrera(client_id, mensaje_barrera)
@@ -100,8 +119,9 @@ class AgregadorBancarioWorker(BaseWorker):
         return True
 
     def al_completar_cliente(self, client_id: str):
-        with self.lock_estado:
-            estado_agregador, estado_eof = self.persistidor.cargar_estado()
+        lock = self._obtener_lock_cliente(client_id)
+        with lock:
+            estado_agregador, estado_eof = self.persistidor.cargar_estado_cliente(client_id)
 
             if client_id in estado_agregador:
                 records = []
@@ -132,34 +152,32 @@ class AgregadorBancarioWorker(BaseWorker):
                     self._enviar(mensaje_bytes, payload=batch_payload)
 
                 logger.info(f"[BARRERA CONTROL] Envío finalizado con éxito para cliente {client_id}.")
-                del estado_agregador[client_id]
             else:
                 logger.warning(f"[BARRERA CONTROL] Se disparó al_completar_cliente para {client_id} sin datos locales registrados.")
 
-            if client_id in estado_eof:
-                del estado_eof[client_id]
-            
-            self.persistidor.guardar_estado(estado_agregador, estado_eof)
+            self.persistidor.borrar_estado_cliente(client_id)
+        self._borrar_lock_cliente(client_id)
 
     def al_desconectar_cliente(self, client_id: str):
-        with self.lock_estado:
-            estado_agregador, estado_eof = self.persistidor.cargar_estado()
-            estado_agregador.pop(client_id, None)
-            estado_eof.pop(client_id, None)
-            self.persistidor.guardar_estado(estado_agregador, estado_eof)
+        lock = self._obtener_lock_cliente(client_id)
+        with lock:
+            self.persistidor.borrar_estado_cliente(client_id)
+        self._borrar_lock_cliente(client_id)
 
     def al_cerrar(self):
         logger.info("[AgregadorBancario] Solicitud de apagado recibida de las señales del sistema.")
 
-
     def _recuperar_barreras_pendientes(self):
-        _, estado_eof = self.persistidor.cargar_estado()
-        for client_id, estado in estado_eof.items():
-            if estado.get("flush_iniciado") and estado.get("eof_mensaje"):
-                logger.warning(
-                    f"[AgregadorBancario] Recuperando barrera pendiente para {client_id} tras reinicio."
-                )
-                self.coordinator.iniciar_barrera(client_id, estado["eof_mensaje"])
+        clientes_pendientes = self.persistidor.detectar_clientes_pendientes()
+        for client_id in clientes_pendientes:
+            _, estado_eof = self.persistidor.cargar_estado_cliente(client_id)
+            if client_id in estado_eof:
+                estado = estado_eof[client_id]
+                if estado.get("flush_iniciado") and estado.get("eof_mensaje"):
+                    logger.warning(
+                        f"[AgregadorBancario] Recuperando barrera pendiente para {client_id} tras reinicio."
+                    )
+                    self.coordinator.iniciar_barrera(client_id, estado["eof_mensaje"])
 
 def __main__():
     setup_logging("bank_shard")

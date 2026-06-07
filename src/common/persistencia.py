@@ -60,6 +60,7 @@ class PersistidorEstado:
     def cargar(self) -> dict:
         """
         Carga el estado persistido. Si no existe, retorna un diccionario vacío.
+        Lanza excepción si el archivo existe pero está corrupto.
         """
         if not os.path.exists(self.filepath):
             logger.info(f"[Persistencia] No se encontró estado anterior para {self.node_name}. Iniciando limpio.")
@@ -68,9 +69,12 @@ class PersistidorEstado:
         try:
             with open(self.filepath, 'r', encoding='utf-8') as f:
                 return json.load(f)
+        except json.JSONDecodeError as e:
+            logger.error(f"[Persistencia] Archivo de estado corrupto {self.filepath}: {e}")
+            raise RuntimeError(f"Archivo de estado corrupto: {self.filepath}") from e
         except Exception as e:
-            logger.error(f"[Persistencia] Error al leer archivo de estado {self.filepath}: {e}. Retornando vacío.")
-            return {}
+            logger.error(f"[Persistencia] Error inesperado al leer archivo de estado {self.filepath}: {e}")
+            raise
 
     def borrar(self) -> bool:
         """

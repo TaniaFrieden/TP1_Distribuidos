@@ -93,7 +93,7 @@ clean:
 	rm -f logs/*.txt
 	rm -f output/*.csv
 	rm -rf output/*/
-	rm -rf volumen/
+	rm -rf volume/
 
 free-ports:
 	@echo "=== Liberando puerto $(SERVER_PORT) (Gateway) ==="
