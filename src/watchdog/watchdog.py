@@ -13,7 +13,6 @@ logger = logging.getLogger(__name__)
 
 
 def _publicar_caidas_watchdogs(config: WatchdogConfig, dead_ids: list[int]):
-    """Publica en la cola 'caidas' a cada watchdog muerto para que el actuador lo reinicie."""
     if not dead_ids:
         return
     try:
@@ -38,6 +37,11 @@ def main():
     detector_lock = threading.Lock()
 
     def on_become_leader(dead_watchdog_ids: list[int]):
+        """Activa el detector de caídas de workers y publica los watchdogs caídos detectados.
+
+        Crea una instancia nueva del detector en cada mandato para evitar que
+        _stop_event quede seteado de un mandato anterior.
+        """
         nonlocal detector_running, current_detector
         with detector_lock:
             if not detector_running:
@@ -48,6 +52,7 @@ def main():
         _publicar_caidas_watchdogs(config, dead_watchdog_ids)
 
     def on_lose_leader():
+        """Detiene el detector de caídas al ceder el liderazgo."""
         nonlocal detector_running, current_detector
         with detector_lock:
             if detector_running:

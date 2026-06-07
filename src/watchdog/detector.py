@@ -10,40 +10,37 @@ logger = logging.getLogger(__name__)
 
 class HeartbeatDetector:
     """
-    Consume colas heartbeat.<etapa> y detecta caídas por ausencia de heartbeat.
+    Monitorea los workers del sistema detectando ausencia de heartbeats.
 
-    Al detectar una caída publica {"etapa": ..., "instancia": ...} en la cola
-    de caidas para que el Actuador lo procese independientemente.
+    Cada worker publica periódicamente en heartbeat.<etapa>. Este detector
+    consume esas colas y, si un worker deja de enviar durante timeout_seconds,
+    publica {"etapa": ..., "instancia": ...} en la cola de caidas para que
+    el actuador lo reinicie.
+
+    Solo el watchdog líder instancia y ejecuta este detector.
     """
 
     def __init__(self, config):
         self._config = config
         self._lock = threading.Lock()
-        self._last_seen: dict[tuple, float] = {}       # {(etapa, instancia): timestamp}
+        self._last_seen: dict[tuple, float] = {}
         self._stop_event = threading.Event()
         self._consumer_queues: list[MessageMiddlewareQueueRabbitMQ] = []
         self._caidas_queue: MessageMiddlewareQueueRabbitMQ | None = None
 
-    # ------------------------------------------------------------------
-    # Ciclo de vida
-    # ------------------------------------------------------------------
-
     def start(self):
         for stage in self._config.stages:
-            t = threading.Thread(
+            threading.Thread(
                 target=self._consume_stage,
                 args=(stage,),
                 daemon=True,
                 name=f"detector-{stage}",
-            )
-            t.start()
-
-        checker = threading.Thread(
+            ).start()
+        threading.Thread(
             target=self._check_loop,
             daemon=True,
             name="detector-checker",
-        )
-        checker.start()
+        ).start()
         logger.info(
             f"[Detector] Iniciado. Etapas monitoreadas: {self._config.stages}. "
             f"Timeout: {self._config.timeout_seconds:.1f}s"
@@ -59,10 +56,6 @@ class HeartbeatDetector:
             except Exception:
                 pass
 
-    # ------------------------------------------------------------------
-    # Consumidor por etapa
-    # ------------------------------------------------------------------
-
     def _consume_stage(self, stage: str):
         queue_name = f"heartbeat.{stage}"
         try:
@@ -75,7 +68,7 @@ class HeartbeatDetector:
             if not self._stop_event.is_set():
                 logger.error(f"[Detector] Error consumiendo {queue_name}: {e}", exc_info=True)
 
-    def _on_heartbeat(self, msg: bytes, ack, nack):
+    def _on_heartbeat(self, msg: bytes, ack, _):
         try:
             payload = json.loads(msg.decode("utf-8"))
             etapa = payload["etapa"]
@@ -88,11 +81,12 @@ class HeartbeatDetector:
             logger.warning(f"[Detector] Heartbeat malformado: {e}")
             ack()
 
-    # ------------------------------------------------------------------
-    # Hilo de revisión periódica
-    # ------------------------------------------------------------------
-
     def _check_loop(self):
+        """Revisa periódicamente si algún worker superó el timeout de heartbeat.
+
+        Trabaja sobre un snapshot de _last_seen para minimizar el tiempo con lock.
+        Una vez publicada la caída, elimina la entrada para no publicarla de nuevo.
+        """
         while not self._stop_event.wait(self._config.check_interval_seconds):
             now = time.time()
             with self._lock:
@@ -119,17 +113,9 @@ class HeartbeatDetector:
                     self._config.mom_host,
                     self._config.caidas_queue,
                 )
-
-            evento = {"etapa": etapa, "instancia": instancia}
-            self._caidas_queue.send(json.dumps(evento).encode("utf-8"))
-
-            # Sacar del tracking para no publicar múltiples veces la misma caída
+            self._caidas_queue.send(json.dumps({"etapa": etapa, "instancia": instancia}).encode("utf-8"))
             with self._lock:
                 self._last_seen.pop((etapa, instancia), None)
-
             logger.info(f"[Detector] Evento de caída publicado: {etapa}/{instancia}")
         except Exception as e:
-            logger.error(
-                f"[Detector] Error publicando caída de {etapa}/{instancia}: {e}",
-                exc_info=True,
-            )
+            logger.error(f"[Detector] Error publicando caída de {etapa}/{instancia}: {e}", exc_info=True)
