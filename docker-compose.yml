@@ -1737,11 +1737,12 @@ services:
       PREFETCH_COUNT: '10'
       LOG_LEVEL: WARNING
       LOG_FILE: /app/logs/q5_counter_01.txt
-  watchdog:
+  watchdog_1:
     build:
       context: ./src
       dockerfile: watchdog/Dockerfile
-    container_name: watchdog
+    container_name: watchdog_1
+    restart: on-failure
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -1760,13 +1761,89 @@ services:
       MISSED_HEARTBEATS_THRESHOLD: '6'
       CHECK_INTERVAL_SECONDS: '5'
       CAIDAS_QUEUE: caidas
+      WATCHDOG_ID: '1'
+      NUM_WATCHDOGS: '3'
+      LEADER_HEARTBEAT_INTERVAL: '5'
+      LEADER_TIMEOUT_SECONDS: '20'
+      ELECTION_STARTUP_DELAY_MAX: '3'
+      CHECK_LEADER_INTERVAL: '5'
+      ELECTION_TIMEOUT: '30'
+      SUSPECTED_DEAD_TTL: '60'
       LOG_LEVEL: INFO
-      LOG_FILE: /app/logs/watchdog.txt
-  actuador:
+      LOG_FILE: /app/logs/watchdog_1.txt
+  watchdog_2:
+    build:
+      context: ./src
+      dockerfile: watchdog/Dockerfile
+    container_name: watchdog_2
+    restart: on-failure
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    volumes:
+    - ./logs:/app/logs
+    environment:
+      MOM_HOST: rabbitmq
+      MOM_PORT: '5672'
+      MOM_USER: distributed
+      MOM_PASSWORD: distributed
+      MOM_VHOST: /
+      WATCHDOG_STAGES: '["shared_filter_usd", "q1_projection", "q1_minor_than_50", "q2_bank_projection", "q2_projection", "q2_agregador_shard", "q3_filter_fechas", "q3_format_shard", "q4_projection", "q4_filter_period", "q4_sumador", "q4_joiner", "q4_contador", "q5_projection", "q5_filter_period", "q5_filter_format", "q5_converter", "q5_counter"]'
+      HEARTBEAT_INTERVAL_SECONDS: '5'
+      MISSED_HEARTBEATS_THRESHOLD: '6'
+      CHECK_INTERVAL_SECONDS: '5'
+      CAIDAS_QUEUE: caidas
+      WATCHDOG_ID: '2'
+      NUM_WATCHDOGS: '3'
+      LEADER_HEARTBEAT_INTERVAL: '5'
+      LEADER_TIMEOUT_SECONDS: '20'
+      ELECTION_STARTUP_DELAY_MAX: '3'
+      CHECK_LEADER_INTERVAL: '5'
+      ELECTION_TIMEOUT: '30'
+      SUSPECTED_DEAD_TTL: '60'
+      LOG_LEVEL: INFO
+      LOG_FILE: /app/logs/watchdog_2.txt
+  watchdog_3:
+    build:
+      context: ./src
+      dockerfile: watchdog/Dockerfile
+    container_name: watchdog_3
+    restart: on-failure
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    volumes:
+    - ./logs:/app/logs
+    environment:
+      MOM_HOST: rabbitmq
+      MOM_PORT: '5672'
+      MOM_USER: distributed
+      MOM_PASSWORD: distributed
+      MOM_VHOST: /
+      WATCHDOG_STAGES: '["shared_filter_usd", "q1_projection", "q1_minor_than_50", "q2_bank_projection", "q2_projection", "q2_agregador_shard", "q3_filter_fechas", "q3_format_shard", "q4_projection", "q4_filter_period", "q4_sumador", "q4_joiner", "q4_contador", "q5_projection", "q5_filter_period", "q5_filter_format", "q5_converter", "q5_counter"]'
+      HEARTBEAT_INTERVAL_SECONDS: '5'
+      MISSED_HEARTBEATS_THRESHOLD: '6'
+      CHECK_INTERVAL_SECONDS: '5'
+      CAIDAS_QUEUE: caidas
+      WATCHDOG_ID: '3'
+      NUM_WATCHDOGS: '3'
+      LEADER_HEARTBEAT_INTERVAL: '5'
+      LEADER_TIMEOUT_SECONDS: '20'
+      ELECTION_STARTUP_DELAY_MAX: '3'
+      CHECK_LEADER_INTERVAL: '5'
+      ELECTION_TIMEOUT: '30'
+      SUSPECTED_DEAD_TTL: '60'
+      LOG_LEVEL: INFO
+      LOG_FILE: /app/logs/watchdog_3.txt
+  actuador_1:
     build:
       context: ./src
       dockerfile: watchdog/DockerfileActuador
-    container_name: actuador
+    container_name: actuador_1
     restart: always
     depends_on:
       rabbitmq:
@@ -1782,4 +1859,25 @@ services:
       MOM_VHOST: /
       CAIDAS_QUEUE: caidas
       LOG_LEVEL: INFO
-      LOG_FILE: /app/logs/actuador.txt
+      LOG_FILE: /app/logs/actuador_1.txt
+  actuador_2:
+    build:
+      context: ./src
+      dockerfile: watchdog/DockerfileActuador
+    container_name: actuador_2
+    restart: always
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+    - /var/run/docker.sock:/var/run/docker.sock
+    - ./logs:/app/logs
+    environment:
+      MOM_HOST: rabbitmq
+      MOM_PORT: '5672'
+      MOM_USER: distributed
+      MOM_PASSWORD: distributed
+      MOM_VHOST: /
+      CAIDAS_QUEUE: caidas
+      LOG_LEVEL: INFO
+      LOG_FILE: /app/logs/actuador_2.txt

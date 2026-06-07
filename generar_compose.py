@@ -18,6 +18,8 @@ LEADER_HEARTBEAT_INTERVAL = 5            # con qué frecuencia el líder envía 
 LEADER_TIMEOUT_SECONDS = 20              # tiempo sin heartbeat antes de que un standby inicie elección
 ELECTION_STARTUP_DELAY_MAX = 3           # jitter máximo en segundos al arrancar antes de iniciar elección
 CHECK_LEADER_INTERVAL = 5               # frecuencia del hilo que chequea timeout del líder
+ELECTION_TIMEOUT = 30                    # segundos antes de reintentar una elección que no cerró
+SUSPECTED_DEAD_TTL = 60                  # segundos que un nodo permanece en la lista de sospechados
 
 NUM_ACTUADORES = 2                       # instancias del actuador (consume cola "caidas" en paralelo)
 
@@ -306,6 +308,8 @@ def generar_compose():
                 'LEADER_TIMEOUT_SECONDS': str(LEADER_TIMEOUT_SECONDS),
                 'ELECTION_STARTUP_DELAY_MAX': str(ELECTION_STARTUP_DELAY_MAX),
                 'CHECK_LEADER_INTERVAL': str(CHECK_LEADER_INTERVAL),
+                'ELECTION_TIMEOUT': str(ELECTION_TIMEOUT),
+                'SUSPECTED_DEAD_TTL': str(SUSPECTED_DEAD_TTL),
                 'LOG_LEVEL': 'INFO',
                 'LOG_FILE': f'/app/logs/watchdog_{wid}.txt',
             },

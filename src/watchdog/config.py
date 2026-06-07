@@ -18,6 +18,8 @@ class WatchdogConfig:
         self.leader_timeout_seconds = float(os.getenv("LEADER_TIMEOUT_SECONDS", "20"))
         self.election_startup_delay_max = float(os.getenv("ELECTION_STARTUP_DELAY_MAX", "3"))
         self.check_leader_interval = float(os.getenv("CHECK_LEADER_INTERVAL", "5"))
+        self.election_timeout = float(os.getenv("ELECTION_TIMEOUT", "30"))
+        self.suspected_dead_ttl = float(os.getenv("SUSPECTED_DEAD_TTL", "60"))
 
     @property
     def timeout_seconds(self):

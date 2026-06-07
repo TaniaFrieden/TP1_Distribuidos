@@ -23,18 +23,25 @@ class RingElection:
     Colas de anillo:     ring.1, ring.2, ring.3
 
     Mensajes:
-      {"tipo": "eleccion",    "id": N}  — propagación de elección
-      {"tipo": "coordinador", "id": N}  — anuncio del líder electo
+      {"tipo": "eleccion",    "id": N, "skip": [...]}  — propagación de elección
+      {"tipo": "coordinador", "id": N}                 — anuncio del líder electo
+      {"tipo": "vivo",        "id": N}                 — nodo se reanuncia al reiniciarse
+      {"tipo": "hb_standby",  "id": N}                 — heartbeat de standby al líder
 
-    El líder publica heartbeats en el exchange fanout LEADER_HB_EXCHANGE.
-    Cada nodo tiene su propia cola heartbeat.watchdog.<id> ligada a ese exchange
-    para recibir todos los heartbeats sin round-robin.
+    El líder:
+      - publica heartbeats via fanout LEADER_HB_EXCHANGE para que los standbys detecten su caída
+      - consume "hb_standby" en su ring queue para detectar la caída de los standbys
+
+    Los standbys:
+      - escuchan el fanout LEADER_HB_EXCHANGE para detectar la caída del líder
+      - envían "hb_standby" periódicamente al ring queue del líder
     """
 
-    def __init__(self, config, on_become_leader, on_lose_leader):
+    def __init__(self, config, on_become_leader, on_lose_leader, on_standby_dead=None):
         self._config = config
         self._on_become_leader = on_become_leader
         self._on_lose_leader = on_lose_leader
+        self._on_standby_dead = on_standby_dead  # callback(node_id: int)
 
         self._id = config.watchdog_id
         self._n = config.num_watchdogs
@@ -43,14 +50,23 @@ class RingElection:
         self._is_leader = False
         self._leader_id = None
         self._in_election = False
-        self._last_leader_hb = None          # None = aún no se recibió heartbeat
-        self._forwarded_coordinators = set() # evitar reenviar el mismo coordinador
+        self._election_started_at: float | None = None
+        self._last_leader_hb: float | None = None
+        self._last_election_target: int | None = None
+        self._forwarded_coordinators: set[int] = set()
+        self._suspected_dead_ids: dict[int, float] = {}  # nodo_id → timestamp sospechado
+
+        # Estado exclusivo del líder para monitorear standbys
+        self._became_leader_at: float | None = None
+        self._standby_last_seen: dict[int, float] = {}   # nodo_id → último hb recibido
+        self._reported_dead_standbys: set[int] = set()   # ya publicados a caidas (evita duplicados)
 
         self._lock = threading.Lock()
+        self._send_lock = threading.Lock()  # pika no es thread-safe; serializa envíos
         self._stop_event = threading.Event()
 
         self._ring_consumer: MessageMiddlewareQueueRabbitMQ | None = None
-        self._ring_sender: MessageMiddlewareQueueRabbitMQ | None = None
+        self._ring_senders: dict[int, MessageMiddlewareQueueRabbitMQ] = {}
         self._hb_consumer: FanoutQueueRabbitMQ | None = None
         self._hb_publisher: FanoutExchangeRabbitMQ | None = None
 
@@ -71,6 +87,12 @@ class RingElection:
         threading.Thread(
             target=self._startup_check, daemon=True, name=f"ring-init-{self._id}"
         ).start()
+        threading.Thread(
+            target=self._standby_hb_sender_loop, daemon=True, name=f"ring-standby-hb-{self._id}"
+        ).start()
+        threading.Thread(
+            target=self._check_standbys_loop, daemon=True, name=f"ring-standby-check-{self._id}"
+        ).start()
         logger.info(
             f"[Ring-{self._id}] Iniciado. Siguiente en anillo: watchdog_{self._next_id}. "
             f"Total nodos: {self._n}"
@@ -86,7 +108,7 @@ class RingElection:
                     pass
 
     # ------------------------------------------------------------------
-    # Chequeo inicial: iniciar elección si no hay líder
+    # Chequeo inicial
     # ------------------------------------------------------------------
 
     def _startup_check(self):
@@ -99,10 +121,33 @@ class RingElection:
             hb_received = self._last_leader_hb is not None
 
         if hb_received:
-            logger.info(f"[Ring-{self._id}] Líder activo detectado vía heartbeat. No se inicia elección.")
+            logger.info(f"[Ring-{self._id}] Líder activo detectado. Anunciando presencia al anillo.")
+            self._announce_alive()
         else:
             logger.info(f"[Ring-{self._id}] Sin heartbeat de líder. Iniciando elección.")
             self._initiate_election()
+
+    # ------------------------------------------------------------------
+    # Anuncio de presencia al reiniciarse como standby
+    # ------------------------------------------------------------------
+
+    def _announce_alive(self):
+        """Notifica a todos los nodos del anillo que este nodo está vivo.
+        Se llama al reiniciarse cuando ya hay un líder activo."""
+        msg = {"tipo": "vivo", "id": self._id}
+        for nid in range(1, self._n + 1):
+            if nid != self._id:
+                self._send_to(nid, msg)
+        logger.info(f"[Ring-{self._id}] Anuncio 'vivo' enviado a todos los nodos.")
+
+    def _handle_alive(self, node_id: int):
+        with self._lock:
+            self._suspected_dead_ids.pop(node_id, None)
+            if self._is_leader:
+                # También cuenta como heartbeat de standby para el monitoreo
+                self._standby_last_seen[node_id] = time.time()
+                self._reported_dead_standbys.discard(node_id)
+        logger.info(f"[Ring-{self._id}] watchdog_{node_id} anunció que está vivo → removido de sospechados.")
 
     # ------------------------------------------------------------------
     # Elección
@@ -111,15 +156,46 @@ class RingElection:
     def _initiate_election(self):
         with self._lock:
             if self._in_election:
-                logger.debug(f"[Ring-{self._id}] Elección ya en progreso, omitiendo inicio duplicado.")
-                return
+                elapsed = (
+                    time.time() - self._election_started_at
+                    if self._election_started_at is not None
+                    else 0
+                )
+                if elapsed < self._config.election_timeout:
+                    return  # elección aún en progreso
+                # Timeout: el nodo al que mandamos no respondió → sospechoso
+                if (self._last_election_target is not None
+                        and self._last_election_target != self._id):
+                    self._suspected_dead_ids.setdefault(
+                        self._last_election_target, time.time()
+                    )
+                    logger.warning(
+                        f"[Ring-{self._id}] Timeout de elección: "
+                        f"watchdog_{self._last_election_target} agregado a sospechados."
+                    )
+                logger.warning(
+                    f"[Ring-{self._id}] Elección sin resultado tras {elapsed:.0f}s. "
+                    "Reintentando saltando nodos sospechados."
+                )
             self._in_election = True
+            self._election_started_at = time.time()
+            skip = list(self._suspected_dead_ids)
 
-        logger.info(f"[Ring-{self._id}] Elección iniciada — enviando id={self._id} a watchdog_{self._next_id}.")
-        self._send_to_next({"tipo": "eleccion", "id": self._id})
-
-    def _handle_election(self, received_id: int):
+        target = self._get_next_target()
         with self._lock:
+            self._last_election_target = target
+        logger.info(
+            f"[Ring-{self._id}] Elección iniciada — "
+            f"enviando id={self._id} a watchdog_{target} (skip={skip})."
+        )
+        self._send_to(target, {"tipo": "eleccion", "id": self._id, "skip": skip})
+
+    def _handle_election(self, received_id: int, skip: list[int]):
+        with self._lock:
+            if skip:
+                now = time.time()
+                for nid in skip:
+                    self._suspected_dead_ids.setdefault(nid, now)
             is_leader = self._is_leader
             leader_id = self._leader_id
             last_hb = self._last_leader_hb
@@ -127,11 +203,9 @@ class RingElection:
         max_id = max(received_id, self._id)
 
         if received_id == self._id:
-            # El propio mensaje dio la vuelta completa al anillo
             if is_leader:
                 logger.debug(f"[Ring-{self._id}] Ya soy líder, ignorando elección duplicada.")
                 return
-            # Verificar que no haya un líder más reciente activo
             if (leader_id is not None
                     and leader_id != self._id
                     and last_hb is not None
@@ -143,7 +217,6 @@ class RingElection:
                 return
             self._declare_leader()
         else:
-            # Swallow si ya hay un líder activo conocido
             if is_leader:
                 logger.debug(f"[Ring-{self._id}] Soy líder, absorbiendo mensaje de elección.")
                 return
@@ -151,30 +224,50 @@ class RingElection:
                     and last_hb is not None
                     and time.time() - last_hb < self._config.leader_timeout_seconds):
                 logger.debug(
-                    f"[Ring-{self._id}] Líder activo conocido, absorbiendo mensaje de elección."
+                    f"[Ring-{self._id}] Líder activo conocido, absorbiendo elección."
                 )
                 return
             with self._lock:
                 self._in_election = True
-            logger.debug(f"[Ring-{self._id}] Reenviando elección id={max_id} (recibido={received_id}).")
-            self._send_to_next({"tipo": "eleccion", "id": max_id})
+                current_skip = list(self._suspected_dead_ids)
+            target = self._get_next_target()
+            logger.info(
+                f"[Ring-{self._id}] Reenviando elección id={max_id} "
+                f"(recibido={received_id}) → watchdog_{target} (skip={current_skip})."
+            )
+            self._send_to(target, {"tipo": "eleccion", "id": max_id, "skip": current_skip})
 
     def _declare_leader(self):
-        logger.info(f"[Ring-{self._id}] ¡SOY EL LÍDER!")
         with self._lock:
+            if self._is_leader:
+                logger.debug(f"[Ring-{self._id}] Ya soy líder, ignorando declaración duplicada.")
+                return
             self._is_leader = True
             self._leader_id = self._id
             self._in_election = False
+            self._election_started_at = None
+            self._forwarded_coordinators.clear()
+            coord_target = self._compute_next_target()
+            self._suspected_dead_ids.pop(self._id, None)
+            now = time.time()
+            dead_nodes = [
+                nid for nid, ts in self._suspected_dead_ids.items()
+                if now - ts < self._config.suspected_dead_ttl
+            ]
+            # Resetear estado de monitoreo de standbys para el nuevo mandato
+            self._became_leader_at = now
+            self._standby_last_seen.clear()
+            self._reported_dead_standbys.clear()
 
-        self._on_become_leader()
-        self._send_to_next({"tipo": "coordinador", "id": self._id})
+        logger.info(f"[Ring-{self._id}] ¡SOY EL LÍDER! Nodos caídos detectados: {dead_nodes}")
+        self._on_become_leader(dead_nodes)
+        self._send_to(coord_target, {"tipo": "coordinador", "id": self._id})
         threading.Thread(
             target=self._leader_hb_loop, daemon=True, name=f"ring-hb-send-{self._id}"
         ).start()
 
     def _handle_coordinator(self, leader_id: int):
         if leader_id == self._id:
-            # El coordinador completó la vuelta o es un stale message tras reinicio
             with self._lock:
                 if not self._is_leader:
                     logger.debug(
@@ -187,12 +280,18 @@ class RingElection:
             already_forwarded = leader_id in self._forwarded_coordinators
             if not already_forwarded:
                 self._forwarded_coordinators.add(leader_id)
-            prev_leader = self._leader_id
             self._leader_id = leader_id
             self._last_leader_hb = time.time()
             self._in_election = False
+            self._election_started_at = None
+            self._suspected_dead_ids.pop(leader_id, None)
             was_leader = self._is_leader
             self._is_leader = False
+            if was_leader:
+                # Limpiar estado de monitoreo al perder el liderazgo
+                self._became_leader_at = None
+                self._standby_last_seen.clear()
+                self._reported_dead_standbys.clear()
 
         logger.info(f"[Ring-{self._id}] Líder establecido: watchdog_{leader_id}")
 
@@ -200,7 +299,8 @@ class RingElection:
             self._on_lose_leader()
 
         if not already_forwarded:
-            self._send_to_next({"tipo": "coordinador", "id": leader_id})
+            target = self._get_next_target()
+            self._send_to(target, {"tipo": "coordinador", "id": leader_id})
 
     # ------------------------------------------------------------------
     # Hilo: consumidor de mensajes del anillo
@@ -222,11 +322,16 @@ class RingElection:
             payload = json.loads(msg.decode("utf-8"))
             tipo = payload.get("tipo")
             received_id = payload.get("id")
+            skip = payload.get("skip", [])
             ack()
             if tipo == "eleccion":
-                self._handle_election(received_id)
+                self._handle_election(received_id, skip)
             elif tipo == "coordinador":
                 self._handle_coordinator(received_id)
+            elif tipo == "vivo":
+                self._handle_alive(received_id)
+            elif tipo == "hb_standby":
+                self._handle_standby_hb(received_id)
             else:
                 logger.warning(f"[Ring-{self._id}] Tipo de mensaje desconocido: {tipo}")
         except Exception as e:
@@ -234,7 +339,7 @@ class RingElection:
             ack()
 
     # ------------------------------------------------------------------
-    # Hilo: heartbeat sender del líder
+    # Hilo: heartbeat sender del líder → standbys
     # ------------------------------------------------------------------
 
     def _leader_hb_loop(self):
@@ -259,7 +364,63 @@ class RingElection:
                 logger.error(f"[Ring-{self._id}] Error en loop heartbeat líder: {e}", exc_info=True)
 
     # ------------------------------------------------------------------
-    # Hilo: consumidor de heartbeats del líder (para standby)
+    # Hilo: heartbeat sender de standbys → líder
+    # ------------------------------------------------------------------
+
+    def _standby_hb_sender_loop(self):
+        while not self._stop_event.is_set():
+            with self._lock:
+                is_leader = self._is_leader
+                leader_id = self._leader_id
+            if not is_leader and leader_id is not None:
+                try:
+                    self._send_to(leader_id, {"tipo": "hb_standby", "id": self._id})
+                    logger.debug(
+                        f"[Ring-{self._id}] Heartbeat de standby enviado al líder watchdog_{leader_id}."
+                    )
+                except Exception as e:
+                    logger.warning(f"[Ring-{self._id}] Error enviando heartbeat de standby: {e}")
+            self._stop_event.wait(self._config.leader_heartbeat_interval)
+
+    def _handle_standby_hb(self, node_id: int):
+        with self._lock:
+            if not self._is_leader:
+                return
+            self._standby_last_seen[node_id] = time.time()
+            self._reported_dead_standbys.discard(node_id)
+        logger.debug(f"[Ring-{self._id}] Heartbeat de standby recibido de watchdog_{node_id}.")
+
+    # ------------------------------------------------------------------
+    # Hilo: líder monitorea si algún standby cayó
+    # ------------------------------------------------------------------
+
+    def _check_standbys_loop(self):
+        while not self._stop_event.wait(self._config.check_leader_interval):
+            with self._lock:
+                if not self._is_leader or self._became_leader_at is None:
+                    continue
+                now = time.time()
+                # Período de gracia: esperar que los standbys hayan podido enviar al menos un HB
+                if now - self._became_leader_at < self._config.leader_timeout_seconds:
+                    continue
+                dead = []
+                for nid in range(1, self._n + 1):
+                    if nid == self._id or nid in self._reported_dead_standbys:
+                        continue
+                    last_ts = self._standby_last_seen.get(nid)
+                    if last_ts is None or now - last_ts > self._config.leader_timeout_seconds:
+                        dead.append(nid)
+                        self._reported_dead_standbys.add(nid)
+
+            for nid in dead:
+                logger.warning(
+                    f"[Ring-{self._id}] Standby watchdog_{nid} sin heartbeat. Publicando caída."
+                )
+                if self._on_standby_dead is not None:
+                    self._on_standby_dead(nid)
+
+    # ------------------------------------------------------------------
+    # Hilo: consumidor de heartbeats del líder (para standbys)
     # ------------------------------------------------------------------
 
     def _consume_leader_hb(self):
@@ -286,6 +447,7 @@ class RingElection:
                 self._last_leader_hb = time.time()
                 if not self._is_leader and leader_id is not None:
                     self._leader_id = leader_id
+                    self._suspected_dead_ids.pop(leader_id, None)
             logger.debug(f"[Ring-{self._id}] Heartbeat recibido de líder watchdog_{leader_id}.")
             ack()
         except Exception as e:
@@ -303,49 +465,85 @@ class RingElection:
                 if self._is_leader:
                     continue
                 last_hb = self._last_leader_hb
+                dead_leader = self._leader_id
+                in_election = self._in_election
+                election_started = self._election_started_at
 
-            if last_hb is None:
-                elapsed = time.time() - startup_time
-            else:
-                elapsed = time.time() - last_hb
-
-            if elapsed > self._config.leader_timeout_seconds:
-                logger.warning(
-                    f"[Ring-{self._id}] Sin heartbeat de líder por {elapsed:.1f}s. "
-                    "Iniciando nueva elección."
-                )
-                with self._lock:
-                    self._leader_id = None
-                    self._last_leader_hb = None
-                    self._forwarded_coordinators.clear()
-                self._initiate_election()
-
-    # ------------------------------------------------------------------
-    # Helper: enviar al siguiente nodo del anillo
-    # ------------------------------------------------------------------
-
-    def _send_to_next(self, payload: dict):
-        queue_name = f"ring.{self._next_id}"
-        data = json.dumps(payload).encode()
-        try:
-            if self._ring_sender is None:
-                self._ring_sender = MessageMiddlewareQueueRabbitMQ(
-                    self._config.mom_host, queue_name
-                )
-            self._ring_sender.send(data)
-        except Exception as e:
-            logger.error(
-                f"[Ring-{self._id}] Error enviando {payload['tipo']} a {queue_name}: {e}",
-                exc_info=True,
+            elapsed = (
+                time.time() - last_hb
+                if last_hb is not None
+                else time.time() - startup_time
             )
-            self._ring_sender = None
+
+            if elapsed <= self._config.leader_timeout_seconds:
+                continue
+
+            election_timed_out = (
+                in_election
+                and election_started is not None
+                and time.time() - election_started >= self._config.election_timeout
+            )
+            if in_election and not election_timed_out:
+                continue  # elección en progreso, esperar
+
+            with self._lock:
+                if dead_leader is not None:
+                    self._suspected_dead_ids[dead_leader] = time.time()
+                self._leader_id = None
+                self._last_leader_hb = None
+                self._forwarded_coordinators.clear()
+
+            logger.warning(
+                f"[Ring-{self._id}] Sin heartbeat de líder por {elapsed:.1f}s. "
+                "Iniciando nueva elección."
+            )
+            self._initiate_election()
+
+    # ------------------------------------------------------------------
+    # Helpers de envío
+    # ------------------------------------------------------------------
+
+    def _compute_next_target(self) -> int:
+        """Calcula el próximo nodo del anillo saltando los sospechados. Requiere self._lock."""
+        now = time.time()
+        dead = {
+            nid for nid, ts in self._suspected_dead_ids.items()
+            if now - ts < self._config.suspected_dead_ttl
+        }
+        target = self._next_id
+        for _ in range(self._n):
+            if target not in dead:
+                return target
+            target = (target % self._n) + 1
+        return self._next_id  # fallback: todos sospechados, reintentar con el siguiente directo
+
+    def _get_next_target(self) -> int:
+        with self._lock:
+            return self._compute_next_target()
+
+    def _send_to(self, target_id: int, payload: dict):
+        queue_name = f"ring.{target_id}"
+        data = json.dumps(payload).encode()
+        with self._send_lock:
             try:
-                self._ring_sender = MessageMiddlewareQueueRabbitMQ(
-                    self._config.mom_host, queue_name
-                )
-                self._ring_sender.send(data)
-            except Exception as e2:
+                if target_id not in self._ring_senders:
+                    self._ring_senders[target_id] = MessageMiddlewareQueueRabbitMQ(
+                        self._config.mom_host, queue_name
+                    )
+                self._ring_senders[target_id].send(data)
+            except Exception as e:
                 logger.error(
-                    f"[Ring-{self._id}] Retry fallido enviando a {queue_name}: {e2}",
+                    f"[Ring-{self._id}] Error enviando {payload.get('tipo')} a {queue_name}: {e}",
                     exc_info=True,
                 )
+                self._ring_senders.pop(target_id, None)
+                try:
+                    self._ring_senders[target_id] = MessageMiddlewareQueueRabbitMQ(
+                        self._config.mom_host, queue_name
+                    )
+                    self._ring_senders[target_id].send(data)
+                except Exception as e2:
+                    logger.error(
+                        f"[Ring-{self._id}] Retry fallido enviando a {queue_name}: {e2}",
+                        exc_info=True,
+                    )
