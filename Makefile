@@ -1,5 +1,5 @@
 MAKEFLAGS += --no-print-directory
-PYTHON := .venv/bin/python
+PYTHON := $(shell command -v python3 2>/dev/null || command -v python 2>/dev/null)
 PIP := $(PYTHON) -m pip
 PYTEST := PYTHONPATH=src $(PYTHON) -m pytest
 START_VERBOSE := $(if $(filter --verbose,$(MAKECMDGOALS)),1,0)
@@ -69,6 +69,14 @@ test:
 	@echo " projection"
 	@echo "══════════════════════════════════════════"
 	@$(PYTEST) test/common/workers/test_projection.py -v --tb=short --no-header -q || true
+	@echo "\n══════════════════════════════════════════"
+	@echo " ring_election"
+	@echo "══════════════════════════════════════════"
+	@$(PYTEST) test/watchdog/test_ring_election.py -v --tb=short --no-header -q || true
+	@echo "\n══════════════════════════════════════════"
+	@echo " detector"
+	@echo "══════════════════════════════════════════"
+	@$(PYTEST) test/watchdog/test_detector.py -v --tb=short --no-header -q || true
 
 test-worker-base:
 	$(PYTEST) test/common/worker_base/test_worker_base.py -q
