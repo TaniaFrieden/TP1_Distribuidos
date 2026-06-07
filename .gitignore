@@ -11,6 +11,7 @@ __pycache__/
 .agents
 docs/*.md
 tp
+volume
 
 # C extensions
 *.so

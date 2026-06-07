@@ -61,6 +61,10 @@ def main():
     for indice in range(1, cantidad_iteraciones + 1):
         imprimir_titulo(f"Iteración {indice}/{cantidad_iteraciones}")
         
+        client_id_actual = str(indice - 1)
+        os.system("truncate -s 0 logs/*.txt 2>/dev/null")
+        os.system(f"rm -rf output/{client_id_actual}/ 2>/dev/null")
+        
         try:
             subprocess.run(
                 [
@@ -92,6 +96,8 @@ def main():
                 fallas_por_query[query] += 1
                 print(f"\nComparando CSVs para Query {query}: Diferentes")
                 print(mensaje)
+                print("\n[ERROR CRÍTICO] Discrepancia detectada en Query {}. Abortando para preservar logs y estado del sistema.".format(query))
+                sys.exit(1)
 
     imprimir_titulo("Resumen")
     print(f"\nResumen de fallas por query después de {cantidad_iteraciones} iteraciones:")
