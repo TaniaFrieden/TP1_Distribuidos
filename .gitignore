@@ -8,7 +8,9 @@ __pycache__/
 *.py[codz]
 *$py.class
 .antigravitycli 
-agents
+.agents
+docs/*.md
+tp
 
 # C extensions
 *.so
