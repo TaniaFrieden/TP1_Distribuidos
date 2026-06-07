@@ -19,22 +19,16 @@ class RingElection:
     """
     Protocolo de elección en anillo entre instancias del watchdog.
 
-    Topología del anillo: watchdog_1 → watchdog_2 → watchdog_3 → watchdog_1
-    Colas de anillo:     ring.1, ring.2, ring.3
+    Topología: watchdog_1 → watchdog_2 → watchdog_3 → watchdog_1  (ring.N queues)
 
-    Mensajes:
-      {"tipo": "eleccion",    "id": N, "skip": [...]}  — propagación de elección
-      {"tipo": "coordinador", "id": N}                 — anuncio del líder electo
-      {"tipo": "vivo",        "id": N}                 — nodo se reanuncia al reiniciarse
-      {"tipo": "hb_standby",  "id": N}                 — heartbeat de standby al líder
+    Mensajes por el anillo:
+      eleccion    — propaga max(received_id, self_id) hacia el siguiente nodo
+      coordinador — anuncia el líder electo, da una vuelta completa
+      vivo        — nodo reiniciado avisa que está activo
+      hb_standby  — standby avisa periódicamente al líder que sigue vivo
 
-    El líder:
-      - publica heartbeats via fanout LEADER_HB_EXCHANGE para que los standbys detecten su caída
-      - consume "hb_standby" en su ring queue para detectar la caída de los standbys
-
-    Los standbys:
-      - escuchan el fanout LEADER_HB_EXCHANGE para detectar la caída del líder
-      - envían "hb_standby" periódicamente al ring queue del líder
+    Heartbeats fuera del anillo:
+      líder → standbys : fanout exchange LEADER_HB_EXCHANGE
     """
 
     def __init__(self, config, on_become_leader, on_lose_leader, on_standby_dead=None):
@@ -59,7 +53,7 @@ class RingElection:
         # Estado exclusivo del líder para monitorear standbys
         self._became_leader_at: float | None = None
         self._standby_last_seen: dict[int, float] = {}   # nodo_id → último hb recibido
-        self._reported_dead_standbys: set[int] = set()   # ya publicados a caidas (evita duplicados)
+        self._reported_dead_standbys: set[int] = set()   # ya publicados a caidas
 
         self._lock = threading.Lock()
         self._send_lock = threading.Lock()  # pika no es thread-safe; serializa envíos
@@ -82,16 +76,10 @@ class RingElection:
             target=self._consume_leader_hb, daemon=True, name=f"ring-hb-{self._id}"
         ).start()
         threading.Thread(
-            target=self._check_leader_timeout, daemon=True, name=f"ring-check-{self._id}"
+            target=self._periodic_loop, daemon=True, name=f"ring-periodic-{self._id}"
         ).start()
         threading.Thread(
             target=self._startup_check, daemon=True, name=f"ring-init-{self._id}"
-        ).start()
-        threading.Thread(
-            target=self._standby_hb_sender_loop, daemon=True, name=f"ring-standby-hb-{self._id}"
-        ).start()
-        threading.Thread(
-            target=self._check_standbys_loop, daemon=True, name=f"ring-standby-check-{self._id}"
         ).start()
         logger.info(
             f"[Ring-{self._id}] Iniciado. Siguiente en anillo: watchdog_{self._next_id}. "
@@ -132,8 +120,6 @@ class RingElection:
     # ------------------------------------------------------------------
 
     def _announce_alive(self):
-        """Notifica a todos los nodos del anillo que este nodo está vivo.
-        Se llama al reiniciarse cuando ya hay un líder activo."""
         msg = {"tipo": "vivo", "id": self._id}
         for nid in range(1, self._n + 1):
             if nid != self._id:
@@ -144,7 +130,6 @@ class RingElection:
         with self._lock:
             self._suspected_dead_ids.pop(node_id, None)
             if self._is_leader:
-                # También cuenta como heartbeat de standby para el monitoreo
                 self._standby_last_seen[node_id] = time.time()
                 self._reported_dead_standbys.discard(node_id)
         logger.info(f"[Ring-{self._id}] watchdog_{node_id} anunció que está vivo → removido de sospechados.")
@@ -162,8 +147,7 @@ class RingElection:
                     else 0
                 )
                 if elapsed < self._config.election_timeout:
-                    return  # elección aún en progreso
-                # Timeout: el nodo al que mandamos no respondió → sospechoso
+                    return
                 if (self._last_election_target is not None
                         and self._last_election_target != self._id):
                     self._suspected_dead_ids.setdefault(
@@ -223,9 +207,7 @@ class RingElection:
             if (leader_id is not None
                     and last_hb is not None
                     and time.time() - last_hb < self._config.leader_timeout_seconds):
-                logger.debug(
-                    f"[Ring-{self._id}] Líder activo conocido, absorbiendo elección."
-                )
+                logger.debug(f"[Ring-{self._id}] Líder activo conocido, absorbiendo elección.")
                 return
             with self._lock:
                 self._in_election = True
@@ -254,7 +236,6 @@ class RingElection:
                 nid for nid, ts in self._suspected_dead_ids.items()
                 if now - ts < self._config.suspected_dead_ttl
             ]
-            # Resetear estado de monitoreo de standbys para el nuevo mandato
             self._became_leader_at = now
             self._standby_last_seen.clear()
             self._reported_dead_standbys.clear()
@@ -288,7 +269,6 @@ class RingElection:
             was_leader = self._is_leader
             self._is_leader = False
             if was_leader:
-                # Limpiar estado de monitoreo al perder el liderazgo
                 self._became_leader_at = None
                 self._standby_last_seen.clear()
                 self._reported_dead_standbys.clear()
@@ -339,7 +319,7 @@ class RingElection:
             ack()
 
     # ------------------------------------------------------------------
-    # Hilo: heartbeat sender del líder → standbys
+    # Hilo: heartbeat sender del líder → standbys (fanout)
     # ------------------------------------------------------------------
 
     def _leader_hb_loop(self):
@@ -362,62 +342,6 @@ class RingElection:
         except Exception as e:
             if not self._stop_event.is_set():
                 logger.error(f"[Ring-{self._id}] Error en loop heartbeat líder: {e}", exc_info=True)
-
-    # ------------------------------------------------------------------
-    # Hilo: heartbeat sender de standbys → líder
-    # ------------------------------------------------------------------
-
-    def _standby_hb_sender_loop(self):
-        while not self._stop_event.is_set():
-            with self._lock:
-                is_leader = self._is_leader
-                leader_id = self._leader_id
-            if not is_leader and leader_id is not None:
-                try:
-                    self._send_to(leader_id, {"tipo": "hb_standby", "id": self._id})
-                    logger.debug(
-                        f"[Ring-{self._id}] Heartbeat de standby enviado al líder watchdog_{leader_id}."
-                    )
-                except Exception as e:
-                    logger.warning(f"[Ring-{self._id}] Error enviando heartbeat de standby: {e}")
-            self._stop_event.wait(self._config.leader_heartbeat_interval)
-
-    def _handle_standby_hb(self, node_id: int):
-        with self._lock:
-            if not self._is_leader:
-                return
-            self._standby_last_seen[node_id] = time.time()
-            self._reported_dead_standbys.discard(node_id)
-        logger.debug(f"[Ring-{self._id}] Heartbeat de standby recibido de watchdog_{node_id}.")
-
-    # ------------------------------------------------------------------
-    # Hilo: líder monitorea si algún standby cayó
-    # ------------------------------------------------------------------
-
-    def _check_standbys_loop(self):
-        while not self._stop_event.wait(self._config.check_leader_interval):
-            with self._lock:
-                if not self._is_leader or self._became_leader_at is None:
-                    continue
-                now = time.time()
-                # Período de gracia: esperar que los standbys hayan podido enviar al menos un HB
-                if now - self._became_leader_at < self._config.leader_timeout_seconds:
-                    continue
-                dead = []
-                for nid in range(1, self._n + 1):
-                    if nid == self._id or nid in self._reported_dead_standbys:
-                        continue
-                    last_ts = self._standby_last_seen.get(nid)
-                    if last_ts is None or now - last_ts > self._config.leader_timeout_seconds:
-                        dead.append(nid)
-                        self._reported_dead_standbys.add(nid)
-
-            for nid in dead:
-                logger.warning(
-                    f"[Ring-{self._id}] Standby watchdog_{nid} sin heartbeat. Publicando caída."
-                )
-                if self._on_standby_dead is not None:
-                    self._on_standby_dead(nid)
 
     # ------------------------------------------------------------------
     # Hilo: consumidor de heartbeats del líder (para standbys)
@@ -455,52 +379,101 @@ class RingElection:
             ack()
 
     # ------------------------------------------------------------------
-    # Hilo: detector de timeout del líder
+    # Hilo periódico unificado: timeout líder + HB standby + monitoreo standbys
     # ------------------------------------------------------------------
 
-    def _check_leader_timeout(self):
+    def _periodic_loop(self):
         startup_time = time.time()
         while not self._stop_event.wait(self._config.check_leader_interval):
-            with self._lock:
-                if self._is_leader:
+            self._tick_leader_timeout(startup_time)
+            self._tick_standby_hb()
+            self._tick_standbys_check()
+
+    def _tick_leader_timeout(self, startup_time: float):
+        with self._lock:
+            if self._is_leader:
+                return
+            last_hb = self._last_leader_hb
+            dead_leader = self._leader_id
+            in_election = self._in_election
+            election_started = self._election_started_at
+
+        elapsed = (
+            time.time() - last_hb
+            if last_hb is not None
+            else time.time() - startup_time
+        )
+
+        if elapsed <= self._config.leader_timeout_seconds:
+            return
+
+        election_timed_out = (
+            in_election
+            and election_started is not None
+            and time.time() - election_started >= self._config.election_timeout
+        )
+        if in_election and not election_timed_out:
+            return
+
+        with self._lock:
+            if dead_leader is not None:
+                self._suspected_dead_ids[dead_leader] = time.time()
+            self._leader_id = None
+            self._last_leader_hb = None
+            self._forwarded_coordinators.clear()
+
+        logger.warning(
+            f"[Ring-{self._id}] Sin heartbeat de líder por {elapsed:.1f}s. "
+            "Iniciando nueva elección."
+        )
+        self._initiate_election()
+
+    def _tick_standby_hb(self):
+        with self._lock:
+            is_leader = self._is_leader
+            leader_id = self._leader_id
+        if not is_leader and leader_id is not None:
+            try:
+                self._send_to(leader_id, {"tipo": "hb_standby", "id": self._id})
+                logger.debug(
+                    f"[Ring-{self._id}] Heartbeat de standby enviado al líder watchdog_{leader_id}."
+                )
+            except Exception as e:
+                logger.warning(f"[Ring-{self._id}] Error enviando heartbeat de standby: {e}")
+
+    def _tick_standbys_check(self):
+        with self._lock:
+            if not self._is_leader or self._became_leader_at is None:
+                return
+            now = time.time()
+            if now - self._became_leader_at < self._config.leader_timeout_seconds:
+                return
+            dead = []
+            for nid in range(1, self._n + 1):
+                if nid == self._id or nid in self._reported_dead_standbys:
                     continue
-                last_hb = self._last_leader_hb
-                dead_leader = self._leader_id
-                in_election = self._in_election
-                election_started = self._election_started_at
+                last_ts = self._standby_last_seen.get(nid)
+                if last_ts is None or now - last_ts > self._config.leader_timeout_seconds:
+                    dead.append(nid)
+                    self._reported_dead_standbys.add(nid)
 
-            elapsed = (
-                time.time() - last_hb
-                if last_hb is not None
-                else time.time() - startup_time
-            )
-
-            if elapsed <= self._config.leader_timeout_seconds:
-                continue
-
-            election_timed_out = (
-                in_election
-                and election_started is not None
-                and time.time() - election_started >= self._config.election_timeout
-            )
-            if in_election and not election_timed_out:
-                continue  # elección en progreso, esperar
-
-            with self._lock:
-                if dead_leader is not None:
-                    self._suspected_dead_ids[dead_leader] = time.time()
-                self._leader_id = None
-                self._last_leader_hb = None
-                self._forwarded_coordinators.clear()
-
+        for nid in dead:
             logger.warning(
-                f"[Ring-{self._id}] Sin heartbeat de líder por {elapsed:.1f}s. "
-                "Iniciando nueva elección."
+                f"[Ring-{self._id}] Standby watchdog_{nid} sin heartbeat. Publicando caída."
             )
-            self._initiate_election()
+            if self._on_standby_dead is not None:
+                self._on_standby_dead(nid)
+
+    def _handle_standby_hb(self, node_id: int):
+        with self._lock:
+            if not self._is_leader:
+                return
+            self._standby_last_seen[node_id] = time.time()
+            self._reported_dead_standbys.discard(node_id)
+        logger.debug(f"[Ring-{self._id}] Heartbeat de standby recibido de watchdog_{node_id}.")
 
     # ------------------------------------------------------------------
-    # Helpers de envío
+    # Helpers de envío y routing
     # ------------------------------------------------------------------
 
     def _compute_next_target(self) -> int:
@@ -515,7 +488,7 @@ class RingElection:
             if target not in dead:
                 return target
             target = (target % self._n) + 1
-        return self._next_id  # fallback: todos sospechados, reintentar con el siguiente directo
+        return self._next_id  # fallback: todos sospechados
 
     def _get_next_target(self) -> int:
         with self._lock:
