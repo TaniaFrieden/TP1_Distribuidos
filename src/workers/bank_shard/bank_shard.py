@@ -17,6 +17,8 @@ class AgregadorBancarioWorker(BaseWorker):
         self.persistidor = PersistidorEstadoShard(nombre_nodo)
         self.procesador = ProcesadorRegistros()
         
+        self._recuperar_barreras_pendientes()
+        
         logger.info(f"[AgregadorBancario] Worker inicializado con arquitectura limpia y modular.")
 
     def procesar_payload(self, queue_name: str, client_id: str, payload: dict, mensaje_original: bytes, ack, nack):
@@ -28,19 +30,26 @@ class AgregadorBancarioWorker(BaseWorker):
                     logger.info(f"[CLIENTE NUEVO] Inicializando estado para {client_id}")
                     estado_agregador[client_id] = {}
 
+                hubo_cambio = False
+
                 if "batches" in payload:
                     for batch in payload["batches"]:
                         schema = batch["header"]["schema"]
                         records = batch["payload"]
 
                         if "transactions" in queue_name:
-                            self.procesador.procesar_batch_transacciones(client_id, schema, records, estado_agregador)
+                            cambio = self.procesador.procesar_batch_transacciones(client_id, schema, records, estado_agregador)
                         elif "banks" in queue_name:
-                            self.procesador.procesar_batch_bancos(client_id, schema, records, estado_agregador)
+                            cambio = self.procesador.procesar_batch_bancos(client_id, schema, records, estado_agregador)
+                        else:
+                            cambio = False
+                        
+                        hubo_cambio = hubo_cambio or cambio
                 else:
-                    self.procesador.procesar_registro_individual(queue_name, client_id, payload, estado_agregador)
-                
-                self.persistidor.guardar_estado(estado_agregador, estado_eof)
+                    hubo_cambio = self.procesador.procesar_registro_individual(queue_name, client_id, payload, estado_agregador)
+
+                if hubo_cambio:
+                    self.persistidor.guardar_estado(estado_agregador, estado_eof)
 
             ack()
         except ValueError as e:
@@ -141,6 +150,16 @@ class AgregadorBancarioWorker(BaseWorker):
 
     def al_cerrar(self):
         logger.info("[AgregadorBancario] Solicitud de apagado recibida de las señales del sistema.")
+
+
+    def _recuperar_barreras_pendientes(self):
+        _, estado_eof = self.persistidor.cargar_estado()
+        for client_id, estado in estado_eof.items():
+            if estado.get("flush_iniciado") and estado.get("eof_mensaje"):
+                logger.warning(
+                    f"[AgregadorBancario] Recuperando barrera pendiente para {client_id} tras reinicio."
+                )
+                self.coordinator.iniciar_barrera(client_id, estado["eof_mensaje"])
 
 def __main__():
     setup_logging("bank_shard")

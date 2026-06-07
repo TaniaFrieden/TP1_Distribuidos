@@ -2,6 +2,7 @@ import json
 import threading
 import logging
 from common import middleware
+from common.persistencia import PersistidorEstado
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +20,11 @@ class DistributedCoordinator:
         self._originadores_reconocidos = {}  
         self._local_eof_completed = set()
         self._clientes_finalizados = set()
+
+        nombre_nodo = f"coordinator_{config.node_prefix}_{config.node_id}"
+        self._persistidor = PersistidorEstado(nombre_nodo)
+        self._persistencia_lock = threading.Lock()
+        self._recuperar_estado_coordinacion()
         
         if config.total_workers > 1:
             self._tiene_cola_sharded = any(
@@ -49,6 +55,40 @@ class DistributedCoordinator:
         )
         self._rebroadcast_thread.start()
 
+    def _recuperar_estado_coordinacion(self):
+        estado = self._persistidor.cargar()
+        coordinaciones = estado.get("coordinaciones_eof", {})
+        for client_id, datos in coordinaciones.items():
+            mensaje_original = None
+            if datos.get("mensaje_payload"):
+                mensaje_original = json.dumps(datos["mensaje_payload"]).encode('utf-8')
+            self._coordinaciones_eof[client_id] = {
+                "workers": set(datos.get("workers_confirmados", [])),
+                "mensaje_original": mensaje_original
+            }
+            self._originadores_reconocidos[client_id] = self.config.node_id
+            self._local_eof_completed.add(client_id)
+            logger.info(
+                f"[Coordinator] Recuperando coordinación para {client_id}: "
+                f"{len(self._coordinaciones_eof[client_id]['workers'])}/{self.config.total_workers} confirmados."
+            )
+
+    def _persistir_coordinacion(self):
+        with self._persistencia_lock:
+            coordinaciones_serial = {}
+            for client_id, datos in self._coordinaciones_eof.items():
+                mensaje_payload = None
+                if datos.get("mensaje_original"):
+                    try:
+                        mensaje_payload = json.loads(datos["mensaje_original"].decode('utf-8'))
+                    except Exception:
+                        pass
+                coordinaciones_serial[client_id] = {
+                    "workers_confirmados": list(datos["workers"]),
+                    "mensaje_payload": mensaje_payload
+                }
+            self._persistidor.guardar({"coordinaciones_eof": coordinaciones_serial})
+
     def registrar_vuelo(self, client_id):
         with self._vuelo_lock:
             self._mensajes_en_vuelo[client_id] = self._mensajes_en_vuelo.get(client_id, 0) + 1
@@ -62,7 +102,6 @@ class DistributedCoordinator:
                 self._vuelo_cv.notify_all()
 
     def _esperar_vuelo_cero(self, client_id):
-        """Espera hasta que no haya mensajes en vuelo para client_id, utilizando variables de condición."""
         with self._vuelo_lock:
             while self._mensajes_en_vuelo.get(client_id, 0) > 0:
                 self._vuelo_cv.wait()
@@ -111,6 +150,7 @@ class DistributedCoordinator:
             self._clientes_finalizados.discard(client_id)
         with self._vuelo_lock:
             self._mensajes_en_vuelo.pop(client_id, None)
+        self._persistir_coordinacion()
 
     def esta_eof_local_completo(self, client_id: str) -> bool:
         with self._coordinacion_lock:
@@ -125,18 +165,17 @@ class DistributedCoordinator:
             originator = self._originadores_reconocidos.get(client_id)
 
             if originator is not None and self._tiene_cola_sharded:
-                # La barrera ya fue activada por otro worker; como nuestro EOF local ya está listo, podemos flushear.
                 logger.info(f"[Coordinator] Barrera ya activa para {client_id} (originador: {originator}). Disparando flush diferido.")
                 ejecutar_flush_inmediato = True
                 originator_para_flush = originator
             else:
-                # Primer worker en completar el EOF local: nos autodeclaramos originador y difundimos.
                 self._originadores_reconocidos[client_id] = self.config.node_id
                 self._coordinaciones_eof[client_id] = {
                     "workers": set(),
                     "mensaje_original": mensaje_original
                 }
-                
+                self._persistir_coordinacion()
+
                 logger.info(
                     f"[Coordinator] EOF local completo para client_id={client_id} (somos originador). Difundiendo control."
                 )
@@ -180,8 +219,6 @@ class DistributedCoordinator:
                     })
                     return
 
-                # Resolución de colisiones: si dos workers se autodeclaran originador simultáneamente,
-                # gana el de menor ID para evitar duplicar el reenvío del EOF final.
                 with self._coordinacion_lock:
                     originador_actual = self._originadores_reconocidos.get(client_id)
 
@@ -192,12 +229,14 @@ class DistributedCoordinator:
                                 self._originadores_reconocidos[client_id] = originator
                                 if originador_actual == self.config.node_id:
                                     self._coordinaciones_eof.pop(client_id, None)
+                                    self._persistir_coordinacion()
                         else:
                             if originator < originador_actual:
                                 logger.info(f"[Coordinator] Colisión de barrera: cediendo originador de {originador_actual} a {originator}")
                                 self._originadores_reconocidos[client_id] = originator
                                 if originador_actual == self.config.node_id:
                                     self._coordinaciones_eof.pop(client_id, None)
+                                    self._persistir_coordinacion()
                             elif originator > originador_actual:
                                 logger.info(f"[Coordinator] Colisión de barrera: {originator} reclamó, pero yo ({originador_actual}) tengo menor ID. Reenviando mi reclamo para desatascar.")
                                 self._enviar_control({
@@ -226,10 +265,12 @@ class DistributedCoordinator:
                             f"[Coordinator] WORKER_FINISHED para client_id={client_id}. "
                             f"Confirmados: {len(self._coordinaciones_eof[client_id]['workers'])}/{self.config.total_workers}."
                         )
-                        
+                        self._persistir_coordinacion()
+
                         if len(self._coordinaciones_eof[client_id]["workers"]) >= self.config.total_workers:
                             msg_original = self._coordinaciones_eof[client_id]["mensaje_original"]
                             del self._coordinaciones_eof[client_id]
+                            self._persistir_coordinacion()
 
                             logger.info(f"[Coordinator] Barrera completa para client_id={client_id}. Difundiendo BARRIER_COMPLETE.")
                             self._enviar_control({
@@ -244,6 +285,8 @@ class DistributedCoordinator:
                     self._originadores_reconocidos.pop(client_id, None)
                     self._local_eof_completed.discard(client_id)
                     self._clientes_finalizados.add(client_id)
+                    self._coordinaciones_eof.pop(client_id, None)
+                    self._persistir_coordinacion()
                 logger.info(f"[Coordinator] Barrera completa liberada globalmente para client_id={client_id}.")
                 if self.on_barrier_complete:
                     self.on_barrier_complete(client_id)
