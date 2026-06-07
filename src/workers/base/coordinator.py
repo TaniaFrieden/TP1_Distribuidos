@@ -41,6 +41,14 @@ class DistributedCoordinator:
             self.control_exchange.exchange_name
         )
 
+        self._cierre_solicitado = False
+        self._rebroadcast_thread = threading.Thread(
+            target=self._rebroadcast_loop,
+            name=f"Coordinator-Rebroadcast-{config.node_id}",
+            daemon=True
+        )
+        self._rebroadcast_thread.start()
+
     def registrar_vuelo(self, client_id):
         with self._vuelo_lock:
             self._mensajes_en_vuelo[client_id] = self._mensajes_en_vuelo.get(client_id, 0) + 1
@@ -116,7 +124,7 @@ class DistributedCoordinator:
             self._local_eof_completed.add(client_id)
             originator = self._originadores_reconocidos.get(client_id)
 
-            if originator is not None:
+            if originator is not None and self._tiene_cola_sharded:
                 # La barrera ya fue activada por otro worker; como nuestro EOF local ya está listo, podemos flushear.
                 logger.info(f"[Coordinator] Barrera ya activa para {client_id} (originador: {originator}). Disparando flush diferido.")
                 ejecutar_flush_inmediato = True
@@ -178,13 +186,26 @@ class DistributedCoordinator:
                     originador_actual = self._originadores_reconocidos.get(client_id)
 
                     if originador_actual is not None:
-                        if originator < originador_actual:
-                            logger.info(f"[Coordinator] Colisión de barrera: cediendo originador de {originador_actual} a {originator}")
-                            self._originadores_reconocidos[client_id] = originator
-                            if originador_actual == self.config.node_id:
-                                self._coordinaciones_eof.pop(client_id, None)
-                        elif originator > originador_actual:
-                            return
+                        if not self._tiene_cola_sharded:
+                            if originator != originador_actual:
+                                logger.info(f"[Coordinator] Cola no sharded: actualizando originador de {originador_actual} a {originator}")
+                                self._originadores_reconocidos[client_id] = originator
+                                if originador_actual == self.config.node_id:
+                                    self._coordinaciones_eof.pop(client_id, None)
+                        else:
+                            if originator < originador_actual:
+                                logger.info(f"[Coordinator] Colisión de barrera: cediendo originador de {originador_actual} a {originator}")
+                                self._originadores_reconocidos[client_id] = originator
+                                if originador_actual == self.config.node_id:
+                                    self._coordinaciones_eof.pop(client_id, None)
+                            elif originator > originador_actual:
+                                logger.info(f"[Coordinator] Colisión de barrera: {originator} reclamó, pero yo ({originador_actual}) tengo menor ID. Reenviando mi reclamo para desatascar.")
+                                self._enviar_control({
+                                    "type": "EOF_RECEIVED",
+                                    "client_id": client_id,
+                                    "originator": originador_actual
+                                })
+                                return
                     else:
                         self._originadores_reconocidos[client_id] = originator
 
@@ -238,6 +259,23 @@ class DistributedCoordinator:
     def stop_consuming(self):
         self.control_queue.stop_consuming()
 
+    def _rebroadcast_loop(self):
+        import time
+        while not self._cierre_solicitado:
+            time.sleep(2.0)
+            if self._cierre_solicitado:
+                break
+            with self._coordinacion_lock:
+                clients_to_rebroadcast = list(self._coordinaciones_eof.keys())
+            for client_id in clients_to_rebroadcast:
+                logger.info(f"[Coordinator] Re-difundiendo EOF_RECEIVED para client_id={client_id} para despertar posibles workers reiniciados.")
+                self._enviar_control({
+                    "type": "EOF_RECEIVED",
+                    "client_id": client_id,
+                    "originator": self.config.node_id
+                })
+
     def close(self):
+        self._cierre_solicitado = True
         self.control_queue.close()
         self.control_exchange.close()
