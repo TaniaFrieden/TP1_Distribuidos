@@ -1,138 +1,100 @@
 import logging
-import os
-import operator
 import json
-
-try:
-    from base import BaseWorker
-except ImportError:
-    from workers.base.base import BaseWorker
+import operator
+from base.base import BaseWorker
 from common.logging_setup import setup_logging
+from filter_config import FilterConfig
+from batch_processor import BatchProcessor
+from operators import OPERATORS, OP_BETWEEN, OP_IN, NUMERIC_OPERATORS
 
 logger = logging.getLogger(__name__)
+
 
 class GenericFilterWorker(BaseWorker):
     def __init__(self):
         super().__init__()
+        self.filter_config = FilterConfig()
         
-        self.campo_objetivo = os.environ["FILTER_FIELD"]
-        self.valor_objetivo = os.environ["FILTER_VALUE"]
-        self.operador_str = os.environ.get("FILTER_OPERATOR", "eq").lower()
+        self.field = self.filter_config.target_field
+        self.op_str = self.filter_config.operator_str
+        self.ref_val = self._pre_parse_value(self.filter_config.raw_target_value)
+        self.operation = OPERATORS.get(self.op_str, operator.eq)
         
-        operaciones = {
-            "eq": operator.eq,              # ==
-            "neq": operator.ne,             # !=
-            "contains": lambda a, b: b in str(a), # a contiene b
-            "lt": operator.lt,              # <  (Less Than)
-            "gt": operator.gt,              # >  (Greater Than)
-            "lte": operator.le,             # <= (Less Than or Equal)
-            "gte": operator.ge,              # >= (Greater Than or Equal)
-            "between": lambda a, b: b[0] <= a <= b[1],
-            "in": lambda a, b: a in b
-        }
-        self.operacion = operaciones.get(self.operador_str, operator.eq)
+        self.processor = BatchProcessor(self)
 
-        logger.info(f"[GenericFilter] Iniciado: Campo '{self.campo_objetivo}' {self.operador_str} '{self.valor_objetivo}'")
+        logger.info(f"[GenericFilter] Iniciado: Campo '{self.field}' {self.op_str} '{self.ref_val}'")
+
+    def _pre_parse_value(self, raw_value: str):
+        """Pre-procesa el valor objetivo según el operador para optimizar comparaciones."""
+        if self.op_str == OP_BETWEEN:
+            limits = [lim.strip() for lim in raw_value.split(",")]
+            if len(limits) != 2:
+                raise ValueError(f"FILTER_VALUE debe ser 'min,max' para 'between'. Recibido: {raw_value}")
+            return limits
+            
+        if self.op_str == OP_IN:
+            return {opt.strip() for opt in raw_value.split(",")}
+            
+        if self.op_str in NUMERIC_OPERATORS:
+            try:
+                return float(raw_value)
+            except ValueError:
+                return raw_value
+                
+        return raw_value
+
+    def matches(self, transaction: dict) -> bool:
+        """Determina si una transacción individual cumple con la regla de filtrado."""
+        if self.field not in transaction:
+            return False
+
+        val = transaction[self.field]
+        if isinstance(self.ref_val, float):
+            try:
+                val = float(val)
+            except (ValueError, TypeError):
+                val = str(val)
+        elif self.op_str != OP_BETWEEN:
+            val = str(val)
+
+        return self.operation(val, self.ref_val)
 
     def procesar_payload(self, queue_name: str, client_id: str, payload: dict | str, mensaje_original: bytes, ack, nack):
         try:
-            if isinstance(payload, dict):
-                transaccion = payload
-            else:
-                transaccion = json.loads(payload)
-            if transaccion.get("EOF"):
+            transaction = payload if isinstance(payload, dict) else json.loads(payload)
+            
+            if transaction.get("EOF"):
                 logger.info(f"[EOF] Reenviando señal de fin para cliente {client_id}.")
                 self._enviar(mensaje_original)
                 ack()
                 return
 
-            if "batches" in transaccion:
-                filtered_batches = []
-                for batch in transaccion["batches"]:
-                    header = batch["header"]
-                    schema = header["schema"]
-                    records = batch["payload"]
-                    logger.info(f"[{self.__class__.__name__}] Recibidos {len(records)} registros para filtrar del cliente {client_id}")
-                    
-                    filtered_records = []
-                    for record_values in records:
-                        record_dict = dict(zip(schema, record_values))
-                        if self._match_filter(record_dict, client_id):
-                            filtered_records.append(record_values)
-                    
-                    if filtered_records:
-                        filtered_batches.append({
-                            "header": {
-                                "schema": schema,
-                                "client_id": header.get("client_id", client_id),
-                                "count": len(filtered_records)
-                            },
-                            "payload": filtered_records
-                        })
-                
-                if filtered_batches:
-                    output_payload = {
-                        "client_id": client_id,
-                        "batches": filtered_batches
-                    }
-                    msg_bytes = json.dumps(output_payload).encode("utf-8")
-                    self._enviar(msg_bytes, payload=output_payload)
+            if "batches" in transaction:
+                result = self.processor.process_payload(transaction)
+                if result:
+                    msg_bytes = json.dumps(result).encode("utf-8")
+                    self._enviar(msg_bytes, payload=result)
             else:
-                if self._match_filter(transaccion, client_id):
-                    self._enviar(mensaje_original, payload=transaccion)
+                if self.matches(transaction):
+                    self._enviar(mensaje_original, payload=transaction)
 
             ack()
 
         except json.JSONDecodeError:
             logger.error(f"Error parseando JSON del cliente {client_id}: {payload}")
-            nack() 
+            nack()
         except Exception as e:
             logger.error(f"Error procesando regla genérica: {e}", exc_info=True)
             nack()
 
-    def _match_filter(self, transaccion: dict, client_id: str) -> bool:
-        if self.campo_objetivo in transaccion:
-            valor_actual = transaccion[self.campo_objetivo]
-            valor_referencia = self.valor_objetivo
-
-            if self.operador_str == "between":
-                limites = [limite.strip() for limite in str(self.valor_objetivo).split(",")]
-                if len(limites) == 2:
-                    valor_referencia = limites
-                    # Trunca al largo del límite para comparar solo la parte relevante (ej: "2022/09/05 00:00:00" → "2022/09/05")
-                    max_len = min(len(limites[0]), len(limites[1]))
-                    valor_actual = str(valor_actual)[:max_len]
-                else:
-                    logger.error(f"[ERROR_RANGO] FILTER_VALUE debe ser 'min,max' para 'between'. Recibido: {self.valor_objetivo}")
-                    return False
-            elif self.operador_str == "in":
-                # Convierte "Wire, ACH" en una lista: ['Wire', 'ACH']
-                valor_referencia = [opcion.strip() for opcion in str(self.valor_objetivo).split(",")]
-                valor_actual = str(valor_actual)
-
-            elif self.operador_str in ["lt", "gt", "lte", "gte"]:
-                try:
-                    valor_actual = float(valor_actual)
-                    valor_referencia = float(valor_referencia)
-                except (ValueError, TypeError):
-                    valor_actual = str(valor_actual)
-                    valor_referencia = str(valor_referencia)
-            else:
-                valor_actual = str(valor_actual)
-                valor_referencia = str(valor_referencia)
-
-            return self.operacion(valor_actual, valor_referencia)
-        else:
-            logger.warning(f"[FALTA_CAMPO] El JSON del cliente {client_id} no contiene el campo '{self.campo_objetivo}'")
-            return False
-
     def al_cerrar(self):
         logger.info("Filtro genérico apagado.")
 
-def __main__():
+
+def main():
     setup_logging("filter")
     worker = GenericFilterWorker()
     worker.iniciar()
 
 if __name__ == "__main__":
-    __main__()
+    main()
