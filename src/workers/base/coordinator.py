@@ -58,20 +58,49 @@ class DistributedCoordinator:
     def _recuperar_estado_coordinacion(self):
         estado = self._persistidor.cargar()
         coordinaciones = estado.get("coordinaciones_eof", {})
+        
+        eofs_locales = estado.get("eofs_locales_recibidos", {})
+        for client_id, colas in eofs_locales.items():
+            self._eofs_locales_recibidos[client_id] = set(colas)
+
         for client_id, datos in coordinaciones.items():
             mensaje_original = None
             if datos.get("mensaje_payload"):
                 mensaje_original = json.dumps(datos["mensaje_payload"]).encode('utf-8')
+            
+            workers_confirmados = set(datos.get("workers_confirmados", []))
             self._coordinaciones_eof[client_id] = {
-                "workers": set(datos.get("workers_confirmados", [])),
+                "workers": workers_confirmados,
                 "mensaje_original": mensaje_original
             }
             self._originadores_reconocidos[client_id] = self.config.node_id
             self._local_eof_completed.add(client_id)
             logger.info(
                 f"[Coordinator] Recuperando coordinación para {client_id}: "
-                f"{len(self._coordinaciones_eof[client_id]['workers'])}/{self.config.total_workers} confirmados."
+                f"{len(workers_confirmados)}/{self.config.total_workers} confirmados."
             )
+
+            if len(workers_confirmados) >= self.config.total_workers:
+                logger.info(f"[Coordinator] La barrera para {client_id} ya estaba completa. Finalizando y enviando BARRIER_COMPLETE.")
+                
+                def finalizar_barrera_diferido(cid, msg):
+                    import time
+                    time.sleep(1.0)
+                    with self._coordinacion_lock:
+                        if cid in self._coordinaciones_eof:
+                            del self._coordinaciones_eof[cid]
+                            self._persistir_coordinacion()
+                        self._enviar_control({
+                            "type": "BARRIER_COMPLETE",
+                            "client_id": cid
+                        })
+                    self.on_sync_complete(cid, msg)
+                
+                threading.Thread(
+                    target=finalizar_barrera_diferido, 
+                    args=(client_id, mensaje_original), 
+                    daemon=True
+                ).start()
 
     def _persistir_coordinacion(self):
         with self._persistencia_lock:
@@ -87,7 +116,16 @@ class DistributedCoordinator:
                     "workers_confirmados": list(datos["workers"]),
                     "mensaje_payload": mensaje_payload
                 }
-            self._persistidor.guardar({"coordinaciones_eof": coordinaciones_serial})
+            
+            eofs_locales_serial = {
+                client_id: list(colas)
+                for client_id, colas in self._eofs_locales_recibidos.items()
+            }
+            
+            self._persistidor.guardar({
+                "coordinaciones_eof": coordinaciones_serial,
+                "eofs_locales_recibidos": eofs_locales_serial
+            })
 
     def registrar_vuelo(self, client_id):
         with self._vuelo_lock:
@@ -111,12 +149,14 @@ class DistributedCoordinator:
             if client_id not in self._eofs_locales_recibidos:
                 self._eofs_locales_recibidos[client_id] = set()
             self._eofs_locales_recibidos[client_id].add(queue_name)
+            self._persistir_coordinacion()
             return len(self._eofs_locales_recibidos[client_id]) == total_esperados
 
     def limpiar_eof_local(self, client_id):
         with self._coordinacion_lock:
             if client_id in self._eofs_locales_recibidos:
                 del self._eofs_locales_recibidos[client_id]
+                self._persistir_coordinacion()
 
     def _ejecutar_flush_y_notificar(self, client_id: str, originator: str):
         logger.info(f"[Coordinator] EOF local y de control recibidos para {client_id}. Esperando vuelos a cero antes de flush.")
