@@ -20,6 +20,7 @@ class DistributedCoordinator:
         self._originadores_reconocidos = {}  
         self._local_eof_completed = set()
         self._clientes_finalizados = set()
+        self._barreras_pendientes = []
 
         nombre_nodo = f"coordinator_{config.node_prefix}_{config.node_id}"
         self._persistidor = PersistidorEstado(nombre_nodo)
@@ -47,7 +48,7 @@ class DistributedCoordinator:
             self.control_exchange.exchange_name
         )
 
-        self._cierre_solicitado = False
+        self._cierre_evento = threading.Event()
         self._rebroadcast_thread = threading.Thread(
             target=self._rebroadcast_loop,
             name=f"Coordinator-Rebroadcast-{config.node_id}",
@@ -81,26 +82,25 @@ class DistributedCoordinator:
             )
 
             if len(workers_confirmados) >= self.config.total_workers:
-                logger.info(f"[Coordinator] La barrera para {client_id} ya estaba completa. Finalizando y enviando BARRIER_COMPLETE.")
-                
-                def finalizar_barrera_diferido(cid, msg):
-                    import time
-                    time.sleep(1.0)
-                    with self._coordinacion_lock:
-                        if cid in self._coordinaciones_eof:
-                            del self._coordinaciones_eof[cid]
-                            self._persistir_coordinacion()
-                        self._enviar_control({
-                            "type": "BARRIER_COMPLETE",
-                            "client_id": cid
-                        })
-                    self.on_sync_complete(cid, msg)
-                
-                threading.Thread(
-                    target=finalizar_barrera_diferido, 
-                    args=(client_id, mensaje_original), 
-                    daemon=True
-                ).start()
+                logger.info(f"[Coordinator] La barrera para {client_id} ya estaba completa. Encolando para enviar BARRIER_COMPLETE.")
+                self._barreras_pendientes.append((client_id, mensaje_original))
+
+    def procesar_barreras_recuperadas(self):
+        for cid, msg in self._barreras_pendientes:
+            with self._coordinacion_lock:
+                if cid in self._coordinaciones_eof:
+                    del self._coordinaciones_eof[cid]
+                    self._persistir_coordinacion()
+                self._clientes_flusheados.discard(cid)
+                self._originadores_reconocidos.pop(cid, None)
+                self._local_eof_completed.discard(cid)
+                self._clientes_finalizados.add(cid)
+                self._enviar_control({
+                    "type": "BARRIER_COMPLETE",
+                    "client_id": cid
+                })
+            self.on_sync_complete(cid, msg)
+        self._barreras_pendientes.clear()
 
     def _persistir_coordinacion(self):
         with self._persistencia_lock:
@@ -299,6 +299,16 @@ class DistributedCoordinator:
 
             elif msg_type == "WORKER_FINISHED" and originator == self.config.node_id:
                 with self._coordinacion_lock:
+                    ya_finalizado = client_id in self._clientes_finalizados
+                
+                if ya_finalizado:
+                    self._enviar_control({
+                        "type": "BARRIER_COMPLETE",
+                        "client_id": client_id
+                    })
+                    return
+
+                with self._coordinacion_lock:
                     if client_id in self._coordinaciones_eof:
                         self._coordinaciones_eof[client_id]["workers"].add(msg_dict.get("worker_id"))
                         logger.info(
@@ -343,11 +353,7 @@ class DistributedCoordinator:
         self.control_queue.stop_consuming()
 
     def _rebroadcast_loop(self):
-        import time
-        while not self._cierre_solicitado:
-            time.sleep(2.0)
-            if self._cierre_solicitado:
-                break
+        while not self._cierre_evento.wait(2.0):
             with self._coordinacion_lock:
                 clients_to_rebroadcast = list(self._coordinaciones_eof.keys())
             for client_id in clients_to_rebroadcast:
@@ -359,6 +365,6 @@ class DistributedCoordinator:
                 })
 
     def close(self):
-        self._cierre_solicitado = True
+        self._cierre_evento.set()
         self.control_queue.close()
         self.control_exchange.close()
