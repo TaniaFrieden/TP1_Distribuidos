@@ -89,7 +89,7 @@ def _generar_servicio(node, worker_config, workers_config, compose_data):
             'NODE_PREFIX': prefix,
             'ID': worker_id,
             'TOTAL_WORKERS': str(replicas),
-            'LOG_LEVEL': 'WARNING',
+            'LOG_LEVEL': 'INFO',
             'LOG_FILE': f'/app/logs/{worker_name}.txt'
         })
         env.update(node.get('extra_env', {}))
@@ -192,7 +192,7 @@ def _generar_servicio(node, worker_config, workers_config, compose_data):
             'TOTAL_WORKERS': str(replicas),
             'HEARTBEAT_INTERVAL_SECONDS': str(HEARTBEAT_INTERVAL_SECONDS),
             'PREFETCH_COUNT': '10',
-            'LOG_LEVEL': 'WARNING',
+            'LOG_LEVEL': 'INFO',
             'LOG_FILE': f'/app/logs/{worker_name}.txt'
         })
         env.update(node.get('extra_env', {}))

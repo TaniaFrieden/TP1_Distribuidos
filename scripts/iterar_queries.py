@@ -62,8 +62,9 @@ def main():
         imprimir_titulo(f"Iteración {indice}/{cantidad_iteraciones}")
         
         client_id_actual = str(indice - 1)
-        os.system("truncate -s 0 logs/*.txt 2>/dev/null")
+        # os.system("truncate -s 0 logs/*.txt 2>/dev/null")
         os.system(f"rm -rf output/{client_id_actual}/ 2>/dev/null")
+
         
         try:
             subprocess.run(

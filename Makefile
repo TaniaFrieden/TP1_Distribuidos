@@ -1,6 +1,6 @@
 MAKEFLAGS += --no-print-directory
-PYTHON := $(shell command -v python3 2>/dev/null || command -v python 2>/dev/null)
-PIP := $(PYTHON) -m pip
+PYTHON := .venv/bin/python
+PIP := .venv/bin/pip
 PYTEST := PYTHONPATH=src $(PYTHON) -m pytest
 START_VERBOSE := $(if $(filter --verbose,$(MAKECMDGOALS)),1,0)
 
