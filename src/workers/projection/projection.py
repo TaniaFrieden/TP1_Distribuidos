@@ -4,7 +4,7 @@ import json
 from base.base import BaseWorker
 from common.logging_setup import setup_logging
 from projection_config import ProjectionConfig
-from projection_processor import ProjectionProcessor
+from processor import ProjectionProcessor
 
 logger = logging.getLogger(__name__)
 
