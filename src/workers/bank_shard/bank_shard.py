@@ -51,13 +51,25 @@ class AgregadorBancarioWorker(BaseWorker):
                     with self._get_client_lock(client_id):
                         self.aggregator_state[client_id] = saved_state.get("bancos", {})
                         
+                        trans_cerrado = saved_state.get("transacciones_cerrado", False)
+                        bancos_cerrado = saved_state.get("bancos_cerrado", False)
                         eof_hex = saved_state.get("eof_mensaje_bytes_hex")
+                        
                         self.eof_state[client_id] = {
-                            "transacciones_cerrado": saved_state.get("transacciones_cerrado", False),
-                            "bancos_cerrado": saved_state.get("bancos_cerrado", False),
+                            "transacciones_cerrado": trans_cerrado,
+                            "bancos_cerrado": bancos_cerrado,
                             "eof_mensaje": bytes.fromhex(eof_hex) if eof_hex else None,
                             "flush_iniciado": saved_state.get("flush_iniciado", False)
                         }
+                        
+                        if trans_cerrado and bancos_cerrado:
+                            with self.coordinator._coordinacion_lock:
+                                self.coordinator._local_eof_completed.add(client_id)
+                            logger.info(
+                                f"[PARCHE CONTROL] Cliente {client_id} recuperado con EOF local "
+                                f"completo. Inyectado con éxito en _local_eof_completed."
+                            )
+
                     logger.info(f"[Recuperación] Estado cargado de disco para cliente {client_id}")
 
     def procesar_payload(self, queue_name: str, client_id: str, payload: dict, mensaje_original: bytes, ack, nack):
