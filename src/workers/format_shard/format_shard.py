@@ -56,8 +56,12 @@ class FormatShardWorker(BaseWorker):
             client_id = folder_name[len(prefix):]
             persistidor = self._get_persistidor(client_id)
             saved = persistidor.cargar()
-            if not saved:
+            cache_path = self._get_cache_file_path(client_id)
+            
+            if not saved and not os.path.exists(cache_path):
                 continue
+                
+            saved = saved or {}
 
             eof_hex = saved.get("eof_mensaje_bytes_hex")
             barrier_completada = saved.get("barrier_completada", False)
@@ -303,6 +307,9 @@ class FormatShardWorker(BaseWorker):
                         continue
 
                     from_bank = record_values[idx["from_bank"]] if idx["from_bank"] is not None else ""
+                    if isinstance(from_bank, str) and from_bank.isdigit():
+                        from_bank = from_bank.lstrip("0") or "0"
+                    
                     account = record_values[idx["account"]] if idx["account"] is not None else ""
                     records.append([from_bank, account, formato, monto])
 
