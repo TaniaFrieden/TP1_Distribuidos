@@ -50,11 +50,14 @@ class ProjectionProcessor:
                 
         if not projected_batches:
             return None
-            
-        return {
+
+        resultado = {
             "client_id": client_id,
             "batches": projected_batches
         }
+        if "msg_id" in payload:
+            resultado["msg_id"] = payload["msg_id"]
+        return resultado
 
     def process_single(self, transaction: dict, client_id: str) -> dict:
         """Projects a single transaction dictionary."""

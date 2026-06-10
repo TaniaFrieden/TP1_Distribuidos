@@ -163,7 +163,7 @@ down:
 
 caos:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
-	$(PYTHON) scripts/chaos_monkey.py $$ARGS
+	DOCKER_HOST="unix:///home/tania/.docker/desktop/docker.sock" $(PYTHON) scripts/chaos_monkey.py $$ARGS
 
 generar:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \

@@ -78,6 +78,7 @@ class ClientHandler:
 
                     internal_msg = {
                         "client_id": client_id,
+                        "msg_id": str(uuid.uuid4()),
                         "batches": [
                             {
                                 "header": header,

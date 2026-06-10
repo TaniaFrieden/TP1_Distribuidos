@@ -36,8 +36,11 @@ class BatchProcessor:
                 
         if not filtered_batches:
             return None
-            
-        return {
+
+        resultado = {
             "client_id": client_id,
             "batches": filtered_batches
         }
+        if "msg_id" in payload:
+            resultado["msg_id"] = payload["msg_id"]
+        return resultado
