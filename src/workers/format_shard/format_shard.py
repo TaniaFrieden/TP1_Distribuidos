@@ -176,8 +176,8 @@ class FormatShardWorker(BaseWorker):
                         formato = payload.get("Payment Format", "")
                         monto = float(payload.get("Amount Paid", 0))
                         if formato not in estado["datos_temprano"]:
-                            estado["datos_temprano"][formato] = {"suma": 0.0, "count": 0}
-                        estado["datos_temprano"][formato]["suma"] += monto
+                            estado["datos_temprano"][formato] = {"suma": 0, "count": 0}
+                        estado["datos_temprano"][formato]["suma"] += int(round(monto * 100))
                         estado["datos_temprano"][formato]["count"] += 1
                     elif "tardio" in queue_name:
                         schema = list(payload.keys())
@@ -201,8 +201,8 @@ class FormatShardWorker(BaseWorker):
             formato = record_values[formato_idx] if formato_idx is not None else ""
             monto = float(record_values[monto_idx] if monto_idx is not None else 0)
             if formato not in estado["datos_temprano"]:
-                estado["datos_temprano"][formato] = {"suma": 0.0, "count": 0}
-            estado["datos_temprano"][formato]["suma"] += monto
+                estado["datos_temprano"][formato] = {"suma": 0, "count": 0}
+            estado["datos_temprano"][formato]["suma"] += int(round(monto * 100))
             estado["datos_temprano"][formato]["count"] += 1
 
     # ------------------------------------------------------------------ #
@@ -261,7 +261,8 @@ class FormatShardWorker(BaseWorker):
     def _calcular_promedios(self, estado: dict):
         for formato, stats in estado["datos_temprano"].items():
             if stats["count"] > 0:
-                estado["promedios"][formato] = stats["suma"] / stats["count"]
+                promedio_centavos = stats["suma"] / stats["count"]
+                estado["promedios"][formato] = promedio_centavos / 100.0
         estado["promedios_listos"] = True
 
     def _procesar_cache_tardio(self, client_id: str, estado: dict):
