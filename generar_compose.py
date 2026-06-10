@@ -95,7 +95,7 @@ def _generar_servicio(node, worker_config, workers_config, compose_data):
         env.update(node.get('extra_env', {}))
 
         volumes = ['./logs:/app/logs']
-        if worker_type in ['bank_shard', 'format_shard', 'joiner_q4']:
+        if worker_type in ['bank_shard', 'format_shard', 'joiner_q4', 'counter']:
             volumes.append(f'./volume/{worker_name}:/app/volumen')
 
         compose_data['services'][worker_name] = {
@@ -198,7 +198,7 @@ def _generar_servicio(node, worker_config, workers_config, compose_data):
         env.update(node.get('extra_env', {}))
 
         volumes = ['./logs:/app/logs']
-        if worker_type in ['bank_shard', 'format_shard', 'joiner_q4']:
+        if worker_type in ['bank_shard', 'format_shard', 'joiner_q4', 'counter']:
             volumes.append(f'./volume/{worker_name}:/app/volumen')
 
         compose_data['services'][worker_name] = {
