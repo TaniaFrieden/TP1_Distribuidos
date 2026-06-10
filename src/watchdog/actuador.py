@@ -69,6 +69,12 @@ class Actuador:
 
     def _reiniciar(self, container_name: str):
         container = self._docker.containers.get(container_name)
-        logger.info(f"[Actuador] Reiniciando container '{container_name}'...")
-        container.restart()
-        logger.info(f"[Actuador] Container '{container_name}' reiniciado exitosamente.")
+        container.reload()
+        estado = container.status
+        if estado != "running":
+            logger.info(f"[Actuador] Container '{container_name}' no está corriendo (estado={estado}). Iniciando con start()...")
+            container.start()
+        else:
+            logger.info(f"[Actuador] Container '{container_name}' está corriendo pero colgado (estado={estado}). Reiniciando con restart()...")
+            container.restart()
+        logger.info(f"[Actuador] Container '{container_name}' levantado exitosamente.")
