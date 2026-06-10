@@ -17,6 +17,7 @@ class DistributedCoordinator:
         self._eofs_locales_recibidos = {}
         self._mensajes_en_vuelo = {}
         self._clientes_flusheados = set()
+        self._flush_en_progreso = set()  # flush iniciado pero datos aún no publicados downstream
         self._originadores_reconocidos = {}
         self._local_eof_completed = set()
         self._clientes_finalizados = set()
@@ -111,6 +112,7 @@ class DistributedCoordinator:
                     del self._coordinaciones_eof[cid]
                     self._persistir_coordinacion()
                 self._clientes_flusheados.discard(cid)
+                self._flush_en_progreso.discard(cid)
                 self._originadores_reconocidos.pop(cid, None)
                 self._local_eof_completed.discard(cid)
                 self._clientes_finalizados.add(cid)
@@ -194,15 +196,31 @@ class DistributedCoordinator:
         self._esperar_vuelo_cero(client_id)
 
         with self._coordinacion_lock:
-            ya_flusheado = client_id in self._clientes_flusheados
-            if not ya_flusheado:
+            if client_id in self._clientes_flusheados:
+                # Los datos ya se publicaron downstream: es seguro reconfirmar WORKER_FINISHED.
+                debe_flushear = False
+            elif client_id in self._flush_en_progreso:
+                # Otro hilo está publicando los datos AHORA mismo. No mandamos WORKER_FINISHED
+                # todavía: hacerlo dejaría que el originador reenvíe el EOF downstream y este
+                # adelante a los datos que aún viajan (carrera que pierde un shard completo).
+                # El rebroadcast del originador reintentará y entrará por la rama
+                # _clientes_flusheados una vez que la publicación termine.
+                logger.info(f"[Coordinator] Flush en progreso para client_id={client_id}. Postergando WORKER_FINISHED.")
+                return
+            else:
+                debe_flushear = True
+                self._flush_en_progreso.add(client_id)
+
+        if debe_flushear:
+            logger.info(f"[Coordinator] Vuelos en cero para client_id={client_id}. Flusheando datos locales.")
+            # Publicar los datos ANTES de marcar flusheado/persistir: WORKER_FINISHED solo debe
+            # emitirse cuando la salida ya está en la cola downstream.
+            self.on_sync_complete(client_id, None)
+            with self._coordinacion_lock:
+                self._flush_en_progreso.discard(client_id)
                 self._clientes_flusheados.add(client_id)
                 self._flush_completados[client_id] = originator
                 self._persistir_coordinacion()
-
-        if not ya_flusheado:
-            logger.info(f"[Coordinator] Vuelos en cero para client_id={client_id}. Flusheando datos locales.")
-            self.on_sync_complete(client_id, None)
         else:
             logger.info(f"[Coordinator] Ya flusheado para client_id={client_id}. Skip.")
 
@@ -220,6 +238,7 @@ class DistributedCoordinator:
             self._originadores_reconocidos.pop(client_id, None)
             self._eofs_locales_recibidos.pop(client_id, None)
             self._clientes_flusheados.discard(client_id)
+            self._flush_en_progreso.discard(client_id)
             self._clientes_finalizados.discard(client_id)
         with self._vuelo_lock:
             self._mensajes_en_vuelo.pop(client_id, None)
@@ -365,6 +384,7 @@ class DistributedCoordinator:
             elif msg_type == "BARRIER_COMPLETE":
                 with self._coordinacion_lock:
                     self._clientes_flusheados.discard(client_id)
+                    self._flush_en_progreso.discard(client_id)
                     self._originadores_reconocidos.pop(client_id, None)
                     self._local_eof_completed.discard(client_id)
                     self._clientes_finalizados.add(client_id)
