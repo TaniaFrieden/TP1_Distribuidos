@@ -78,6 +78,7 @@ class ClientHandler:
 
                     internal_msg = {
                         "client_id": client_id,
+                        "request_id": str(uuid.uuid4()),
                         "batches": [
                             {
                                 "header": header,
@@ -143,6 +144,7 @@ class ClientHandler:
                     for shard_id, shard_records in records_by_shard.items():
                         shard_batch = {
                             "client_id": client_id,
+                            "request_id": str(uuid.uuid4()),
                             "batches": [
                                 {
                                     "header": {

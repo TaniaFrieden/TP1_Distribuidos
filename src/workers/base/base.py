@@ -17,6 +17,8 @@ except ImportError:
     from workers.base.router import MessageRouter
     from workers.base.coordinator import DistributedCoordinator
 
+from common.dedup_filter import DedupFilter
+
 logger = logging.getLogger(__name__)
 
 class BaseWorker(ABC):
@@ -30,11 +32,13 @@ class BaseWorker(ABC):
         self._heartbeat_stop_event = threading.Event()
         self._heartbeat_thread = None
         self._eofs_pendientes_ack = {}  # {client_id: [ack_callbacks]}
+        self._thread_local = threading.local()
 
         self.config = WorkerConfig()
         self._heartbeat_queue_name = f"heartbeat.{self.config.node_prefix}"
         self._heartbeat_instance_id = f"{self.config.node_id:02d}"
         self.router = MessageRouter(self.config)
+        self.dedup_filter = DedupFilter(f"{self.config.node_prefix}_{self.config.node_id}")
         self.coordinator = DistributedCoordinator(
             self.config, 
             on_sync_complete_cb=self._al_completar_sincronizacion_global,
@@ -143,6 +147,7 @@ class BaseWorker(ABC):
             
             # Sincronizamos las barreras diferidas post-caída de forma segura sin sleeps
             self.coordinator.procesar_barreras_recuperadas()
+            self.al_iniciar_post_arranque()
 
             control_thread.join()
             for t in input_threads:
@@ -182,6 +187,7 @@ class BaseWorker(ABC):
                 self._eofs_pendientes_ack.pop(client_id, None)
                 self.al_desconectar_cliente(client_id)
                 self.coordinator.limpiar_cliente(client_id)
+                self.dedup_filter.limpiar_cliente(client_id)
                 self._enviar(mensaje, mensaje_json)
                 return ack()
 
@@ -205,21 +211,28 @@ class BaseWorker(ABC):
                     self.coordinator.iniciar_barrera(client_id, mensaje)
                     self.coordinator.limpiar_eof_local(client_id)
             else:
+                request_id = mensaje_json.get("request_id")
+
+                if self.dedup_filter.es_duplicado(client_id, request_id):
+                    logger.info(f"[{self.__class__.__name__}] Duplicado descartado request_id={request_id} client_id={client_id}.")
+                    return ack()
+
+                self._thread_local.current_request_id = request_id
                 self.coordinator.registrar_vuelo(client_id)
-                    
+
                 def ack_wrapper():
+                    self.dedup_filter.marcar_procesado(client_id, request_id)
                     self.coordinator.descontar_vuelo(client_id)
                     ack()
-                        
+
                 def nack_wrapper():
                     self.coordinator.descontar_vuelo(client_id)
                     nack()
 
                 try:
                     self.procesar_payload(queue_name, client_id, mensaje_json, mensaje, ack_wrapper, nack_wrapper)
-                except Exception as e:
-                    self.coordinator.descontar_vuelo(client_id)
-                    raise e
+                finally:
+                    self._thread_local.current_request_id = None
 
         except json.JSONDecodeError:
             logger.warning("Mensaje no JSON omitido.")
@@ -229,8 +242,8 @@ class BaseWorker(ABC):
             nack()
 
     def _enviar(self, mensaje: bytes, payload: dict = None):
-        """Expone el ruteador de forma sencilla hacia las subclases."""
-        self.router.enviar(mensaje, payload)
+        upstream_request_id = getattr(self._thread_local, "current_request_id", None)
+        self.router.enviar(mensaje, payload, upstream_request_id=upstream_request_id)
 
     def _al_completar_sincronizacion_global(self, client_id: str, mensaje_original: bytes):
         if mensaje_original is None:
@@ -256,6 +269,9 @@ class BaseWorker(ABC):
                 ack_cb()
             except Exception as e:
                 logger.warning(f"[{self.__class__.__name__}] Error al ejecutar ACK diferido: {e}")
+
+    def al_iniciar_post_arranque(self):
+        pass
 
     def interceptar_eof(self, queue_name: str, client_id: str, payload: dict, mensaje_original: bytes) -> bool:
         """

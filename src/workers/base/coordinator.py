@@ -87,6 +87,11 @@ class DistributedCoordinator:
                 logger.info(f"[Coordinator] La barrera para {client_id} ya estaba completa. Encolando para enviar BARRIER_COMPLETE.")
                 self._barreras_pendientes.append((client_id, mensaje_original))
 
+        # Recover clientes_finalizados so late WORKER_FINISHED messages get a BARRIER_COMPLETE response
+        for client_id in estado.get("clientes_finalizados", []):
+            self._clientes_finalizados.add(client_id)
+            logger.info(f"[Coordinator] Recuperando cliente finalizado: {client_id}.")
+
         # Recover workers that flushed but never confirmed WORKER_FINISHED
         flush_completados = estado.get("flush_completados", {})
         for client_id, originator in flush_completados.items():
@@ -150,6 +155,7 @@ class DistributedCoordinator:
                 "coordinaciones_eof": coordinaciones_serial,
                 "eofs_locales_recibidos": eofs_locales_serial,
                 "flush_completados": dict(self._flush_completados),
+                "clientes_finalizados": list(self._clientes_finalizados),
             })
 
     def registrar_vuelo(self, client_id):
