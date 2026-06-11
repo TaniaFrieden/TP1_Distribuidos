@@ -19,7 +19,7 @@ MOM_HOST ?= localhost
 INPUT_QUEUE ?= input_queue
 OUTPUT_QUEUE ?= output_queue
 
-.PHONY: help venv install test test-worker-base clean free-ports client run-clients test-server gateway start down docker-logs iterar solucionar generar log generar-sample caos
+.PHONY: help venv install test test-worker-base clean free-ports client run-clients test-server gateway start down docker-logs iterar solucionar generar log generar-sample caos test-todos test-etapa test-cliente test-gateway
 
 help:
 	@echo "Targets disponibles:"
@@ -40,6 +40,10 @@ help:
 	@echo "  make client <trans> <cuentas> [dir] - Corre un cliente enviando transacciones y cuentas, guardando resultados en el directorio de salida indicado"
 	@echo "  make caos [min] [max]            - Corre el script de Chaos Monkey para derribar workers aleatoriamente"
 	@echo "  make generar-sample <dataset> <porcentaje> - Genera una muestra de un dataset con el porcentaje indicado (default: 30)"
+	@echo "  make test-todos [cant] [tx] [acc] [sol] [espera]    - Mata todos los workers en simultáneo"
+	@echo "  make test-etapa <prefix> [cant] [tx] [acc] [sol] [espera] - Mata todos los nodos de una etapa"
+	@echo "  make test-cliente [cant] [tx] [acc] [sol] [espera]  - Mata un cliente a mitad de envío"
+	@echo "  make test-gateway [cant] [tx] [acc] [sol] [espera]  - Mata el gateway"
 
 venv:
 	python3 -m venv .venv
@@ -120,11 +124,12 @@ client:
 	TX_FILE=$${TRANSACTIONS_FILE:-$$TX}; \
 	ACC_FILE=$${ACCOUNTS_FILE:-$$ACC}; \
 	OUT_DIR=$${OUTPUT_DIR:-$${OUT:-$(OUTPUT_DIR)}}; \
-	CLIENT_SUFFIX=$$(date +%s); \
+	CLIENT_SUFFIX=$$(date +%s%N); \
 	docker build -q -t client-image -f src/client/Dockerfile src >/dev/null 2>&1 && \
 	docker run --rm \
 		--name client_$$CLIENT_SUFFIX \
 		--network host \
+		--user "$$(id -u):$$(id -g)" \
 		-v "$(shell pwd)/datasets:/app/datasets" \
 		-v "$(shell pwd)/$$OUT_DIR:/app/$$OUT_DIR" \
 		-v "$(shell pwd)/logs:/app/logs" \
@@ -223,6 +228,28 @@ generar-sample:
 		--input datasets/$$DB.csv \
 		--output datasets/$${DB}_sample_$${PCT}.csv \
 		--percentage $$PCT
+
+test-todos:
+	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
+	bash scripts/test_todos.sh $$ARGS
+
+test-etapa:
+	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
+	if [ -z "$$ARGS" ]; then \
+		echo "Error: Debes especificar el prefix de la etapa."; \
+		echo "Uso: make test-etapa <prefix> [cant_clientes] [tx] [acc] [soluciones] [espera]"; \
+		echo "Ejemplo: make test-etapa bank_shard 3"; \
+		exit 1; \
+	fi; \
+	bash scripts/test_etapa.sh $$ARGS
+
+test-cliente:
+	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
+	bash scripts/test_cliente.sh $$ARGS
+
+test-gateway:
+	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
+	bash scripts/test_gateway.sh $$ARGS
 
 # Ignorar argumentos pasados a targets dinámicos
 %:
