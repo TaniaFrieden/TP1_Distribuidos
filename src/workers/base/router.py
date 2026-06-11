@@ -1,6 +1,7 @@
 import json
 import logging
 import threading
+import uuid
 from common import middleware, sharding
 
 logger = logging.getLogger(__name__)
@@ -100,11 +101,11 @@ class MessageRouter:
         parts = [self._canonical_hash_part(payload.get(field)) for field in hash_fields]
         return "|".join(parts) if parts else "default"
 
-    def enviar(self, mensaje: bytes, payload: dict | None = None):
+    def enviar(self, mensaje: bytes, payload: dict | None = None, upstream_request_id: str | None = None):
         with self._send_lock:
-            self._enviar_locked(mensaje, payload)
+            self._enviar_locked(mensaje, payload, upstream_request_id)
 
-    def _enviar_locked(self, mensaje: bytes, payload: dict | None = None):
+    def _enviar_locked(self, mensaje: bytes, payload: dict | None = None, upstream_request_id: str | None = None):
         try:
             if mensaje is None:
                 return
@@ -145,8 +146,10 @@ class MessageRouter:
                             records_by_shard[target_id].append(record_values)
                             
                     for shard_id, shard_records in records_by_shard.items():
+                        derived_id = f"{upstream_request_id}:s{shard_id}" if upstream_request_id else str(uuid.uuid4())
                         shard_payload = {
                             "client_id": client_id,
+                            "request_id": derived_id,
                             "batches": [
                                 {
                                     "header": {
@@ -187,9 +190,11 @@ class MessageRouter:
                                     records_by_queue[target_queue][1].append(record_values)
                                     break
                                     
-                    for target_queue, (schema, q_records) in records_by_queue.items():
+                    for i, (target_queue, (schema, q_records)) in enumerate(records_by_queue.items()):
+                        derived_id = f"{upstream_request_id}:c{i}" if upstream_request_id else str(uuid.uuid4())
                         q_payload = {
                             "client_id": client_id,
+                            "request_id": derived_id,
                             "batches": [
                                 {
                                     "header": {

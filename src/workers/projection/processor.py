@@ -55,8 +55,8 @@ class ProjectionProcessor:
             "client_id": client_id,
             "batches": projected_batches
         }
-        if "msg_id" in payload:
-            resultado["msg_id"] = payload["msg_id"]
+        if "request_id" in payload:
+            resultado["request_id"] = payload["request_id"]
         return resultado
 
     def process_single(self, transaction: dict, client_id: str) -> dict:

@@ -54,11 +54,11 @@ class CounterWorker(BaseWorker):
     def procesar_payload(self, queue_name: str, client_id: str, payload: dict | str, mensaje_original: bytes, ack, nack):
         try:
             t = payload if isinstance(payload, dict) else json.loads(payload)
-            msg_id = t.get("msg_id")
+            request_id = t.get("request_id")
 
             with self._lock:
-                if msg_id and msg_id in self._vistos.get(client_id, set()):
-                    logger.warning(f"[Counter] Mensaje duplicado ignorado: msg_id={msg_id} para client_id={client_id}")
+                if request_id and request_id in self._vistos.get(client_id, set()):
+                    logger.warning(f"[Counter] Mensaje duplicado ignorado: request_id={request_id} para client_id={client_id}")
                     ack()
                     return
 
@@ -68,10 +68,10 @@ class CounterWorker(BaseWorker):
                 else:
                     self._conteos[client_id] = self._conteos.get(client_id, 0) + 1
 
-                if msg_id:
+                if request_id:
                     if client_id not in self._vistos:
                         self._vistos[client_id] = set()
-                    self._vistos[client_id].add(msg_id)
+                    self._vistos[client_id].add(request_id)
 
                 self._guardar_estado(client_id)
 

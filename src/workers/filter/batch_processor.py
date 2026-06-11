@@ -41,6 +41,6 @@ class BatchProcessor:
             "client_id": client_id,
             "batches": filtered_batches
         }
-        if "msg_id" in payload:
-            resultado["msg_id"] = payload["msg_id"]
+        if "request_id" in payload:
+            resultado["request_id"] = payload["request_id"]
         return resultado

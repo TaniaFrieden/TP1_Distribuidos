@@ -3,10 +3,10 @@ FROM python:3-alpine
 RUN pip3 install pika
 
 WORKDIR /app
-ENV PYTHONPATH=/app
+ENV PYTHONPATH=/app:/app/base
 
 COPY common ./common
-COPY workers/base/*.py ./
-COPY workers/format_shard/*.py ./
+COPY workers/base ./base
+COPY workers/format_shard ./
 
 ENTRYPOINT ["python3", "format_shard.py"]

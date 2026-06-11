@@ -122,8 +122,8 @@ class CurrencyConverterWorker(BaseWorker):
                         "client_id": client_id,
                         "batches": filtered_batches
                     }
-                    if "msg_id" in t:
-                        output_payload["msg_id"] = t["msg_id"]
+                    if "request_id" in t:
+                        output_payload["request_id"] = t["request_id"]
                     msg_bytes = json.dumps(output_payload).encode("utf-8")
                     self._enviar(msg_bytes, payload=output_payload)
             else:

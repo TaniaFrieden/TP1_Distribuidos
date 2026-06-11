@@ -16,11 +16,14 @@ class DistributedCoordinator:
         self._coordinaciones_eof = {}
         self._eofs_locales_recibidos = {}
         self._mensajes_en_vuelo = {}
-        self._clientes_flusheados = set()  
-        self._originadores_reconocidos = {}  
+        self._clientes_flusheados = set()
+        self._flush_en_progreso = set()  # flush iniciado pero datos aún no publicados downstream
+        self._originadores_reconocidos = {}
         self._local_eof_completed = set()
         self._clientes_finalizados = set()
         self._barreras_pendientes = []
+        self._flush_completados = {}  # {client_id: originator_id} — persisted, cleared on BARRIER_COMPLETE
+        self._worker_finished_pendientes = []  # [(client_id, originator)] to resend on recovery
 
         nombre_nodo = f"coordinator_{config.node_prefix}_{config.node_id}"
         self._persistidor = PersistidorEstado(nombre_nodo)
@@ -59,7 +62,7 @@ class DistributedCoordinator:
     def _recuperar_estado_coordinacion(self):
         estado = self._persistidor.cargar()
         coordinaciones = estado.get("coordinaciones_eof", {})
-        
+
         eofs_locales = estado.get("eofs_locales_recibidos", {})
         for client_id, colas in eofs_locales.items():
             self._eofs_locales_recibidos[client_id] = set(colas)
@@ -68,7 +71,7 @@ class DistributedCoordinator:
             mensaje_original = None
             if datos.get("mensaje_payload"):
                 mensaje_original = json.dumps(datos["mensaje_payload"]).encode('utf-8')
-            
+
             workers_confirmados = set(datos.get("workers_confirmados", []))
             self._coordinaciones_eof[client_id] = {
                 "workers": workers_confirmados,
@@ -85,6 +88,23 @@ class DistributedCoordinator:
                 logger.info(f"[Coordinator] La barrera para {client_id} ya estaba completa. Encolando para enviar BARRIER_COMPLETE.")
                 self._barreras_pendientes.append((client_id, mensaje_original))
 
+        # Recover clientes_finalizados so late WORKER_FINISHED messages get a BARRIER_COMPLETE response
+        for client_id in estado.get("clientes_finalizados", []):
+            self._clientes_finalizados.add(client_id)
+            logger.info(f"[Coordinator] Recuperando cliente finalizado: {client_id}.")
+
+        # Recover workers that flushed but never confirmed WORKER_FINISHED
+        flush_completados = estado.get("flush_completados", {})
+        for client_id, originator in flush_completados.items():
+            self._clientes_flusheados.add(client_id)
+            self._local_eof_completed.add(client_id)
+            self._originadores_reconocidos[client_id] = originator
+            self._worker_finished_pendientes.append((client_id, originator))
+            logger.info(
+                f"[Coordinator] Recuperando flush pendiente para {client_id}: "
+                f"ya flusheado, reenviando WORKER_FINISHED al originador {originator}."
+            )
+
     def procesar_barreras_recuperadas(self):
         for cid, msg in self._barreras_pendientes:
             with self._coordinacion_lock:
@@ -92,6 +112,7 @@ class DistributedCoordinator:
                     del self._coordinaciones_eof[cid]
                     self._persistir_coordinacion()
                 self._clientes_flusheados.discard(cid)
+                self._flush_en_progreso.discard(cid)
                 self._originadores_reconocidos.pop(cid, None)
                 self._local_eof_completed.discard(cid)
                 self._clientes_finalizados.add(cid)
@@ -101,6 +122,16 @@ class DistributedCoordinator:
                 })
             self.on_sync_complete(cid, msg)
         self._barreras_pendientes.clear()
+
+        for cid, originator in self._worker_finished_pendientes:
+            logger.info(f"[Coordinator] Reenviando WORKER_FINISHED pendiente para {cid} al originador {originator}.")
+            self._enviar_control({
+                "type": "WORKER_FINISHED",
+                "client_id": cid,
+                "originator": originator,
+                "worker_id": self.config.node_id
+            })
+        self._worker_finished_pendientes.clear()
 
     def _persistir_coordinacion(self):
         with self._persistencia_lock:
@@ -116,15 +147,17 @@ class DistributedCoordinator:
                     "workers_confirmados": list(datos["workers"]),
                     "mensaje_payload": mensaje_payload
                 }
-            
+
             eofs_locales_serial = {
                 client_id: list(colas)
                 for client_id, colas in self._eofs_locales_recibidos.items()
             }
-            
+
             self._persistidor.guardar({
                 "coordinaciones_eof": coordinaciones_serial,
-                "eofs_locales_recibidos": eofs_locales_serial
+                "eofs_locales_recibidos": eofs_locales_serial,
+                "flush_completados": dict(self._flush_completados),
+                "clientes_finalizados": list(self._clientes_finalizados),
             })
 
     def registrar_vuelo(self, client_id):
@@ -163,13 +196,31 @@ class DistributedCoordinator:
         self._esperar_vuelo_cero(client_id)
 
         with self._coordinacion_lock:
-            ya_flusheado = client_id in self._clientes_flusheados
-            if not ya_flusheado:
-                self._clientes_flusheados.add(client_id)
+            if client_id in self._clientes_flusheados:
+                # Los datos ya se publicaron downstream: es seguro reconfirmar WORKER_FINISHED.
+                debe_flushear = False
+            elif client_id in self._flush_en_progreso:
+                # Otro hilo está publicando los datos AHORA mismo. No mandamos WORKER_FINISHED
+                # todavía: hacerlo dejaría que el originador reenvíe el EOF downstream y este
+                # adelante a los datos que aún viajan (carrera que pierde un shard completo).
+                # El rebroadcast del originador reintentará y entrará por la rama
+                # _clientes_flusheados una vez que la publicación termine.
+                logger.info(f"[Coordinator] Flush en progreso para client_id={client_id}. Postergando WORKER_FINISHED.")
+                return
+            else:
+                debe_flushear = True
+                self._flush_en_progreso.add(client_id)
 
-        if not ya_flusheado:
+        if debe_flushear:
             logger.info(f"[Coordinator] Vuelos en cero para client_id={client_id}. Flusheando datos locales.")
+            # Publicar los datos ANTES de marcar flusheado/persistir: WORKER_FINISHED solo debe
+            # emitirse cuando la salida ya está en la cola downstream.
             self.on_sync_complete(client_id, None)
+            with self._coordinacion_lock:
+                self._flush_en_progreso.discard(client_id)
+                self._clientes_flusheados.add(client_id)
+                self._flush_completados[client_id] = originator
+                self._persistir_coordinacion()
         else:
             logger.info(f"[Coordinator] Ya flusheado para client_id={client_id}. Skip.")
 
@@ -187,6 +238,7 @@ class DistributedCoordinator:
             self._originadores_reconocidos.pop(client_id, None)
             self._eofs_locales_recibidos.pop(client_id, None)
             self._clientes_flusheados.discard(client_id)
+            self._flush_en_progreso.discard(client_id)
             self._clientes_finalizados.discard(client_id)
         with self._vuelo_lock:
             self._mensajes_en_vuelo.pop(client_id, None)
@@ -332,10 +384,12 @@ class DistributedCoordinator:
             elif msg_type == "BARRIER_COMPLETE":
                 with self._coordinacion_lock:
                     self._clientes_flusheados.discard(client_id)
+                    self._flush_en_progreso.discard(client_id)
                     self._originadores_reconocidos.pop(client_id, None)
                     self._local_eof_completed.discard(client_id)
                     self._clientes_finalizados.add(client_id)
                     self._coordinaciones_eof.pop(client_id, None)
+                    self._flush_completados.pop(client_id, None)
                     self._persistir_coordinacion()
                 logger.info(f"[Coordinator] Barrera completa liberada globalmente para client_id={client_id}.")
                 if self.on_barrier_complete:
