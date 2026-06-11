@@ -550,6 +550,7 @@ services:
       PREFETCH_COUNT: '10'
       LOG_LEVEL: INFO
       LOG_FILE: /app/logs/q5_counter_01.txt
+      CRASH_AFTER_PERSIST: ${CRASH_AFTER_PERSIST:-false}
   watchdog_1:
     build:
       context: ./src

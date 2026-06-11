@@ -197,6 +197,9 @@ def _generar_servicio(node, worker_config, workers_config, compose_data):
         })
         env.update(node.get('extra_env', {}))
 
+        if worker_type == 'counter':
+            env['CRASH_AFTER_PERSIST'] = '${CRASH_AFTER_PERSIST:-false}'
+
         volumes = ['./logs:/app/logs']
         if worker_type in ['bank_shard', 'format_shard', 'joiner_q4', 'counter']:
             volumes.append(f'./volume/{worker_name}:/app/volumen')

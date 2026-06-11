@@ -25,18 +25,24 @@ class CounterWorker(BaseWorker):
 
     def _recover_state_from_disk(self):
         if not os.path.exists(BASE_DIR):
+            logger.info(f"[Counter] Directorio de persistencia {BASE_DIR} no existe. Arrancando limpio.")
             return
         prefijo = f"counter_{self.config.node_id}_"
-        for carpeta in os.listdir(BASE_DIR):
-            if carpeta.startswith(prefijo):
-                client_id = carpeta[len(prefijo):]
-                persistidor = PersistidorEstado(carpeta, base_dir=BASE_DIR)
-                estado = persistidor.cargar()
-                if estado:
-                    with self._lock:
-                        self._conteos[client_id] = estado.get("count", 0)
-                        self._vistos[client_id] = set(estado.get("vistos", []))
-                    logger.info(f"[Counter] Recuperado estado de disco para {client_id}: count={self._conteos[client_id]}, vistos={len(self._vistos[client_id])}")
+        carpetas_encontradas = [c for c in os.listdir(BASE_DIR) if c.startswith(prefijo)]
+        if not carpetas_encontradas:
+            logger.info(f"[Counter] Sin estado previo en disco (prefijo={prefijo}). Arrancando limpio.")
+            return
+        for carpeta in carpetas_encontradas:
+            client_id = carpeta[len(prefijo):]
+            persistidor = PersistidorEstado(carpeta, base_dir=BASE_DIR)
+            estado = persistidor.cargar()
+            if estado:
+                with self._lock:
+                    self._conteos[client_id] = estado.get("count", 0)
+                    self._vistos[client_id] = set(estado.get("vistos", []))
+                logger.info(f"[Counter] Recuperado estado de disco para client_id={client_id}: count={self._conteos[client_id]}, vistos={len(self._vistos[client_id])}")
+            else:
+                logger.warning(f"[Counter] Carpeta {carpeta} encontrada pero estado vacío o corrupto.")
 
     def _guardar_estado(self, client_id: str):
         PersistidorEstado(self._nombre_nodo(client_id), base_dir=BASE_DIR).guardar({
@@ -52,7 +58,7 @@ class CounterWorker(BaseWorker):
 
             with self._lock:
                 if msg_id and msg_id in self._vistos.get(client_id, set()):
-                    logger.info(f"[Counter] Mensaje duplicado ignorado: msg_id={msg_id} para {client_id}")
+                    logger.warning(f"[Counter] Mensaje duplicado ignorado: msg_id={msg_id} para client_id={client_id}")
                     ack()
                     return
 
@@ -68,6 +74,18 @@ class CounterWorker(BaseWorker):
                     self._vistos[client_id].add(msg_id)
 
                 self._guardar_estado(client_id)
+
+                # SOLO PARA TEST: simula crash entre persist y ack para verificar deduplicación
+                # Activar con CRASH_AFTER_PERSIST=true en el entorno del contenedor
+                # Crashea una sola vez (usa bandera en disco para no repetir)
+                # Limpiar con: rm volume/q5_counter_01/crash_once_done
+                if os.environ.get("CRASH_AFTER_PERSIST") == "true":
+                    bandera = os.path.join(BASE_DIR, "crash_once_done")
+                    if not os.path.exists(bandera):
+                        open(bandera, "w").close()
+                        logger.warning("[Counter] CRASH_AFTER_PERSIST activado — muriendo antes del ack()")
+                        os._exit(1)
+                # FIN TEST
 
             ack()
         except Exception as e:
