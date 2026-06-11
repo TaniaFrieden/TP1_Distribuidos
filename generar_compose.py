@@ -100,7 +100,7 @@ def _generar_servicio(node, worker_config, workers_config, compose_data):
             env['CRASH_AFTER_PERSIST'] = '${CRASH_AFTER_PERSIST:-false}'
 
         volumes = ['./logs:/app/logs']
-        if worker_type in ['bank_shard', 'format_shard', 'joiner_q4', 'counter']:
+        if worker_type in ['bank_shard', 'format_shard', 'joiner_q4', 'counter', 'group_distinct_counter']:
             volumes.append(f'./volume/{worker_name}:/app/volumen')
 
         compose_data['services'][worker_name] = {

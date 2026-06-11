@@ -1,11 +1,15 @@
 import logging
 import json
 import threading
+import os
 
 from base import BaseWorker
 from common.logging_setup import setup_logging
+from common.persistencia import PersistidorEstado
 
 logger = logging.getLogger(__name__)
+
+BASE_DIR = "/app/volumen"
 
 
 class JoinerQ4Worker(BaseWorker):
@@ -24,7 +28,52 @@ class JoinerQ4Worker(BaseWorker):
         super().__init__()
         self._scatter: dict = {}
         self._txns: dict = {}
+        self._vistos: dict[str, set] = {}
         self._lock = threading.Lock()
+        self._recover_state_from_disk()
+
+    def _nombre_nodo(self, client_id: str) -> str:
+        return f"joiner_q4_{self.config.node_id}_{client_id}"
+
+    def _recover_state_from_disk(self):
+        if not os.path.exists(BASE_DIR):
+            logger.info(f"[JoinerQ4] Directorio {BASE_DIR} no existe. Arrancando limpio.")
+            return
+        prefijo = f"joiner_q4_{self.config.node_id}_"
+        carpetas = [c for c in os.listdir(BASE_DIR) if c.startswith(prefijo)]
+        if not carpetas:
+            logger.info(f"[JoinerQ4] Sin estado previo en disco. Arrancando limpio.")
+            return
+        for carpeta in carpetas:
+            client_id = carpeta[len(prefijo):]
+            persistidor = PersistidorEstado(carpeta, base_dir=BASE_DIR)
+            estado = persistidor.cargar()
+            if not estado:
+                continue
+            if estado.get("barrier_completada", False):
+                persistidor.borrar()
+                logger.info(f"[JoinerQ4] barrier_completada detectada para client_id={client_id}. Limpiando remanente.")
+                continue
+            scatter = {k: [tuple(a) for a in v] for k, v in estado.get("scatter", {}).items()}
+            txns = {k: set(tuple(c) for c in v) for k, v in estado.get("txns", {}).items()}
+            with self._lock:
+                self._scatter[client_id] = scatter
+                self._txns[client_id] = txns
+                self._vistos[client_id] = set(estado.get("vistos", []))
+            logger.info(
+                f"[JoinerQ4] Recuperado estado para client_id={client_id}: "
+                f"scatter_keys={len(scatter)}, txns_keys={len(txns)}, vistos={len(self._vistos[client_id])}"
+            )
+
+    def _guardar_estado(self, client_id: str):
+        scatter_serial = {k: [list(a) for a in v] for k, v in self._scatter.get(client_id, {}).items()}
+        txns_serial = {k: [list(c) for c in v] for k, v in self._txns.get(client_id, {}).items()}
+        PersistidorEstado(self._nombre_nodo(client_id), base_dir=BASE_DIR).guardar({
+            "client_id": client_id,
+            "scatter": scatter_serial,
+            "txns": txns_serial,
+            "vistos": list(self._vistos.get(client_id, set())),
+        })
 
     def _norm(self, v) -> str:
         return str(v).strip().lstrip("0") or "0"
@@ -32,25 +81,32 @@ class JoinerQ4Worker(BaseWorker):
     def procesar_payload(self, queue_name: str, client_id: str, payload: dict,
                         mensaje_original: bytes, ack, nack):
         try:
-            if "batches" in payload:
-                with self._lock:
+            request_id = payload.get("request_id")
+
+            with self._lock:
+                if request_id and request_id in self._vistos.get(client_id, set()):
+                    logger.warning(f"[JoinerQ4] Duplicado propio ignorado: request_id={request_id} client_id={client_id}")
+                    ack()
+                    return
+
+                if "batches" in payload:
                     for batch in payload["batches"]:
                         header = batch["header"]
                         schema = header["schema"]
                         records = batch["payload"]
-                        
+
                         if "scatter" in queue_name:
                             to_bank_idx = schema.index("to_bank") if "to_bank" in schema else None
                             to_account_idx = schema.index("to_account") if "to_account" in schema else None
                             from_bank_idx = schema.index("from_bank") if "from_bank" in schema else None
                             from_account_idx = schema.index("from_account") if "from_account" in schema else None
-                            
+
                             for record_values in records:
                                 to_bank = record_values[to_bank_idx] if to_bank_idx is not None else ""
                                 to_account = record_values[to_account_idx] if to_account_idx is not None else ""
                                 from_bank = record_values[from_bank_idx] if from_bank_idx is not None else ""
                                 from_account = record_values[from_account_idx] if from_account_idx is not None else ""
-                                
+
                                 b_key = f"{self._norm(to_bank)}|{self._norm(to_account)}"
                                 a_info = (self._norm(from_bank), self._norm(from_account))
                                 self._scatter.setdefault(client_id, {}).setdefault(b_key, []).append(a_info)
@@ -59,27 +115,31 @@ class JoinerQ4Worker(BaseWorker):
                             account_idx = schema.index("Account") if "Account" in schema else None
                             to_bank_idx = schema.index("To Bank") if "To Bank" in schema else None
                             to_account_idx = schema.index("Account.1") if "Account.1" in schema else None
-                            
+
                             for record_values in records:
                                 from_bank = record_values[from_bank_idx] if from_bank_idx is not None else ""
                                 account = record_values[account_idx] if account_idx is not None else ""
                                 to_bank = record_values[to_bank_idx] if to_bank_idx is not None else ""
                                 to_account = record_values[to_account_idx] if to_account_idx is not None else ""
-                                
+
                                 b_key = f"{self._norm(from_bank)}|{self._norm(account)}"
                                 c_info = (self._norm(to_bank), self._norm(to_account))
                                 self._txns.setdefault(client_id, {}).setdefault(b_key, set()).add(c_info)
-            else:
-                if "scatter" in queue_name:
-                    b_key = f"{self._norm(payload['to_bank'])}|{self._norm(payload['to_account'])}"
-                    a_info = (self._norm(payload["from_bank"]), self._norm(payload["from_account"]))
-                    with self._lock:
-                        self._scatter.setdefault(client_id, {}).setdefault(b_key, []).append(a_info)
                 else:
-                    b_key = f"{self._norm(payload.get('From Bank', ''))}|{self._norm(payload.get('Account', ''))}"
-                    c_info = (self._norm(payload.get("To Bank", "")), self._norm(payload.get("Account.1", "")))
-                    with self._lock:
+                    if "scatter" in queue_name:
+                        b_key = f"{self._norm(payload['to_bank'])}|{self._norm(payload['to_account'])}"
+                        a_info = (self._norm(payload["from_bank"]), self._norm(payload["from_account"]))
+                        self._scatter.setdefault(client_id, {}).setdefault(b_key, []).append(a_info)
+                    else:
+                        b_key = f"{self._norm(payload.get('From Bank', ''))}|{self._norm(payload.get('Account', ''))}"
+                        c_info = (self._norm(payload.get("To Bank", "")), self._norm(payload.get("Account.1", "")))
                         self._txns.setdefault(client_id, {}).setdefault(b_key, set()).add(c_info)
+
+                if request_id:
+                    self._vistos.setdefault(client_id, set()).add(request_id)
+
+                self._guardar_estado(client_id)
+
             ack()
         except Exception as e:
             logger.error(f"Error procesando payload: {e}", exc_info=True)
@@ -108,6 +168,7 @@ class JoinerQ4Worker(BaseWorker):
         with self._lock:
             scatter = self._scatter.pop(client_id, {})
             txns    = self._txns.pop(client_id, {})
+            self._vistos.pop(client_id, None)
 
         logger.info(f"[JoinerQ4] scatter_keys={len(scatter)} txns_keys={len(txns)}")
 
@@ -143,11 +204,15 @@ class JoinerQ4Worker(BaseWorker):
             enviados += len(batch)
 
         logger.info(f"[JoinerQ4] Flush completo para client_id={client_id}. Registros emitidos: {enviados}.")
+        PersistidorEstado(self._nombre_nodo(client_id), base_dir=BASE_DIR).guardar({"barrier_completada": True})
+        PersistidorEstado(self._nombre_nodo(client_id), base_dir=BASE_DIR).borrar()
 
     def al_desconectar_cliente(self, client_id: str):
         with self._lock:
             self._scatter.pop(client_id, None)
             self._txns.pop(client_id, None)
+            self._vistos.pop(client_id, None)
+        PersistidorEstado(self._nombre_nodo(client_id), base_dir=BASE_DIR).borrar()
         logger.info(f"[JoinerQ4] Estado descartado para {client_id}.")
 
     def al_cerrar(self):

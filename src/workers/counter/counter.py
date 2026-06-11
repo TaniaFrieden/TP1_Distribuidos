@@ -36,13 +36,17 @@ class CounterWorker(BaseWorker):
             client_id = carpeta[len(prefijo):]
             persistidor = PersistidorEstado(carpeta, base_dir=BASE_DIR)
             estado = persistidor.cargar()
-            if estado:
-                with self._lock:
-                    self._conteos[client_id] = estado.get("count", 0)
-                    self._vistos[client_id] = set(estado.get("vistos", []))
-                logger.info(f"[Counter] Recuperado estado de disco para client_id={client_id}: count={self._conteos[client_id]}, vistos={len(self._vistos[client_id])}")
-            else:
+            if not estado:
                 logger.warning(f"[Counter] Carpeta {carpeta} encontrada pero estado vacío o corrupto.")
+                continue
+            if estado.get("barrier_completada", False):
+                persistidor.borrar()
+                logger.info(f"[Counter] barrier_completada detectada para client_id={client_id}. Limpiando remanente.")
+                continue
+            with self._lock:
+                self._conteos[client_id] = estado.get("count", 0)
+                self._vistos[client_id] = set(estado.get("vistos", []))
+            logger.info(f"[Counter] Recuperado estado de disco para client_id={client_id}: count={self._conteos[client_id]}, vistos={len(self._vistos[client_id])}")
 
     def _guardar_estado(self, client_id: str):
         PersistidorEstado(self._nombre_nodo(client_id), base_dir=BASE_DIR).guardar({
@@ -112,6 +116,7 @@ class CounterWorker(BaseWorker):
         }
         self._enviar(json.dumps(output_payload).encode("utf-8"), payload=output_payload)
         logger.info(f"Q5 count emitido para {client_id}: {count} transacciones.")
+        PersistidorEstado(self._nombre_nodo(client_id), base_dir=BASE_DIR).guardar({"barrier_completada": True})
         PersistidorEstado(self._nombre_nodo(client_id), base_dir=BASE_DIR).borrar()
 
     def al_desconectar_cliente(self, client_id: str):

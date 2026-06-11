@@ -5,8 +5,11 @@ import os
 
 from base import BaseWorker
 from common.logging_setup import setup_logging
+from common.persistencia import PersistidorEstado
 
 logger = logging.getLogger(__name__)
+
+BASE_DIR = "/app/volumen"
 
 
 class GroupDistinctCounterWorker(BaseWorker):
@@ -46,12 +49,61 @@ class GroupDistinctCounterWorker(BaseWorker):
         self.count_field  = os.environ.get("COUNT_OUTPUT_FIELD", "Amount Transactions")
 
         self._grupos: dict = {}
+        self._vistos: dict[str, set] = {}
         self._lock = threading.Lock()
+
+        self._recover_state_from_disk()
 
         logger.info(
             f"[GroupDistinctCounter] group={self.group_fields} value={self.value_fields} "
             f"expected={self.expected} operator={self.operator} mode={self.emit_mode}"
         )
+
+    def _nombre_nodo(self, client_id: str) -> str:
+        return f"gdc_{self.config.node_prefix}_{self.config.node_id}_{client_id}"
+
+    def _recover_state_from_disk(self):
+        if not os.path.exists(BASE_DIR):
+            logger.info(f"[GroupDistinctCounter] Directorio {BASE_DIR} no existe. Arrancando limpio.")
+            return
+        prefijo = f"gdc_{self.config.node_prefix}_{self.config.node_id}_"
+        carpetas = [c for c in os.listdir(BASE_DIR) if c.startswith(prefijo)]
+        if not carpetas:
+            logger.info(f"[GroupDistinctCounter] Sin estado previo en disco. Arrancando limpio.")
+            return
+        for carpeta in carpetas:
+            client_id = carpeta[len(prefijo):]
+            persistidor = PersistidorEstado(carpeta, base_dir=BASE_DIR)
+            estado = persistidor.cargar()
+            if not estado:
+                continue
+            if estado.get("barrier_completada", False):
+                persistidor.borrar()
+                logger.info(f"[GroupDistinctCounter] barrier_completada detectada para client_id={client_id}. Limpiando remanente.")
+                continue
+            grupos_serial = estado.get("grupos", {})
+            grupos = {}
+            for k, vlist in grupos_serial.items():
+                gkey = tuple(json.loads(k))
+                grupos[gkey] = set(tuple(v) for v in vlist)
+            with self._lock:
+                self._grupos[client_id] = grupos
+                self._vistos[client_id] = set(estado.get("vistos", []))
+            logger.info(
+                f"[GroupDistinctCounter] Recuperado estado para client_id={client_id}: "
+                f"grupos={len(grupos)}, vistos={len(self._vistos[client_id])}"
+            )
+
+    def _guardar_estado(self, client_id: str):
+        grupos_serial = {}
+        for gkey, vset in self._grupos.get(client_id, {}).items():
+            k = json.dumps(list(gkey))
+            grupos_serial[k] = [list(vkey) for vkey in vset]
+        PersistidorEstado(self._nombre_nodo(client_id), base_dir=BASE_DIR).guardar({
+            "client_id": client_id,
+            "grupos": grupos_serial,
+            "vistos": list(self._vistos.get(client_id, set())),
+        })
 
     def _make_key(self, payload: dict, fields: list) -> tuple:
         return tuple(str(payload.get(f, "")) for f in fields)
@@ -59,26 +111,37 @@ class GroupDistinctCounterWorker(BaseWorker):
     def procesar_payload(self, queue_name: str, client_id: str, payload: dict,
                          mensaje_original: bytes, ack, nack):
         try:
-            if "batches" in payload:
-                with self._lock:
+            request_id = payload.get("request_id")
+
+            with self._lock:
+                if request_id and request_id in self._vistos.get(client_id, set()):
+                    logger.warning(f"[GroupDistinctCounter] Duplicado propio ignorado: request_id={request_id} client_id={client_id}")
+                    ack()
+                    return
+
+                if "batches" in payload:
                     for batch in payload["batches"]:
                         header = batch["header"]
                         schema = header["schema"]
                         records = batch["payload"]
-                        
+
                         group_indices = [schema.index(f) if f in schema else None for f in self.group_fields]
                         value_indices = [schema.index(f) if f in schema else None for f in self.value_fields]
-                        
+
                         for record_values in records:
                             gkey = tuple(str(record_values[idx]) if idx is not None else "" for idx in group_indices)
                             vkey = tuple(str(record_values[idx]) if idx is not None else "" for idx in value_indices)
-                            
                             self._grupos.setdefault(client_id, {}).setdefault(gkey, set()).add(vkey)
-            else:
-                gkey = self._make_key(payload, self.group_fields)
-                vkey = self._make_key(payload, self.value_fields)
-                with self._lock:
+                else:
+                    gkey = self._make_key(payload, self.group_fields)
+                    vkey = self._make_key(payload, self.value_fields)
                     self._grupos.setdefault(client_id, {}).setdefault(gkey, set()).add(vkey)
+
+                if request_id:
+                    self._vistos.setdefault(client_id, set()).add(request_id)
+
+                self._guardar_estado(client_id)
+
             ack()
         except Exception as e:
             logger.error(f"Error procesando payload: {e}", exc_info=True)
@@ -105,11 +168,12 @@ class GroupDistinctCounterWorker(BaseWorker):
     def al_completar_cliente(self, client_id: str):
         with self._lock:
             grupos = self._grupos.pop(client_id, {})
+            self._vistos.pop(client_id, None)
 
         logger.info(f"[GroupDistinctCounter] grupos totales: {len(grupos)}")
         top = sorted(grupos.items(), key=lambda x: len(x[1]), reverse=True)[:5]
         for gkey, vset in top:
-            logger.info(f"[GroupDistinctCounter] grupo {gkey}: {len(vset)} B's distintos")
+            logger.info(f"[GroupDistinctCounter] grupo {gkey}: {len(vset)} valores distintos")
 
         if self.emit_mode == "explode":
             schema = self.group_out + self.value_out
@@ -125,7 +189,7 @@ class GroupDistinctCounterWorker(BaseWorker):
             elif self.operator == "gte":
                 if len(vset) < self.expected:
                     continue
-            else: # eq
+            else:  # eq
                 if len(vset) != self.expected:
                     continue
 
@@ -144,10 +208,14 @@ class GroupDistinctCounterWorker(BaseWorker):
             enviados += len(batch)
 
         logger.info(f"[GroupDistinctCounter] Flush completo para client_id={client_id}. Registros emitidos: {enviados}.")
+        PersistidorEstado(self._nombre_nodo(client_id), base_dir=BASE_DIR).guardar({"barrier_completada": True})
+        PersistidorEstado(self._nombre_nodo(client_id), base_dir=BASE_DIR).borrar()
 
     def al_desconectar_cliente(self, client_id: str):
         with self._lock:
             self._grupos.pop(client_id, None)
+            self._vistos.pop(client_id, None)
+        PersistidorEstado(self._nombre_nodo(client_id), base_dir=BASE_DIR).borrar()
         logger.info(f"[GroupDistinctCounter] Estado descartado para {client_id}.")
 
     def al_cerrar(self):
