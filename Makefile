@@ -41,9 +41,10 @@ help:
 	@echo "  make caos [min] [max]            - Corre el script de Chaos Monkey para derribar workers aleatoriamente"
 	@echo "  make generar-sample <dataset> <porcentaje> - Genera una muestra de un dataset con el porcentaje indicado (default: 30)"
 	@echo "  make test-todos [cant] [tx] [acc] [sol] [espera]    - Mata todos los workers en simultáneo"
-	@echo "  make test-etapa <prefix> [cant] [tx] [acc] [sol] [espera] - Mata todos los nodos de una etapa"
+		@echo "  make test-etapa <prefix> [cant] [tx] [acc] [sol] [espera|random] - Mata todos los nodos de una etapa"
 	@echo "  make test-cliente [cant] [tx] [acc] [sol] [espera]  - Mata un cliente a mitad de envío"
 	@echo "  make test-gateway [cant] [tx] [acc] [sol] [espera]  - Mata el gateway"
+	@echo "  make test-crash-caso6 [cant] [tx] [acc] [sol]       - Automatiza test del Caso 6 (pre-confirmación)"
 
 venv:
 	python3 -m venv .venv
@@ -237,7 +238,7 @@ test-etapa:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
 	if [ -z "$$ARGS" ]; then \
 		echo "Error: Debes especificar el prefix de la etapa."; \
-		echo "Uso: make test-etapa <prefix> [cant_clientes] [tx] [acc] [soluciones] [espera]"; \
+		echo "Uso: make test-etapa <prefix> [cant_clientes] [tx] [acc] [soluciones] [espera|random]"; \
 		echo "Ejemplo: make test-etapa bank_shard 3"; \
 		exit 1; \
 	fi; \
@@ -250,6 +251,10 @@ test-cliente:
 test-gateway:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
 	bash scripts/test_gateway.sh $$ARGS
+
+test-crash-caso6:
+	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
+	bash scripts/test_crash_caso6.sh $$ARGS
 
 # Ignorar argumentos pasados a targets dinámicos
 %:

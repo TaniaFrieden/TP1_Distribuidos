@@ -5,8 +5,8 @@ lanzar_clientes() {
     local tx=$2
     local acc=$3
     PIDS=()
+    rm -rf output/*/ 2>/dev/null
     for i in $(seq 1 "$cant"); do
-        rm -rf "output/$((i-1))" 2>/dev/null
         ( make client TRANSACTIONS_FILE="$tx" ACCOUNTS_FILE="$acc" OUTPUT_DIR="output" \
             > "logs/client_stdout_$i.txt" 2>&1 ) &
         PIDS+=($!)
@@ -20,7 +20,7 @@ esperar_clientes() {
 }
 
 obtener_queries() {
-    python3 -c "
+    .venv/bin/python -c "
 import sys
 sys.path.append('scripts')
 from obtener_queries import obtener_queries_desde_compose
@@ -46,7 +46,7 @@ comparar_resultados() {
             actual="output/$cid/q${q}_solucion.csv"
             expected="solutions/$soluciones_dir/q${q}_solucion.csv"
             if [ -f "$actual" ]; then
-                python3 -c "
+                .venv/bin/python -c "
 import sys
 sys.path.append('scripts')
 from comparar_datasets import comparar_csv_sin_orden

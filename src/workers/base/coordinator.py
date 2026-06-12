@@ -224,6 +224,15 @@ class DistributedCoordinator:
         else:
             logger.info(f"[Coordinator] Ya flusheado para client_id={client_id}. Skip.")
 
+        import os
+        if os.environ.get("CRASH_BEFORE_FINISHED_CONFIRMATION") == "true":
+            base_dir = os.path.dirname(self._persistidor.directory)
+            bandera = os.path.join(base_dir, f"{self.config.node_prefix}_{self.config.node_id}_crash_before_finished_done")
+            if not os.path.exists(bandera):
+                open(bandera, "w").close()
+                logger.warning(f"[Coordinator] CRASH_BEFORE_FINISHED_CONFIRMATION activado — muriendo ANTES de enviar WORKER_FINISHED")
+                os._exit(1)
+
         logger.info(f"[Coordinator] Flush completo. Enviando WORKER_FINISHED a originator {originator}.")
         self._enviar_control({
             "type": "WORKER_FINISHED",
