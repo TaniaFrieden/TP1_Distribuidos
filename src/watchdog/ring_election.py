@@ -239,6 +239,15 @@ class RingElection:
 
         logger.info(f"[Ring-{self._id}] ¡SOY EL LÍDER! Nodos caídos detectados: {dead_nodes}")
         self._on_become_leader(dead_nodes)
+        
+        import os
+        if os.environ.get("CRASH_LEADER_MID_ELECTION") == "true":
+            bandera = f"/tmp/watchdog_{self._id}_election_crash_done"
+            if not os.path.exists(bandera):
+                open(bandera, "w").close()
+                logger.warning(f"[Ring-{self._id}] CRASH_LEADER_MID_ELECTION activado: Muriendo antes de propagar coordinador!")
+                os._exit(1)
+
         self._send_to(coord_target, {"tipo": "coordinador", "id": self._id})
         threading.Thread(
             target=self._leader_hb_loop, daemon=True, name=f"ring-hb-send-{self._id}"

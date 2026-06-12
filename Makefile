@@ -46,6 +46,7 @@ help:
 	@echo "  make test-gateway [cant] [tx] [acc] [sol] [espera]  - Mata el gateway"
 	@echo "  make test-crash-caso6 [cant] [tx] [acc] [sol]       - Automatiza test del Caso 6 (pre-confirmación)"
 	@echo "  make test-crash-caso7 [cant] [tx] [acc] [sol]       - Automatiza test del Caso 7 (pre-barrera)"
+	@echo "  make test-crash-leader [cant] [tx] [acc] [sol]      - Automatiza test de Caída del Líder en Elección"
 
 venv:
 	python3 -m venv .venv
@@ -260,6 +261,10 @@ test-crash-caso6:
 test-crash-caso7:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
 	bash scripts/test_crash_caso7.sh $$ARGS
+
+test-crash-leader:
+	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
+	bash scripts/test_crash_leader.sh $$ARGS
 
 test-stress-crash:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \

@@ -225,6 +225,7 @@ def generar_compose():
                 'SUSPECTED_DEAD_TTL': str(SUSPECTED_DEAD_TTL),
                 'LOG_LEVEL': 'INFO',
                 'LOG_FILE': f'/app/logs/watchdog_{wid}.txt',
+                'CRASH_LEADER_MID_ELECTION': '${CRASH_LEADER_MID_ELECTION:-false}',
             },
         }
 
