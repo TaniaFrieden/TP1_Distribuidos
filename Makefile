@@ -41,10 +41,11 @@ help:
 	@echo "  make caos [min] [max]            - Corre el script de Chaos Monkey para derribar workers aleatoriamente"
 	@echo "  make generar-sample <dataset> <porcentaje> - Genera una muestra de un dataset con el porcentaje indicado (default: 30)"
 	@echo "  make test-todos [cant] [tx] [acc] [sol] [espera]    - Mata todos los workers en simultáneo"
-		@echo "  make test-etapa <prefix> [cant] [tx] [acc] [sol] [espera|random] - Mata todos los nodos de una etapa"
+	@echo "  make test-etapa <prefix> [cant] [tx] [acc] [sol] [espera|random] - Mata todos los nodos de una etapa"
 	@echo "  make test-cliente [cant] [tx] [acc] [sol] [espera]  - Mata un cliente a mitad de envío"
 	@echo "  make test-gateway [cant] [tx] [acc] [sol] [espera]  - Mata el gateway"
 	@echo "  make test-crash-caso6 [cant] [tx] [acc] [sol]       - Automatiza test del Caso 6 (pre-confirmación)"
+	@echo "  make test-crash-caso7 [cant] [tx] [acc] [sol]       - Automatiza test del Caso 7 (pre-barrera)"
 
 venv:
 	python3 -m venv .venv
@@ -255,6 +256,14 @@ test-gateway:
 test-crash-caso6:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
 	bash scripts/test_crash_caso6.sh $$ARGS
+
+test-crash-caso7:
+	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
+	bash scripts/test_crash_caso7.sh $$ARGS
+
+test-stress-crash:
+	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
+	bash scripts/test_stress_crash.sh $$ARGS
 
 # Ignorar argumentos pasados a targets dinámicos
 %:

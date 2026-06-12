@@ -184,6 +184,15 @@ class AgregadorBancarioWorker(BaseWorker):
 
             if state["transacciones_cerrado"] and state["bancos_cerrado"] and not state["flush_iniciado"]:
                 logger.info(f"[BankShard] Ambas colas cerradas para {client_id}. Solicitando barrera de flush.")
+
+                if os.environ.get("CRASH_PRE_BARRERA") == "true":
+                    base_dir = os.path.dirname(persistidor.directory)
+                    bandera = os.path.join(base_dir, f"{self.shard_config.node_name_prefix}_crash_pre_barrera_done")
+                    if not os.path.exists(bandera):
+                        open(bandera, "w").close()
+                        logger.warning(f"[BankShard] CRASH_PRE_BARRERA activado — muriendo antes de persistir flush_iniciado y antes de iniciar_barrera")
+                        os._exit(1)
+
                 state["flush_iniciado"] = True
                 persistidor.guardar(self._build_serializable_state(client_id))
 
