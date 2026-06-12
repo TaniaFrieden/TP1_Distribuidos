@@ -90,14 +90,18 @@ def _generar_servicio(node, worker_config, workers_config, compose_data):
             'ID': worker_id,
             'TOTAL_WORKERS': str(replicas),
             'HEARTBEAT_INTERVAL_SECONDS': str(HEARTBEAT_INTERVAL_SECONDS),
-            'PREFETCH_COUNT': '10',
             'LOG_LEVEL': 'INFO',
             'LOG_FILE': f'/app/logs/{worker_name}.txt'
         })
         env.update(node.get('extra_env', {}))
+        env.setdefault('PREFETCH_COUNT', '50')
 
         if worker_type == 'counter':
             env['CRASH_AFTER_PERSIST'] = '${CRASH_AFTER_PERSIST:-false}'
+            env['CRASH_AFTER_FLUSH'] = '${CRASH_AFTER_FLUSH:-false}'
+
+        if worker_type in ['joiner_q4', 'group_distinct_counter']:
+            env['CRASH_AFTER_FLUSH'] = '${CRASH_AFTER_FLUSH:-false}'
 
         volumes = ['./logs:/app/logs']
         if worker_type in ['bank_shard', 'format_shard', 'joiner_q4', 'counter', 'group_distinct_counter']:

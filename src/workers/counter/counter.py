@@ -116,6 +116,14 @@ class CounterWorker(BaseWorker):
         }
         self._enviar(json.dumps(output_payload).encode("utf-8"), payload=output_payload)
         logger.info(f"Q5 count emitido para {client_id}: {count} transacciones.")
+
+        if os.environ.get("CRASH_AFTER_FLUSH") == "true":
+            bandera = os.path.join(BASE_DIR, "crash_flush_done")
+            if not os.path.exists(bandera):
+                open(bandera, "w").close()
+                logger.warning("[Counter] CRASH_AFTER_FLUSH — muriendo después del envío, antes de barrier_completada")
+                os._exit(1)
+
         PersistidorEstado(self._nombre_nodo(client_id), base_dir=BASE_DIR).guardar({"barrier_completada": True})
         PersistidorEstado(self._nombre_nodo(client_id), base_dir=BASE_DIR).borrar()
 

@@ -31,6 +31,7 @@ class GroupDistinctCounterWorker(BaseWorker):
       EMIT_MODE            "explode" | "aggregate" (default: aggregate)
       COUNT_OUTPUT_FIELD   nombre del campo de conteo en modo aggregate (default: Amount Transactions)
     """
+    SAVE_BATCH = 50
 
     def __init__(self):
         super().__init__()
@@ -50,6 +51,7 @@ class GroupDistinctCounterWorker(BaseWorker):
 
         self._grupos: dict = {}
         self._vistos: dict[str, set] = {}
+        self._pending_acks: dict[str, list] = {}
         self._lock = threading.Lock()
 
         self._recover_state_from_disk()
@@ -110,42 +112,51 @@ class GroupDistinctCounterWorker(BaseWorker):
 
     def procesar_payload(self, queue_name: str, client_id: str, payload: dict,
                          mensaje_original: bytes, ack, nack):
+        acks_a_liberar = []
         try:
-            request_id = payload.get("request_id")
-
             with self._lock:
+                request_id = payload.get("request_id")
+
                 if request_id and request_id in self._vistos.get(client_id, set()):
                     logger.warning(f"[GroupDistinctCounter] Duplicado propio ignorado: request_id={request_id} client_id={client_id}")
-                    ack()
-                    return
-
-                if "batches" in payload:
-                    for batch in payload["batches"]:
-                        header = batch["header"]
-                        schema = header["schema"]
-                        records = batch["payload"]
-
-                        group_indices = [schema.index(f) if f in schema else None for f in self.group_fields]
-                        value_indices = [schema.index(f) if f in schema else None for f in self.value_fields]
-
-                        for record_values in records:
-                            gkey = tuple(str(record_values[idx]) if idx is not None else "" for idx in group_indices)
-                            vkey = tuple(str(record_values[idx]) if idx is not None else "" for idx in value_indices)
-                            self._grupos.setdefault(client_id, {}).setdefault(gkey, set()).add(vkey)
+                    acks_a_liberar = [ack]
                 else:
-                    gkey = self._make_key(payload, self.group_fields)
-                    vkey = self._make_key(payload, self.value_fields)
-                    self._grupos.setdefault(client_id, {}).setdefault(gkey, set()).add(vkey)
+                    if "batches" in payload:
+                        for batch in payload["batches"]:
+                            header = batch["header"]
+                            schema = header["schema"]
+                            records = batch["payload"]
 
-                if request_id:
-                    self._vistos.setdefault(client_id, set()).add(request_id)
+                            group_indices = [schema.index(f) if f in schema else None for f in self.group_fields]
+                            value_indices = [schema.index(f) if f in schema else None for f in self.value_fields]
 
-                self._guardar_estado(client_id)
+                            for record_values in records:
+                                gkey = tuple(str(record_values[idx]) if idx is not None else "" for idx in group_indices)
+                                vkey = tuple(str(record_values[idx]) if idx is not None else "" for idx in value_indices)
+                                self._grupos.setdefault(client_id, {}).setdefault(gkey, set()).add(vkey)
+                    else:
+                        gkey = self._make_key(payload, self.group_fields)
+                        vkey = self._make_key(payload, self.value_fields)
+                        self._grupos.setdefault(client_id, {}).setdefault(gkey, set()).add(vkey)
 
-            ack()
+                    if request_id:
+                        self._vistos.setdefault(client_id, set()).add(request_id)
+
+                    self._pending_acks.setdefault(client_id, []).append(ack)
+                    total_pending = sum(len(v) for v in self._pending_acks.values())
+                    if total_pending >= self.SAVE_BATCH:
+                        for cid in list(self._pending_acks.keys()):
+                            self._guardar_estado(cid)
+                        for cid in list(self._pending_acks.keys()):
+                            acks_a_liberar.extend(self._pending_acks.pop(cid, []))
+
         except Exception as e:
             logger.error(f"Error procesando payload: {e}", exc_info=True)
             nack()
+            return
+
+        for fn in acks_a_liberar:
+            fn()
 
     FLUSH_BATCH_SIZE = 1000
 
@@ -165,10 +176,23 @@ class GroupDistinctCounterWorker(BaseWorker):
         }
         self._enviar(json.dumps(output_payload).encode("utf-8"), payload=output_payload)
 
+    def al_completar_eof_local(self, client_id: str):
+        """Libera los acks pendientes del último lote parcial antes de que el
+        coordinator espere vuelos=0. Si esperáramos a al_completar_cliente,
+        el coordinator ya sostendría _vuelo_lock al llamarla → deadlock."""
+        acks_a_liberar = []
+        with self._lock:
+            self._guardar_estado(client_id)
+            acks_a_liberar = self._pending_acks.pop(client_id, [])
+        for fn in acks_a_liberar:
+            fn()
+
     def al_completar_cliente(self, client_id: str):
         with self._lock:
+            self._guardar_estado(client_id)
             grupos = self._grupos.pop(client_id, {})
             self._vistos.pop(client_id, None)
+            self._pending_acks.pop(client_id, None)
 
         logger.info(f"[GroupDistinctCounter] grupos totales: {len(grupos)}")
         top = sorted(grupos.items(), key=lambda x: len(x[1]), reverse=True)[:5]
@@ -208,14 +232,26 @@ class GroupDistinctCounterWorker(BaseWorker):
             enviados += len(batch)
 
         logger.info(f"[GroupDistinctCounter] Flush completo para client_id={client_id}. Registros emitidos: {enviados}.")
+
+        if os.environ.get("CRASH_AFTER_FLUSH") == "true":
+            bandera = os.path.join(BASE_DIR, "crash_flush_done")
+            if not os.path.exists(bandera):
+                open(bandera, "w").close()
+                logger.warning("[GroupDistinctCounter] CRASH_AFTER_FLUSH — muriendo después del envío, antes de barrier_completada")
+                os._exit(1)
+
         PersistidorEstado(self._nombre_nodo(client_id), base_dir=BASE_DIR).guardar({"barrier_completada": True})
         PersistidorEstado(self._nombre_nodo(client_id), base_dir=BASE_DIR).borrar()
 
     def al_desconectar_cliente(self, client_id: str):
+        acks_a_liberar = []
         with self._lock:
             self._grupos.pop(client_id, None)
             self._vistos.pop(client_id, None)
+            acks_a_liberar = self._pending_acks.pop(client_id, [])
         PersistidorEstado(self._nombre_nodo(client_id), base_dir=BASE_DIR).borrar()
+        for fn in acks_a_liberar:
+            fn()
         logger.info(f"[GroupDistinctCounter] Estado descartado para {client_id}.")
 
     def al_cerrar(self):
