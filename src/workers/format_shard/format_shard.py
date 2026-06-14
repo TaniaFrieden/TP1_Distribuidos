@@ -40,8 +40,15 @@ class FormatShardWorker(BaseWorker):
         """Escribe un batch al archivo JSONL. No reescribe el archivo completo."""
         path = self._get_cache_file_path(client_id)
         line = json.dumps({"request_id": request_id, "schema": schema, "records": records}, ensure_ascii=False)
-        with open(path, "a", encoding="utf-8") as f:
-            f.write(line + "\n")
+        with open(path, "a+b") as f:
+            # Sanar escritura rasgada previa: si el archivo no termina en '\n', insertarlo
+            # para que el JSON corrupto quede aislado en su línea y el nuevo empiece limpio.
+            size = f.seek(0, 2)
+            if size > 0:
+                f.seek(-1, 2)
+                if f.read(1) != b'\n':
+                    f.write(b'\n')
+            f.write((line + "\n").encode("utf-8"))
             f.flush()
             os.fsync(f.fileno())
 
