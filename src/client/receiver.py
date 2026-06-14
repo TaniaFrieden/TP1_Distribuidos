@@ -16,6 +16,7 @@ def escuchar_respuesta(sock, queries, inicio_envio, client_id):
     cabeceras_escritas = {}
     tiempos_inicio = {q_id: inicio_envio for q_id in queries}
     q4_accounts = set()
+    queries_terminadas = set()
     
     # Crea siempre el output en la subcarpeta con el ID asignado por el gateway
     output_path = os.path.join(OUTPUT_DIR, client_id)
@@ -30,7 +31,7 @@ def escuchar_respuesta(sock, queries, inicio_envio, client_id):
                 break
 
             if msg_type == message_protocol.external.MsgType.REPORTE:
-                _procesar_resultado(payload, archivos_salida, cabeceras_escritas, tiempos_inicio, inicio_envio, q4_accounts, output_path)
+                _procesar_resultado(payload, archivos_salida, cabeceras_escritas, tiempos_inicio, inicio_envio, q4_accounts, output_path, queries_terminadas)
 
             elif msg_type == message_protocol.external.MsgType.END_OF_RECODS:
                 elapsed = time.perf_counter() - inicio_envio
@@ -41,7 +42,7 @@ def escuchar_respuesta(sock, queries, inicio_envio, client_id):
         for f in archivos_salida.values():
             f.close()
 
-def _procesar_resultado(payload, archivos, cabeceras, tiempos_inicio, inicio_envio, q4_accounts, output_path):
+def _procesar_resultado(payload, archivos, cabeceras, tiempos_inicio, inicio_envio, q4_accounts, output_path, queries_terminadas):
     try:
         data = json.loads(payload) if isinstance(payload, str) else payload
     except json.JSONDecodeError:
@@ -50,7 +51,7 @@ def _procesar_resultado(payload, archivos, cabeceras, tiempos_inicio, inicio_env
     q_id = data.get(KEY_QUERY)
     resultado = data.get(KEY_RESULT)
 
-    if q_id is None:
+    if q_id is None or q_id in queries_terminadas:
         return
 
     if q_id not in tiempos_inicio:
@@ -91,7 +92,7 @@ def _procesar_resultado(payload, archivos, cabeceras, tiempos_inicio, inicio_env
                 logging.info(f"[QUERY {q_id}] Finalizada en {time.perf_counter() - inicio_query:.3f} s")
             else:
                 logging.info(f"[QUERY {q_id}] EOF recibido sin inicio registrado")
-            tiempos_inicio.pop(q_id, None)
+            queries_terminadas.add(q_id)
             break  # EOF cierra el archivo; no procesar más ítems del batch
 
 def _es_eof(resultado):

@@ -94,7 +94,10 @@ def _generar_servicio(node, worker_config, workers_config, compose_data):
             'LOG_FILE': f'/app/logs/{worker_name}.txt'
         })
         env.update(node.get('extra_env', {}))
-        env.setdefault('PREFETCH_COUNT', '50')
+        if worker_type in ['bank_shard', 'group_distinct_counter', 'joiner_q4', 'format_shard']:
+            env.setdefault('PREFETCH_COUNT', '1000')
+        else:
+            env.setdefault('PREFETCH_COUNT', '50')
 
         if worker_type == 'counter':
             env['CRASH_AFTER_PERSIST'] = '${CRASH_AFTER_PERSIST:-false}'

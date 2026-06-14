@@ -9,7 +9,8 @@ SOLUCIONES=${4:-LI-Small}
 
 echo "=== Preparando entorno para Test Caso Líder (Crash mid-election) ==="
 make down
-rm -rf volume/
+docker run --rm -v "$(pwd)/volume:/cleanup" alpine sh -c "rm -rf /cleanup/*" 2>/dev/null \
+    || rm -rf volume/* 2>/dev/null || true
 rm -f /tmp/watchdog_*_election_crash_done
 
 echo "=== Levantando sistema con inyección de falla ==="

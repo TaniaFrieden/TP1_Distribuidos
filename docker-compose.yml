@@ -98,6 +98,9 @@ services:
       FILTER_VALUE: US Dollar
       FILTER_OPERATOR: eq
       PREFETCH_COUNT: '50'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
+      CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   shared_filter_usd_02:
     build:
       context: ./src
@@ -129,6 +132,9 @@ services:
       FILTER_VALUE: US Dollar
       FILTER_OPERATOR: eq
       PREFETCH_COUNT: '50'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
+      CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   shared_filter_usd_03:
     build:
       context: ./src
@@ -160,6 +166,9 @@ services:
       FILTER_VALUE: US Dollar
       FILTER_OPERATOR: eq
       PREFETCH_COUNT: '50'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
+      CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   q1_projection_01:
     build:
       context: ./src
@@ -190,6 +199,9 @@ services:
       CAMPOS: From Bank,Account,To Bank,Account.1,Amount Paid
       INT_FIELDS: From Bank
       PREFETCH_COUNT: '50'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
+      CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   q1_projection_02:
     build:
       context: ./src
@@ -220,6 +232,9 @@ services:
       CAMPOS: From Bank,Account,To Bank,Account.1,Amount Paid
       INT_FIELDS: From Bank
       PREFETCH_COUNT: '50'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
+      CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   q1_minor_than_50_01:
     build:
       context: ./src
@@ -251,6 +266,9 @@ services:
       FILTER_VALUE: '50'
       FILTER_OPERATOR: lt
       PREFETCH_COUNT: '50'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
+      CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   q1_minor_than_50_02:
     build:
       context: ./src
@@ -282,6 +300,9 @@ services:
       FILTER_VALUE: '50'
       FILTER_OPERATOR: lt
       PREFETCH_COUNT: '50'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
+      CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   q1_minor_than_50_03:
     build:
       context: ./src
@@ -313,6 +334,9 @@ services:
       FILTER_VALUE: '50'
       FILTER_OPERATOR: lt
       PREFETCH_COUNT: '50'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
+      CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   q2_bank_projection_01:
     build:
       context: ./src
@@ -343,6 +367,9 @@ services:
       CAMPOS: Bank ID,Bank Name,Account Number
       INT_FIELDS: ''
       PREFETCH_COUNT: '50'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
+      CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   q2_bank_projection_02:
     build:
       context: ./src
@@ -373,6 +400,9 @@ services:
       CAMPOS: Bank ID,Bank Name,Account Number
       INT_FIELDS: ''
       PREFETCH_COUNT: '50'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
+      CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   q2_bank_projection_03:
     build:
       context: ./src
@@ -403,6 +433,9 @@ services:
       CAMPOS: Bank ID,Bank Name,Account Number
       INT_FIELDS: ''
       PREFETCH_COUNT: '50'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
+      CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   q2_projection_01:
     build:
       context: ./src
@@ -433,6 +466,9 @@ services:
       CAMPOS: From Bank,Account,Payment Currency,Receiving Currency,Amount Received,Amount Paid
       INT_FIELDS: From Bank
       PREFETCH_COUNT: '50'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
+      CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   q2_projection_02:
     build:
       context: ./src
@@ -463,6 +499,9 @@ services:
       CAMPOS: From Bank,Account,Payment Currency,Receiving Currency,Amount Received,Amount Paid
       INT_FIELDS: From Bank
       PREFETCH_COUNT: '50'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
+      CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   q2_projection_03:
     build:
       context: ./src
@@ -493,6 +532,9 @@ services:
       CAMPOS: From Bank,Account,Payment Currency,Receiving Currency,Amount Received,Amount Paid
       INT_FIELDS: From Bank
       PREFETCH_COUNT: '50'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
+      CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   q2_projection_04:
     build:
       context: ./src
@@ -523,6 +565,9 @@ services:
       CAMPOS: From Bank,Account,Payment Currency,Receiving Currency,Amount Received,Amount Paid
       INT_FIELDS: From Bank
       PREFETCH_COUNT: '50'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
+      CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   q2_projection_05:
     build:
       context: ./src
@@ -553,6 +598,9 @@ services:
       CAMPOS: From Bank,Account,Payment Currency,Receiving Currency,Amount Received,Amount Paid
       INT_FIELDS: From Bank
       PREFETCH_COUNT: '50'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
+      CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   q2_projection_06:
     build:
       context: ./src
@@ -583,6 +631,9 @@ services:
       CAMPOS: From Bank,Account,Payment Currency,Receiving Currency,Amount Received,Amount Paid
       INT_FIELDS: From Bank
       PREFETCH_COUNT: '50'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
+      CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   q2_agregador_shard_01:
     build:
       context: ./src
@@ -611,7 +662,10 @@ services:
       HEARTBEAT_INTERVAL_SECONDS: '5'
       LOG_LEVEL: INFO
       LOG_FILE: /app/logs/q2_agregador_shard_01.txt
-      PREFETCH_COUNT: '50'
+      PREFETCH_COUNT: '1000'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
+      CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   q2_agregador_shard_02:
     build:
       context: ./src
@@ -640,7 +694,10 @@ services:
       HEARTBEAT_INTERVAL_SECONDS: '5'
       LOG_LEVEL: INFO
       LOG_FILE: /app/logs/q2_agregador_shard_02.txt
-      PREFETCH_COUNT: '50'
+      PREFETCH_COUNT: '1000'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
+      CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   q2_agregador_shard_03:
     build:
       context: ./src
@@ -669,7 +726,10 @@ services:
       HEARTBEAT_INTERVAL_SECONDS: '5'
       LOG_LEVEL: INFO
       LOG_FILE: /app/logs/q2_agregador_shard_03.txt
-      PREFETCH_COUNT: '50'
+      PREFETCH_COUNT: '1000'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
+      CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   q2_agregador_shard_04:
     build:
       context: ./src
@@ -698,7 +758,10 @@ services:
       HEARTBEAT_INTERVAL_SECONDS: '5'
       LOG_LEVEL: INFO
       LOG_FILE: /app/logs/q2_agregador_shard_04.txt
-      PREFETCH_COUNT: '50'
+      PREFETCH_COUNT: '1000'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
+      CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   q2_agregador_shard_05:
     build:
       context: ./src
@@ -727,7 +790,10 @@ services:
       HEARTBEAT_INTERVAL_SECONDS: '5'
       LOG_LEVEL: INFO
       LOG_FILE: /app/logs/q2_agregador_shard_05.txt
-      PREFETCH_COUNT: '50'
+      PREFETCH_COUNT: '1000'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
+      CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   q2_agregador_shard_06:
     build:
       context: ./src
@@ -756,7 +822,10 @@ services:
       HEARTBEAT_INTERVAL_SECONDS: '5'
       LOG_LEVEL: INFO
       LOG_FILE: /app/logs/q2_agregador_shard_06.txt
-      PREFETCH_COUNT: '50'
+      PREFETCH_COUNT: '1000'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
+      CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   q3_filter_fechas_01:
     build:
       context: ./src
@@ -788,6 +857,9 @@ services:
       FILTER_VALUE: 2022/09/01,2022/09/14 23:59:59
       FILTER_OPERATOR: between
       PREFETCH_COUNT: '50'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
+      CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   q3_filter_fechas_02:
     build:
       context: ./src
@@ -819,6 +891,9 @@ services:
       FILTER_VALUE: 2022/09/01,2022/09/14 23:59:59
       FILTER_OPERATOR: between
       PREFETCH_COUNT: '50'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
+      CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   q3_filter_fechas_03:
     build:
       context: ./src
@@ -850,6 +925,9 @@ services:
       FILTER_VALUE: 2022/09/01,2022/09/14 23:59:59
       FILTER_OPERATOR: between
       PREFETCH_COUNT: '50'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
+      CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   q3_filter_fechas_04:
     build:
       context: ./src
@@ -881,6 +959,9 @@ services:
       FILTER_VALUE: 2022/09/01,2022/09/14 23:59:59
       FILTER_OPERATOR: between
       PREFETCH_COUNT: '50'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
+      CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   q3_format_shard_01:
     build:
       context: ./src
@@ -909,7 +990,10 @@ services:
       HEARTBEAT_INTERVAL_SECONDS: '5'
       LOG_LEVEL: INFO
       LOG_FILE: /app/logs/q3_format_shard_01.txt
-      PREFETCH_COUNT: '50'
+      PREFETCH_COUNT: '1000'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
+      CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   q3_format_shard_02:
     build:
       context: ./src
@@ -938,7 +1022,10 @@ services:
       HEARTBEAT_INTERVAL_SECONDS: '5'
       LOG_LEVEL: INFO
       LOG_FILE: /app/logs/q3_format_shard_02.txt
-      PREFETCH_COUNT: '50'
+      PREFETCH_COUNT: '1000'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
+      CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   q4_projection_01:
     build:
       context: ./src
@@ -969,6 +1056,9 @@ services:
       CAMPOS: From Bank,Account,To Bank,Account.1,Timestamp
       INT_FIELDS: From Bank,To Bank
       PREFETCH_COUNT: '50'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
+      CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   q4_projection_02:
     build:
       context: ./src
@@ -999,6 +1089,9 @@ services:
       CAMPOS: From Bank,Account,To Bank,Account.1,Timestamp
       INT_FIELDS: From Bank,To Bank
       PREFETCH_COUNT: '50'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
+      CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   q4_filter_period_01:
     build:
       context: ./src
@@ -1030,6 +1123,9 @@ services:
       FILTER_VALUE: 2022/09/01, 2022/09/05
       FILTER_OPERATOR: between
       PREFETCH_COUNT: '50'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
+      CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   q4_filter_period_02:
     build:
       context: ./src
@@ -1061,6 +1157,9 @@ services:
       FILTER_VALUE: 2022/09/01, 2022/09/05
       FILTER_OPERATOR: between
       PREFETCH_COUNT: '50'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
+      CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   q4_sumador_01:
     build:
       context: ./src
@@ -1096,7 +1195,9 @@ services:
       EXPECTED_COUNT: '5'
       COMPARISON_OPERATOR: gt
       EMIT_MODE: explode
-      PREFETCH_COUNT: '50'
+      PREFETCH_COUNT: '1000'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
       CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   q4_sumador_02:
     build:
@@ -1133,7 +1234,9 @@ services:
       EXPECTED_COUNT: '5'
       COMPARISON_OPERATOR: gt
       EMIT_MODE: explode
-      PREFETCH_COUNT: '50'
+      PREFETCH_COUNT: '1000'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
       CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   q4_sumador_03:
     build:
@@ -1170,7 +1273,9 @@ services:
       EXPECTED_COUNT: '5'
       COMPARISON_OPERATOR: gt
       EMIT_MODE: explode
-      PREFETCH_COUNT: '50'
+      PREFETCH_COUNT: '1000'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
       CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   q4_joiner_01:
     build:
@@ -1200,7 +1305,9 @@ services:
       HEARTBEAT_INTERVAL_SECONDS: '5'
       LOG_LEVEL: INFO
       LOG_FILE: /app/logs/q4_joiner_01.txt
-      PREFETCH_COUNT: '50'
+      PREFETCH_COUNT: '1000'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
       CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   q4_joiner_02:
     build:
@@ -1230,7 +1337,9 @@ services:
       HEARTBEAT_INTERVAL_SECONDS: '5'
       LOG_LEVEL: INFO
       LOG_FILE: /app/logs/q4_joiner_02.txt
-      PREFETCH_COUNT: '50'
+      PREFETCH_COUNT: '1000'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
       CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   q4_joiner_03:
     build:
@@ -1260,7 +1369,9 @@ services:
       HEARTBEAT_INTERVAL_SECONDS: '5'
       LOG_LEVEL: INFO
       LOG_FILE: /app/logs/q4_joiner_03.txt
-      PREFETCH_COUNT: '50'
+      PREFETCH_COUNT: '1000'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
       CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   q4_contador_01:
     build:
@@ -1297,7 +1408,9 @@ services:
       COMPARISON_OPERATOR: gt
       EMIT_MODE: aggregate
       COUNT_OUTPUT_FIELD: Amount Transactions
-      PREFETCH_COUNT: '50'
+      PREFETCH_COUNT: '1000'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
       CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   q4_contador_02:
     build:
@@ -1334,7 +1447,9 @@ services:
       COMPARISON_OPERATOR: gt
       EMIT_MODE: aggregate
       COUNT_OUTPUT_FIELD: Amount Transactions
-      PREFETCH_COUNT: '50'
+      PREFETCH_COUNT: '1000'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
       CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   q4_contador_03:
     build:
@@ -1371,7 +1486,9 @@ services:
       COMPARISON_OPERATOR: gt
       EMIT_MODE: aggregate
       COUNT_OUTPUT_FIELD: Amount Transactions
-      PREFETCH_COUNT: '50'
+      PREFETCH_COUNT: '1000'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
       CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   q5_projection_01:
     build:
@@ -1402,6 +1519,9 @@ services:
       LOG_FILE: /app/logs/q5_projection_01.txt
       CAMPOS: Timestamp,Payment Currency,Payment Format,Amount Paid
       PREFETCH_COUNT: '50'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
+      CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   q5_projection_02:
     build:
       context: ./src
@@ -1431,6 +1551,9 @@ services:
       LOG_FILE: /app/logs/q5_projection_02.txt
       CAMPOS: Timestamp,Payment Currency,Payment Format,Amount Paid
       PREFETCH_COUNT: '50'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
+      CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   q5_projection_03:
     build:
       context: ./src
@@ -1460,6 +1583,9 @@ services:
       LOG_FILE: /app/logs/q5_projection_03.txt
       CAMPOS: Timestamp,Payment Currency,Payment Format,Amount Paid
       PREFETCH_COUNT: '50'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
+      CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   q5_projection_04:
     build:
       context: ./src
@@ -1489,6 +1615,9 @@ services:
       LOG_FILE: /app/logs/q5_projection_04.txt
       CAMPOS: Timestamp,Payment Currency,Payment Format,Amount Paid
       PREFETCH_COUNT: '50'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
+      CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   q5_filter_period_01:
     build:
       context: ./src
@@ -1520,6 +1649,9 @@ services:
       FILTER_VALUE: 2022/09/01, 2022/09/05
       FILTER_OPERATOR: between
       PREFETCH_COUNT: '50'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
+      CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   q5_filter_period_02:
     build:
       context: ./src
@@ -1551,6 +1683,9 @@ services:
       FILTER_VALUE: 2022/09/01, 2022/09/05
       FILTER_OPERATOR: between
       PREFETCH_COUNT: '50'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
+      CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   q5_filter_period_03:
     build:
       context: ./src
@@ -1582,6 +1717,9 @@ services:
       FILTER_VALUE: 2022/09/01, 2022/09/05
       FILTER_OPERATOR: between
       PREFETCH_COUNT: '50'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
+      CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   q5_filter_period_04:
     build:
       context: ./src
@@ -1613,6 +1751,9 @@ services:
       FILTER_VALUE: 2022/09/01, 2022/09/05
       FILTER_OPERATOR: between
       PREFETCH_COUNT: '50'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
+      CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   q5_filter_format_01:
     build:
       context: ./src
@@ -1644,6 +1785,9 @@ services:
       FILTER_VALUE: Wire, ACH
       FILTER_OPERATOR: in
       PREFETCH_COUNT: '50'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
+      CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   q5_filter_format_02:
     build:
       context: ./src
@@ -1675,6 +1819,9 @@ services:
       FILTER_VALUE: Wire, ACH
       FILTER_OPERATOR: in
       PREFETCH_COUNT: '50'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
+      CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   q5_converter_01:
     build:
       context: ./src
@@ -1705,6 +1852,9 @@ services:
       START_DATE: '2022-09-01'
       END_DATE: '2022-09-05'
       PREFETCH_COUNT: '50'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
+      CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   q5_converter_02:
     build:
       context: ./src
@@ -1735,6 +1885,9 @@ services:
       START_DATE: '2022-09-01'
       END_DATE: '2022-09-05'
       PREFETCH_COUNT: '50'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
+      CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   q5_counter_01:
     build:
       context: ./src
@@ -1765,6 +1918,8 @@ services:
       LOG_FILE: /app/logs/q5_counter_01.txt
       PREFETCH_COUNT: '50'
       CRASH_AFTER_PERSIST: ${CRASH_AFTER_PERSIST:-false}
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
       CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
   watchdog_1:
     build:
@@ -1800,6 +1955,7 @@ services:
       SUSPECTED_DEAD_TTL: '60'
       LOG_LEVEL: INFO
       LOG_FILE: /app/logs/watchdog_1.txt
+      CRASH_LEADER_MID_ELECTION: ${CRASH_LEADER_MID_ELECTION:-false}
   watchdog_2:
     build:
       context: ./src
@@ -1834,6 +1990,7 @@ services:
       SUSPECTED_DEAD_TTL: '60'
       LOG_LEVEL: INFO
       LOG_FILE: /app/logs/watchdog_2.txt
+      CRASH_LEADER_MID_ELECTION: ${CRASH_LEADER_MID_ELECTION:-false}
   watchdog_3:
     build:
       context: ./src
@@ -1868,6 +2025,7 @@ services:
       SUSPECTED_DEAD_TTL: '60'
       LOG_LEVEL: INFO
       LOG_FILE: /app/logs/watchdog_3.txt
+      CRASH_LEADER_MID_ELECTION: ${CRASH_LEADER_MID_ELECTION:-false}
   actuador_1:
     build:
       context: ./src

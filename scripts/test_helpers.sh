@@ -5,7 +5,9 @@ lanzar_clientes() {
     local tx=$2
     local acc=$3
     PIDS=()
-    rm -rf output/*/ 2>/dev/null
+    docker run --rm -v "$(pwd)/output:/cleanup_out" -v "$(pwd)/logs:/cleanup_logs" \
+        alpine sh -c "rm -rf /cleanup_out/*/ /cleanup_logs/client_stdout_*.txt" 2>/dev/null \
+        || rm -rf output/*/ 2>/dev/null || true
     for i in $(seq 1 "$cant"); do
         ( make client TRANSACTIONS_FILE="$tx" ACCOUNTS_FILE="$acc" OUTPUT_DIR="output" \
             > "logs/client_stdout_$i.txt" 2>&1 ) &

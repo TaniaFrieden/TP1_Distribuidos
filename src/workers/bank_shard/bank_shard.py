@@ -49,6 +49,8 @@ class AgregadorBancarioWorker(BaseWorker):
         for folder_name in os.listdir(self.shard_config.base_dir):
             if not folder_name.startswith(prefix):
                 continue
+            if not os.path.isdir(os.path.join(self.shard_config.base_dir, folder_name)):
+                continue
 
             client_id = folder_name[len(prefix):]
             persistidor = self._get_persistidor(client_id)
@@ -149,7 +151,7 @@ class AgregadorBancarioWorker(BaseWorker):
                     self._mensajes_desde_flush[client_id] = 0
                     self._get_persistidor(client_id).guardar(self._build_serializable_state(client_id))
 
-            ack()
+                ack()
 
         except ValueError as e:
             logger.error(f"Error de conversión numérica para el cliente {client_id}: {e}")
