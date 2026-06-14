@@ -15,7 +15,6 @@ def escuchar_respuesta(sock, queries, inicio_envio, client_id):
     archivos_salida = {}
     cabeceras_escritas = {}
     tiempos_inicio = {q_id: inicio_envio for q_id in queries}
-    q4_accounts = set()
     queries_terminadas = set()
     
     # Crea siempre el output en la subcarpeta con el ID asignado por el gateway
@@ -31,7 +30,7 @@ def escuchar_respuesta(sock, queries, inicio_envio, client_id):
                 break
 
             if msg_type == message_protocol.external.MsgType.REPORTE:
-                _procesar_resultado(payload, archivos_salida, cabeceras_escritas, tiempos_inicio, inicio_envio, q4_accounts, output_path, queries_terminadas)
+                _procesar_resultado(payload, archivos_salida, cabeceras_escritas, tiempos_inicio, inicio_envio, output_path, queries_terminadas)
 
             elif msg_type == message_protocol.external.MsgType.END_OF_RECODS:
                 elapsed = time.perf_counter() - inicio_envio
@@ -42,7 +41,7 @@ def escuchar_respuesta(sock, queries, inicio_envio, client_id):
         for f in archivos_salida.values():
             f.close()
 
-def _procesar_resultado(payload, archivos, cabeceras, tiempos_inicio, inicio_envio, q4_accounts, output_path, queries_terminadas):
+def _procesar_resultado(payload, archivos, cabeceras, tiempos_inicio, inicio_envio, output_path, queries_terminadas):
     try:
         data = json.loads(payload) if isinstance(payload, str) else payload
     except json.JSONDecodeError:
@@ -50,6 +49,7 @@ def _procesar_resultado(payload, archivos, cabeceras, tiempos_inicio, inicio_env
 
     q_id = data.get(KEY_QUERY)
     resultado = data.get(KEY_RESULT)
+    columns_hint = data.get("columns")
 
     if q_id is None or q_id in queries_terminadas:
         return
@@ -68,24 +68,12 @@ def _procesar_resultado(payload, archivos, cabeceras, tiempos_inicio, inicio_env
         es_mensaje_final = _es_eof(item)
 
         if isinstance(item, dict) and not (len(item) == 1 and es_mensaje_final):
-            if str(q_id) == '4':
-                from_bank = item.get("From Bank")
-                from_acc = item.get("From Account")
-                to_bank = item.get("To Bank")
-                to_acc = item.get("To Account")
-                if from_bank is not None and from_acc is not None:
-                    q4_accounts.add((str(from_bank), str(from_acc)))
-                if to_bank is not None and to_acc is not None:
-                    q4_accounts.add((str(to_bank), str(to_acc)))
-            else:
-                _escribir_cabecera(q_id, item, archivos, cabeceras)
-                _escribir_datos(q_id, item, archivos, cabeceras)
+            _escribir_cabecera(q_id, item, archivos, cabeceras)
+            _escribir_datos(q_id, item, archivos, cabeceras)
 
         if es_mensaje_final:
-            if str(q_id) == '4':
-                archivos[q_id].write("Bank,Account\n")
-                for bank, acc in sorted(q4_accounts):
-                    archivos[q_id].write(f"{bank},{acc}\n")
+            if columns_hint and q_id in archivos and not cabeceras.get(q_id):
+                archivos[q_id].write(",".join(columns_hint) + "\n")
             _cerrar_archivo(q_id, archivos)
             inicio_query = tiempos_inicio.pop(q_id, None)
             if inicio_query is not None:
