@@ -17,9 +17,9 @@ from pathlib import Path
 # RUTA_SALIDAS = "output/Large"
 
 RUTA_DATASETS = "datasets"
-DATASET_TRANS = "LI-Small_Trans_sample_30.csv"
+DATASET_TRANS = "trans_sample.csv"
 DATASET_ACCOUNTS = "LI-Small_accounts.csv"
-RUTA_SALIDAS = "solutions/small30"
+RUTA_SALIDAS = "solutions/sample"
 
 
 def obtener_tasas_cambio():
