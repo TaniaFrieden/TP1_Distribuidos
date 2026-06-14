@@ -8,10 +8,10 @@ from datetime import date, timedelta
 from pathlib import Path
 
 RUTA_DATASETS = "datasets"
-DATASET_TRANS = "HI-Large_Trans_sample_30.csv"
+DATASET_TRANS = "HI-Large_Trans.csv"
 DATASET_ACCOUNTS = "HI-Large_accounts.csv"
 
-RUTA_SALIDAS = "output/Hi-Large-30"
+RUTA_SALIDAS = "output/Large"
 
 
 def main():

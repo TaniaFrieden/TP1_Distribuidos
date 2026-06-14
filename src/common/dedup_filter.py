@@ -1,6 +1,6 @@
 import threading
 import logging
-from common.persistencia import PersistidorEstado
+from common.persistencia import PersistidorEstado, TAMANIO_BATCH_PERSISTENCIA
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +17,7 @@ class DedupFilter:
         self._persistidor = PersistidorEstado(f"dedup_{node_name}", base_dir=base_dir)
         self._seen: dict[str, set[str]] = {}
         self._lock = threading.Lock()
+        self._dirty_count = 0
         self._cargar()
 
     def _cargar(self):
@@ -44,7 +45,10 @@ class DedupFilter:
             if client_id not in self._seen:
                 self._seen[client_id] = set()
             self._seen[client_id].add(request_id)
-            self._persistir()
+            self._dirty_count += 1
+            if self._dirty_count >= TAMANIO_BATCH_PERSISTENCIA:
+                self._persistir()
+                self._dirty_count = 0
 
     def limpiar_cliente(self, client_id: str):
         with self._lock:

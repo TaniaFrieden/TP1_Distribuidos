@@ -5,7 +5,7 @@ import os
 
 from base import BaseWorker
 from common.logging_setup import setup_logging
-from common.persistencia import PersistidorEstado
+from common.persistencia import PersistidorEstado, TAMANIO_BATCH_PERSISTENCIA
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ class GroupDistinctCounterWorker(BaseWorker):
       EMIT_MODE            "explode" | "aggregate" (default: aggregate)
       COUNT_OUTPUT_FIELD   nombre del campo de conteo en modo aggregate (default: Amount Transactions)
     """
-    SAVE_BATCH = 50
+    SAVE_BATCH = TAMANIO_BATCH_PERSISTENCIA
 
     def __init__(self):
         super().__init__()

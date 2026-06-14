@@ -5,7 +5,7 @@ import os
 
 from base import BaseWorker
 from common.logging_setup import setup_logging
-from common.persistencia import PersistidorEstado
+from common.persistencia import PersistidorEstado, TAMANIO_BATCH_PERSISTENCIA
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ class JoinerQ4Worker(BaseWorker):
     # Guardar estado y liberar acks en lote. Los mensajes en el lote permanecen
     # unacked en RabbitMQ hasta el save, así que un crash los reenvía todos
     # y _vistos (guardado junto con el estado) filtra los duplicados.
-    SAVE_BATCH = 50
+    SAVE_BATCH = TAMANIO_BATCH_PERSISTENCIA
 
     def __init__(self):
         super().__init__()
