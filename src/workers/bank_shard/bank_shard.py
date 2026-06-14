@@ -229,7 +229,10 @@ class AgregadorBancarioWorker(BaseWorker):
                         logger.warning(f"[FILTRO] Descartando banco {bank_id} para cliente {client_id}: Nombre desconocido.")
                         continue
 
-                    records.append([bank_id, bank_data["account"], bank_data["bank_name"], bank_data["max_amount"]])
+                    # Emitir una fila por cada cuenta que alcanzó el monto máximo
+                    accounts = bank_data.get("accounts") or [bank_data.get("account", "")]
+                    for account in accounts:
+                        records.append([bank_id, account, bank_data["bank_name"], bank_data["max_amount"]])
 
                 if records:
                     batch_payload = {
