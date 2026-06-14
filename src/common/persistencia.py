@@ -5,6 +5,8 @@ import tempfile
 
 logger = logging.getLogger(__name__)
 
+TAMANIO_BATCH_PERSISTENCIA = 50
+
 class PersistidorEstado:
     """
     Persistidor de estado a disco sin bases de datos externos.
@@ -34,7 +36,7 @@ class PersistidorEstado:
             fd, temp_path = tempfile.mkstemp(dir=self.directory, prefix="temp_estado_", suffix=".json")
             temp_file = os.fdopen(fd, 'w', encoding='utf-8')
             
-            json.dump(estado, temp_file, ensure_ascii=False, indent=4)
+            json.dump(estado, temp_file, ensure_ascii=False)
             temp_file.flush()
             os.fsync(fd)  # Forzar el flush físico a disco
             temp_file.close()

@@ -145,7 +145,6 @@ class BaseWorker(ABC):
             control_thread = threading.Thread(target=self.coordinator.start_consuming)
             control_thread.start()
             
-            # Sincronizamos las barreras diferidas post-caída de forma segura sin sleeps
             self.coordinator.procesar_barreras_recuperadas()
             self.al_iniciar_post_arranque()
 

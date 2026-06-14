@@ -19,7 +19,7 @@ MOM_HOST ?= localhost
 INPUT_QUEUE ?= input_queue
 OUTPUT_QUEUE ?= output_queue
 
-.PHONY: help venv install test test-worker-base clean free-ports client run-clients test-server gateway start down docker-logs iterar solucionar generar log generar-sample caos test-todos test-etapa test-cliente test-gateway
+.PHONY: help venv install test test-worker-base clean free-ports client run-clients test-server gateway start down docker-logs iterar solucionar generar log generar-sample caos test-todos test-etapa test-cliente test-gateway test-persistencia test-crash-flush
 
 help:
 	@echo "Targets disponibles:"
@@ -171,7 +171,7 @@ down:
 
 caos:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
-	DOCKER_HOST="unix:///home/tania/.docker/desktop/docker.sock" $(PYTHON) scripts/chaos_monkey.py $$ARGS
+	$(PYTHON) scripts/chaos_monkey.py $$ARGS
 
 generar:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
@@ -253,6 +253,28 @@ test-cliente:
 test-gateway:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
 	bash scripts/test_gateway.sh $$ARGS
+
+test-persistencia:
+	@echo "\n══════════════════════════════════════════"
+	@echo " persistencia (PersistidorEstado + DedupFilter)"
+	@echo "══════════════════════════════════════════"
+	@$(PYTEST) test/common/persistencia/test_persistencia.py -v --tb=short --no-header -q || true
+	@echo "\n══════════════════════════════════════════"
+	@echo " persistencia counter"
+	@echo "══════════════════════════════════════════"
+	@$(PYTEST) test/workers/test_counter_persistencia.py -v --tb=short --no-header -q || true
+	@echo "\n══════════════════════════════════════════"
+	@echo " persistencia group_distinct_counter"
+	@echo "══════════════════════════════════════════"
+	@$(PYTEST) test/workers/test_group_distinct_counter_persistencia.py -v --tb=short --no-header -q || true
+	@echo "\n══════════════════════════════════════════"
+	@echo " persistencia joiner_q4"
+	@echo "══════════════════════════════════════════"
+	@$(PYTEST) test/workers/test_joiner_q4_persistencia.py -v --tb=short --no-header -q || true
+
+test-crash-flush:
+	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
+	bash scripts/test_crash_flush.sh $$ARGS
 
 test-crash-caso6:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \

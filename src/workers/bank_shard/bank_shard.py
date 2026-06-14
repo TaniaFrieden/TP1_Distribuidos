@@ -12,6 +12,9 @@ from processor import PayloadProcessor
 logger = logging.getLogger(__name__)
 
 
+INTERVALO_PERSISTENCIA = 500
+
+
 class AgregadorBancarioWorker(BaseWorker):
     def __init__(self):
         super().__init__()
@@ -21,6 +24,7 @@ class AgregadorBancarioWorker(BaseWorker):
         self.global_lock = threading.Lock()
         self._processed_request_ids = {}
         self._barreras_para_iniciar = []
+        self._mensajes_desde_flush = {}
 
         self.shard_config = ShardConfig(self.config.node_id)
         self.processor = PayloadProcessor()
@@ -140,8 +144,10 @@ class AgregadorBancarioWorker(BaseWorker):
                 if request_id:
                     self._processed_request_ids.setdefault(client_id, set()).add(request_id)
 
-                persistidor = self._get_persistidor(client_id)
-                persistidor.guardar(self._build_serializable_state(client_id))
+                self._mensajes_desde_flush[client_id] = self._mensajes_desde_flush.get(client_id, 0) + 1
+                if self._mensajes_desde_flush[client_id] >= INTERVALO_PERSISTENCIA:
+                    self._mensajes_desde_flush[client_id] = 0
+                    self._get_persistidor(client_id).guardar(self._build_serializable_state(client_id))
 
             ack()
 
@@ -258,6 +264,7 @@ class AgregadorBancarioWorker(BaseWorker):
 
             self.eof_state.pop(client_id, None)
             self._processed_request_ids.pop(client_id, None)
+            self._mensajes_desde_flush.pop(client_id, None)
 
             self._get_persistidor(client_id).borrar()
 
@@ -270,6 +277,7 @@ class AgregadorBancarioWorker(BaseWorker):
             self.aggregator_state.pop(client_id, None)
             self.eof_state.pop(client_id, None)
             self._processed_request_ids.pop(client_id, None)
+            self._mensajes_desde_flush.pop(client_id, None)
             self._get_persistidor(client_id).borrar()
         with self.global_lock:
             self.client_locks.pop(client_id, None)

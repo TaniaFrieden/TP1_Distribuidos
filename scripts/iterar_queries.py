@@ -58,14 +58,18 @@ def main():
     if len(args) > 3:
         expected_template = f"solutions/{args[3]}/q{{q}}_solucion.csv"
 
+    output_base = project_root / "output"
+    output_base.mkdir(exist_ok=True)
+    directorio_anterior = None
+
     for indice in range(1, cantidad_iteraciones + 1):
         imprimir_titulo(f"Iteración {indice}/{cantidad_iteraciones}")
-        
-        client_id_actual = str(indice - 1)
-        # os.system("truncate -s 0 logs/*.txt 2>/dev/null")
-        os.system(f"rm -rf output/{client_id_actual}/ 2>/dev/null")
 
-        
+        if directorio_anterior:
+            os.system(f"rm -rf '{directorio_anterior}' 2>/dev/null")
+
+        dirs_previos = {d for d in output_base.iterdir() if d.is_dir()}
+
         try:
             subprocess.run(
                 [
@@ -84,10 +88,16 @@ def main():
                 fallas_por_query[query] += 1
             continue
 
+        dirs_nuevos = {d for d in output_base.iterdir() if d.is_dir()} - dirs_previos
+        if dirs_nuevos:
+            client_output_dir = max(dirs_nuevos, key=lambda d: d.stat().st_mtime)
+        else:
+            all_dirs = [d for d in output_base.iterdir() if d.is_dir()]
+            client_output_dir = max(all_dirs, key=lambda d: d.stat().st_mtime) if all_dirs else output_base
+        directorio_anterior = client_output_dir
+
         for query in queries:
-            # Dado que el gateway asigna IDs secuenciales empezando en 0, para la iteración i el ID es i - 1
-            client_id = str(indice - 1)
-            actual_csv = project_root / "output" / client_id / f"q{query}_solucion.csv"
+            actual_csv = client_output_dir / f"q{query}_solucion.csv"
             expected_csv = project_root / expected_template.format(q=query)
 
             son_iguales, mensaje = comparar_csv_sin_orden(actual_csv, expected_csv)
