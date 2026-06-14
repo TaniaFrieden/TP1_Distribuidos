@@ -126,8 +126,6 @@ def main():
     print(f"Cuentas: {input_accounts}")
 
     # scan_csv es lazy: construye el plan de ejecución pero no lee el archivo todavía
-    # El CSV tiene dos columnas "Account"; pandas las llama "Account.1" pero Polars usa
-    # "Account_duplicated_0". Normalizamos al nombre que usa el resto del código.
     trans_lazy = (pl.scan_csv(str(input_trans), infer_schema_length=10000)
         .rename({"Account_duplicated_0": "Account.1"})
     )

@@ -13,7 +13,7 @@ class BackendListener:
     def __init__(self, config: GatewayConfig, state):
         self.config = config
         self.state = state
-        self._processed_hashes = {}  # {client_id: set(batch_hashes)}
+        self._processed_hashes = {}  # {client_id: set(request_ids)}
 
     def escuchar(self, cola_nombre: str):
         match = re.search(self.QUERY_PATTERN, cola_nombre)
@@ -67,22 +67,20 @@ class BackendListener:
                 return
 
             if "batches" in transaccion:
-                import hashlib
+                request_id = transaccion.get("request_id")
+                if request_id:
+                    if client_id not in self._processed_hashes:
+                        self._processed_hashes[client_id] = set()
+                    if request_id in self._processed_hashes[client_id]:
+                        logger.info(f"Ignorando mensaje duplicado request_id={request_id} en {cola_nombre} para {client_id}")
+                        ack()
+                        return
+                    self._processed_hashes[client_id].add(request_id)
+
                 for batch in transaccion["batches"]:
                     header = batch["header"]
                     schema = header["schema"]
                     records = batch["payload"]
-                    
-                    batch_key = (query_id, json.dumps(records, sort_keys=True))
-                    batch_hash = hashlib.md5(str(batch_key).encode("utf-8")).hexdigest()
-                    
-                    if client_id not in self._processed_hashes:
-                        self._processed_hashes[client_id] = set()
-                    
-                    if batch_hash in self._processed_hashes[client_id]:
-                        logger.info(f"Ignorando batch duplicado en {cola_nombre} para {client_id}")
-                        continue
-                    self._processed_hashes[client_id].add(batch_hash)
 
                     logger.info(f"Resultado recibido para {cola_nombre} a {client_id} con {len(records)} registros.")
                     resultado_lista = [
