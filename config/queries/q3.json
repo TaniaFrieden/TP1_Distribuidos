@@ -17,7 +17,8 @@
               "routing": {
                 "queue_shard_prefix": "q3_temprano",
                 "total_workers": "$CANT_Q3_FORMAT_SHARD",
-                "hash_field": "Payment Format"
+                "hash_field": "Payment Format",
+                "include_client_id": true
               }
             },
             {
@@ -26,7 +27,8 @@
               "routing": {
                 "queue_shard_prefix": "q3_tardio",
                 "total_workers": "$CANT_Q3_FORMAT_SHARD",
-                "hash_field": "Payment Format"
+                "hash_field": "Payment Format",
+                "include_client_id": true
               }
             }
           ]

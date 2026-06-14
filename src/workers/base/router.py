@@ -47,7 +47,8 @@ class MessageRouter:
                             "value": case["value"],
                             "hash_field": routing["hash_field"],
                             "total_workers": total,
-                            "queues": shard_queues
+                            "queues": shard_queues,
+                            "include_client_id": routing.get("include_client_id", False),  # NUEVO
                         })
                     self.output_queues_conditional.append({
                         "condition_field": item["condition_field"],
@@ -182,6 +183,11 @@ class MessageRouter:
                                     hash_field = case["hash_field"]
                                     hash_idx = original_schema.index(hash_field) if hash_field in original_schema else None
                                     valor_hash = record_values[hash_idx] if hash_idx is not None else "default"
+
+                                    # NUEVO: si el case lo pide, la clave de sharding pasa a ser cliente+campo
+                                    if case.get("include_client_id"):
+                                        valor_hash = f"{self._canonical_hash_part(client_id)}|{self._canonical_hash_part(valor_hash)}"
+
                                     target_id = sharding.obtener_id_shard(valor_hash, case["total_workers"])
                                     target_queue = case["queues"][target_id]
                                     
@@ -229,6 +235,11 @@ class MessageRouter:
                         for case in cond_meta["cases"]:
                             if self._evaluar_between(valor_campo, case["value"]):
                                 valor_hash = payload.get(case["hash_field"], "default")
+
+                                # NUEVO: mismo criterio que arriba, para el payload sin "batches"
+                                if case.get("include_client_id"):
+                                    valor_hash = f"{self._canonical_hash_part(client_id)}|{self._canonical_hash_part(valor_hash)}"
+
                                 target_id = sharding.obtener_id_shard(valor_hash, case["total_workers"])
                                 case["queues"][target_id].send(mensaje)
                                 break
