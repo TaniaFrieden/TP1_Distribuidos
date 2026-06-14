@@ -25,6 +25,7 @@ class AgregadorBancarioWorker(BaseWorker):
         self._processed_request_ids = {}
         self._barreras_para_iniciar = []
         self._mensajes_desde_flush = {}
+        self._pending_acks = {}
 
         self.shard_config = ShardConfig(self.config.node_id)
         self.processor = PayloadProcessor()
@@ -146,12 +147,16 @@ class AgregadorBancarioWorker(BaseWorker):
                 if request_id:
                     self._processed_request_ids.setdefault(client_id, set()).add(request_id)
 
+                self._pending_acks.setdefault(client_id, []).append(ack)
                 self._mensajes_desde_flush[client_id] = self._mensajes_desde_flush.get(client_id, 0) + 1
+                
                 if self._mensajes_desde_flush[client_id] >= INTERVALO_PERSISTENCIA:
                     self._mensajes_desde_flush[client_id] = 0
                     self._get_persistidor(client_id).guardar(self._build_serializable_state(client_id))
-
-                ack()
+                    
+                    for pending_ack in self._pending_acks[client_id]:
+                        pending_ack()
+                    self._pending_acks[client_id].clear()
 
         except ValueError as e:
             logger.error(f"Error de conversión numérica para el cliente {client_id}: {e}")
@@ -189,6 +194,10 @@ class AgregadorBancarioWorker(BaseWorker):
 
             persistidor = self._get_persistidor(client_id)
             persistidor.guardar(self._build_serializable_state(client_id))
+
+            for pending_ack in self._pending_acks.get(client_id, []):
+                pending_ack()
+            self._pending_acks.pop(client_id, None)
 
             if state["transacciones_cerrado"] and state["bancos_cerrado"] and not state["flush_iniciado"]:
                 logger.info(f"[BankShard] Ambas colas cerradas para {client_id}. Solicitando barrera de flush.")
@@ -270,6 +279,7 @@ class AgregadorBancarioWorker(BaseWorker):
             self.eof_state.pop(client_id, None)
             self._processed_request_ids.pop(client_id, None)
             self._mensajes_desde_flush.pop(client_id, None)
+            self._pending_acks.pop(client_id, None)
 
             self._get_persistidor(client_id).borrar()
 
@@ -283,6 +293,7 @@ class AgregadorBancarioWorker(BaseWorker):
             self.eof_state.pop(client_id, None)
             self._processed_request_ids.pop(client_id, None)
             self._mensajes_desde_flush.pop(client_id, None)
+            self._pending_acks.pop(client_id, None)
             self._get_persistidor(client_id).borrar()
         with self.global_lock:
             self.client_locks.pop(client_id, None)

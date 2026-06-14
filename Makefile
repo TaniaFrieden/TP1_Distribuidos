@@ -170,8 +170,11 @@ down:
 	$(DOCKER_COMPOSE) down
 
 caos:
+	@mkdir -p logs
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
-	$(PYTHON) scripts/chaos_monkey.py $$ARGS
+	LOGFILE="logs/caos.txt"; \
+	echo "Guardando logs de caos en $$LOGFILE"; \
+	$(PYTHON) scripts/chaos_monkey.py $$ARGS 2>&1 | tee "$$LOGFILE"
 
 generar:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \

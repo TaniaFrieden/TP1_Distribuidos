@@ -3,29 +3,37 @@ import time
 import random
 import sys
 import docker
+from datetime import datetime
 
 # Lista de servicios críticos que el Chaos Monkey NO debe apagar jamás
 SERVICIOS_CRITICOS = ["client", "rabbitmq", "gateway", "watchdog", "actuador"]
+
+def log(msg):
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    if msg.startswith('\n'):
+        print(f"\n[{timestamp}] {msg[1:]}", flush=True)
+    else:
+        print(f"[{timestamp}] {msg}", flush=True)
 
 def run_chaos_monkey(intervalo_min=10, intervalo_max=20, filtros=None):
     try:
         client = docker.from_env()
     except Exception as e:
-        print(f"Error al conectar con Docker: {e}")
-        print("Asegúrate de que el daemon de Docker esté corriendo y tengas permisos.")
+        log(f"Error al conectar con Docker: {e}")
+        log("Asegúrate de que el daemon de Docker esté corriendo y tengas permisos.")
         sys.exit(1)
 
-    print("=== Chaos Monkey Iniciado ===")
-    print(f"Intervalo aleatorio de fallas: {intervalo_min}s - {intervalo_max}s")
+    log("=== Chaos Monkey Iniciado ===")
+    log(f"Intervalo aleatorio de fallas: {intervalo_min}s - {intervalo_max}s")
     if filtros:
-        print(f"Apuntando solo a contenedores que contengan: {filtros}")
+        log(f"Apuntando solo a contenedores que contengan: {filtros}")
     else:
-        print(f"Excluyendo servicios críticos: {SERVICIOS_CRITICOS}")
+        log(f"Excluyendo servicios críticos: {SERVICIOS_CRITICOS}")
 
     try:
         while True:
             delay = random.uniform(intervalo_min, intervalo_max)
-            print(f"\nSiguiente ataque en {delay:.1f} segundos...")
+            log(f"\nSiguiente ataque en {delay:.1f} segundos...")
             time.sleep(delay)
 
             contenedores = []
@@ -36,15 +44,16 @@ def run_chaos_monkey(intervalo_min=10, intervalo_max=20, filtros=None):
                 except docker.errors.NotFound:
                     time.sleep(0.1)
                 except Exception as e:
-                    print(f"Error al listar contenedores: {e}")
+                    log(f"Error al listar contenedores: {e}")
                     break
 
             if filtros:
                 # Modo apuntado: solo contenedores que matcheen algún filtro
+                # Si el usuario pasa un servicio crítico explícitamente en filtros, se le permite atacarlo
                 workers = [
                     c for c in contenedores
                     if any(f in c.name for f in filtros)
-                    and not any(crit in c.name for crit in SERVICIOS_CRITICOS)
+                    and not any(crit in c.name for crit in SERVICIOS_CRITICOS if crit not in filtros)
                 ]
             else:
                 # Modo general: todos los workers no críticos
@@ -54,25 +63,25 @@ def run_chaos_monkey(intervalo_min=10, intervalo_max=20, filtros=None):
                 ]
 
             if not workers:
-                print("No se encontraron workers activos para derribar.")
+                log("No se encontraron workers activos para derribar.")
                 continue
 
             victima = random.choice(workers)
             metodo = random.choice(["stop", "kill"])
 
-            print(f"[Chaos Monkey] ATACANDO a '{victima.name}' usando método '{metodo}'...")
+            log(f"[Chaos Monkey] ATACANDO a '{victima.name}' usando método '{metodo}'...")
 
             try:
                 if metodo == "stop":
                     victima.stop(timeout=2)
                 else:
                     victima.kill()
-                print(f"[Chaos Monkey] '{victima.name}' fue derribado exitosamente.")
+                log(f"[Chaos Monkey] '{victima.name}' fue derribado exitosamente.")
             except Exception as e:
-                print(f"[Chaos Monkey] Error derribando a '{victima.name}': {e}")
+                log(f"[Chaos Monkey] Error derribando a '{victima.name}': {e}")
 
     except KeyboardInterrupt:
-        print("\n=== Chaos Monkey Finalizado ===")
+        log("\n=== Chaos Monkey Finalizado ===")
 
 if __name__ == "__main__":
     min_time = int(sys.argv[1]) if len(sys.argv) > 1 else 10
