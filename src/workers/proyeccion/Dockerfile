@@ -7,6 +7,6 @@ ENV PYTHONPATH=/app:/app/base
 
 COPY common ./common
 COPY workers/base ./base
-COPY workers/projection ./
+COPY workers/proyeccion ./
 
-ENTRYPOINT ["python3", "projection.py"]
+ENTRYPOINT ["python3", "proyeccion.py"]

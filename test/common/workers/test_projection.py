@@ -1,5 +1,5 @@
 """
-Tests para ProjectionWorker
+Tests para WorkerProyeccion
 ============================
 Cubren la proyección de campos, normalización de IDs y propagación de EOF.
 """
@@ -24,8 +24,8 @@ def _make_worker(campos="From Bank,Amount Paid", int_fields=""):
          patch("common.middleware.MessageMiddlewareQueueRabbitMQ"), \
          patch("common.middleware.FanoutQueueRabbitMQ"), \
          patch("common.middleware.FanoutExchangeRabbitMQ"):
-        from workers.projection.projection import ProjectionWorker
-        w = ProjectionWorker()
+        from workers.proyeccion.proyeccion import WorkerProyeccion
+        w = WorkerProyeccion()
     w._enviar = MagicMock()
     return w
 

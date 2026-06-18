@@ -175,7 +175,7 @@ services:
   q1_projection_01:
     build:
       context: ./src
-      dockerfile: workers/projection/Dockerfile
+      dockerfile: workers/proyeccion/Dockerfile
     container_name: q1_projection_01
     restart: always
     depends_on:
@@ -209,7 +209,7 @@ services:
   q1_projection_02:
     build:
       context: ./src
-      dockerfile: workers/projection/Dockerfile
+      dockerfile: workers/proyeccion/Dockerfile
     container_name: q1_projection_02
     restart: always
     depends_on:
@@ -348,7 +348,7 @@ services:
   q2_bank_projection_01:
     build:
       context: ./src
-      dockerfile: workers/projection/Dockerfile
+      dockerfile: workers/proyeccion/Dockerfile
     container_name: q2_bank_projection_01
     restart: always
     depends_on:
@@ -382,7 +382,7 @@ services:
   q2_bank_projection_02:
     build:
       context: ./src
-      dockerfile: workers/projection/Dockerfile
+      dockerfile: workers/proyeccion/Dockerfile
     container_name: q2_bank_projection_02
     restart: always
     depends_on:
@@ -416,7 +416,7 @@ services:
   q2_bank_projection_03:
     build:
       context: ./src
-      dockerfile: workers/projection/Dockerfile
+      dockerfile: workers/proyeccion/Dockerfile
     container_name: q2_bank_projection_03
     restart: always
     depends_on:
@@ -450,7 +450,7 @@ services:
   q2_projection_01:
     build:
       context: ./src
-      dockerfile: workers/projection/Dockerfile
+      dockerfile: workers/proyeccion/Dockerfile
     container_name: q2_projection_01
     restart: always
     depends_on:
@@ -484,7 +484,7 @@ services:
   q2_projection_02:
     build:
       context: ./src
-      dockerfile: workers/projection/Dockerfile
+      dockerfile: workers/proyeccion/Dockerfile
     container_name: q2_projection_02
     restart: always
     depends_on:
@@ -518,7 +518,7 @@ services:
   q2_projection_03:
     build:
       context: ./src
-      dockerfile: workers/projection/Dockerfile
+      dockerfile: workers/proyeccion/Dockerfile
     container_name: q2_projection_03
     restart: always
     depends_on:
@@ -552,7 +552,7 @@ services:
   q2_projection_04:
     build:
       context: ./src
-      dockerfile: workers/projection/Dockerfile
+      dockerfile: workers/proyeccion/Dockerfile
     container_name: q2_projection_04
     restart: always
     depends_on:
@@ -586,7 +586,7 @@ services:
   q2_projection_05:
     build:
       context: ./src
-      dockerfile: workers/projection/Dockerfile
+      dockerfile: workers/proyeccion/Dockerfile
     container_name: q2_projection_05
     restart: always
     depends_on:
@@ -620,7 +620,7 @@ services:
   q2_projection_06:
     build:
       context: ./src
-      dockerfile: workers/projection/Dockerfile
+      dockerfile: workers/proyeccion/Dockerfile
     container_name: q2_projection_06
     restart: always
     depends_on:
@@ -1058,7 +1058,7 @@ services:
   q4_projection_01:
     build:
       context: ./src
-      dockerfile: workers/projection/Dockerfile
+      dockerfile: workers/proyeccion/Dockerfile
     container_name: q4_projection_01
     restart: always
     depends_on:
@@ -1092,7 +1092,7 @@ services:
   q4_projection_02:
     build:
       context: ./src
-      dockerfile: workers/projection/Dockerfile
+      dockerfile: workers/proyeccion/Dockerfile
     container_name: q4_projection_02
     restart: always
     depends_on:
@@ -1535,7 +1535,7 @@ services:
   q5_projection_01:
     build:
       context: ./src
-      dockerfile: workers/projection/Dockerfile
+      dockerfile: workers/proyeccion/Dockerfile
     container_name: q5_projection_01
     restart: always
     depends_on:
@@ -1568,7 +1568,7 @@ services:
   q5_projection_02:
     build:
       context: ./src
-      dockerfile: workers/projection/Dockerfile
+      dockerfile: workers/proyeccion/Dockerfile
     container_name: q5_projection_02
     restart: always
     depends_on:
@@ -1601,7 +1601,7 @@ services:
   q5_projection_03:
     build:
       context: ./src
-      dockerfile: workers/projection/Dockerfile
+      dockerfile: workers/proyeccion/Dockerfile
     container_name: q5_projection_03
     restart: always
     depends_on:
@@ -1634,7 +1634,7 @@ services:
   q5_projection_04:
     build:
       context: ./src
-      dockerfile: workers/projection/Dockerfile
+      dockerfile: workers/proyeccion/Dockerfile
     container_name: q5_projection_04
     restart: always
     depends_on:
