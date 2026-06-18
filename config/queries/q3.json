@@ -2,7 +2,7 @@
   "gateway_queue": "raw_data",
   "workers": [
     {
-      "type": "filter",
+      "type": "filtro",
       "prefix": "q3_filter_fechas",
       "replicas": "$CANT_Q3_FILTER_FECHAS",
       "input_queue": "q3_usd_filtered",
@@ -12,7 +12,7 @@
           "condition_field": "Timestamp",
           "cases": [
             {
-              "operator": "between",
+              "operator": "entre",
               "value": "2022/09/01,2022/09/05",
               "routing": {
                 "queue_shard_prefix": "q3_temprano",
@@ -22,7 +22,7 @@
               }
             },
             {
-              "operator": "between",
+              "operator": "entre",
               "value": "2022/09/06,2022/09/14 23:59:59",
               "routing": {
                 "queue_shard_prefix": "q3_tardio",
@@ -35,9 +35,9 @@
         }
       ],
       "extra_env": {
-        "FILTER_FIELD": "Timestamp",
-        "FILTER_VALUE": "2022/09/01,2022/09/14 23:59:59",
-        "FILTER_OPERATOR": "between"
+        "CAMPO_FILTRO": "Timestamp",
+        "VALOR_FILTRO": "2022/09/01,2022/09/14 23:59:59",
+        "OPERADOR_FILTRO": "entre"
       }
     },
     {

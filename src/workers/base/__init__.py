@@ -1,1 +1,1 @@
-from .base import BaseWorker
+from .worker_base import WorkerBase

@@ -1,7 +1,7 @@
 import hashlib
-import logging
+from common.logger import obtener_logger
 
-logger = logging.getLogger(__name__)
+logger = obtener_logger(__name__)
 
 
 def normalizar_valor_hash(valor):

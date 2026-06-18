@@ -1,10 +1,10 @@
 import json
 import re
-import logging
+from common.logger import obtener_logger
 from common import message_protocol, middleware
 from config import GatewayConfig
 
-logger = logging.getLogger(__name__)
+logger = obtener_logger(__name__)
 
 class BackendListener:
     QUERY_PATTERN = r'q(\d+)'

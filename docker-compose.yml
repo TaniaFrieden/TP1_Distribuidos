@@ -70,7 +70,7 @@ services:
   shared_filter_usd_01:
     build:
       context: ./src
-      dockerfile: workers/filter/Dockerfile
+      dockerfile: workers/filtro/Dockerfile
     container_name: shared_filter_usd_01
     restart: always
     depends_on:
@@ -95,9 +95,9 @@ services:
       HEARTBEAT_INTERVAL_SECONDS: '5'
       LOG_LEVEL: INFO
       LOG_FILE: /app/logs/shared_filter_usd_01.txt
-      FILTER_FIELD: Payment Currency
-      FILTER_VALUE: US Dollar
-      FILTER_OPERATOR: eq
+      CAMPO_FILTRO: Payment Currency
+      VALOR_FILTRO: US Dollar
+      OPERADOR_FILTRO: igual
       PREFETCH_COUNT: '50'
       CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
       CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
@@ -105,7 +105,7 @@ services:
   shared_filter_usd_02:
     build:
       context: ./src
-      dockerfile: workers/filter/Dockerfile
+      dockerfile: workers/filtro/Dockerfile
     container_name: shared_filter_usd_02
     restart: always
     depends_on:
@@ -130,9 +130,9 @@ services:
       HEARTBEAT_INTERVAL_SECONDS: '5'
       LOG_LEVEL: INFO
       LOG_FILE: /app/logs/shared_filter_usd_02.txt
-      FILTER_FIELD: Payment Currency
-      FILTER_VALUE: US Dollar
-      FILTER_OPERATOR: eq
+      CAMPO_FILTRO: Payment Currency
+      VALOR_FILTRO: US Dollar
+      OPERADOR_FILTRO: igual
       PREFETCH_COUNT: '50'
       CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
       CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
@@ -140,7 +140,7 @@ services:
   shared_filter_usd_03:
     build:
       context: ./src
-      dockerfile: workers/filter/Dockerfile
+      dockerfile: workers/filtro/Dockerfile
     container_name: shared_filter_usd_03
     restart: always
     depends_on:
@@ -165,9 +165,9 @@ services:
       HEARTBEAT_INTERVAL_SECONDS: '5'
       LOG_LEVEL: INFO
       LOG_FILE: /app/logs/shared_filter_usd_03.txt
-      FILTER_FIELD: Payment Currency
-      FILTER_VALUE: US Dollar
-      FILTER_OPERATOR: eq
+      CAMPO_FILTRO: Payment Currency
+      VALOR_FILTRO: US Dollar
+      OPERADOR_FILTRO: igual
       PREFETCH_COUNT: '50'
       CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
       CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
@@ -243,7 +243,7 @@ services:
   q1_minor_than_50_01:
     build:
       context: ./src
-      dockerfile: workers/filter/Dockerfile
+      dockerfile: workers/filtro/Dockerfile
     container_name: q1_minor_than_50_01
     restart: always
     depends_on:
@@ -268,9 +268,9 @@ services:
       HEARTBEAT_INTERVAL_SECONDS: '5'
       LOG_LEVEL: INFO
       LOG_FILE: /app/logs/q1_minor_than_50_01.txt
-      FILTER_FIELD: Amount Paid
-      FILTER_VALUE: '50'
-      FILTER_OPERATOR: lt
+      CAMPO_FILTRO: Amount Paid
+      VALOR_FILTRO: '50'
+      OPERADOR_FILTRO: menor
       PREFETCH_COUNT: '50'
       CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
       CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
@@ -278,7 +278,7 @@ services:
   q1_minor_than_50_02:
     build:
       context: ./src
-      dockerfile: workers/filter/Dockerfile
+      dockerfile: workers/filtro/Dockerfile
     container_name: q1_minor_than_50_02
     restart: always
     depends_on:
@@ -303,9 +303,9 @@ services:
       HEARTBEAT_INTERVAL_SECONDS: '5'
       LOG_LEVEL: INFO
       LOG_FILE: /app/logs/q1_minor_than_50_02.txt
-      FILTER_FIELD: Amount Paid
-      FILTER_VALUE: '50'
-      FILTER_OPERATOR: lt
+      CAMPO_FILTRO: Amount Paid
+      VALOR_FILTRO: '50'
+      OPERADOR_FILTRO: menor
       PREFETCH_COUNT: '50'
       CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
       CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
@@ -313,7 +313,7 @@ services:
   q1_minor_than_50_03:
     build:
       context: ./src
-      dockerfile: workers/filter/Dockerfile
+      dockerfile: workers/filtro/Dockerfile
     container_name: q1_minor_than_50_03
     restart: always
     depends_on:
@@ -338,9 +338,9 @@ services:
       HEARTBEAT_INTERVAL_SECONDS: '5'
       LOG_LEVEL: INFO
       LOG_FILE: /app/logs/q1_minor_than_50_03.txt
-      FILTER_FIELD: Amount Paid
-      FILTER_VALUE: '50'
-      FILTER_OPERATOR: lt
+      CAMPO_FILTRO: Amount Paid
+      VALOR_FILTRO: '50'
+      OPERADOR_FILTRO: menor
       PREFETCH_COUNT: '50'
       CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
       CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
@@ -852,7 +852,7 @@ services:
   q3_filter_fechas_01:
     build:
       context: ./src
-      dockerfile: workers/filter/Dockerfile
+      dockerfile: workers/filtro/Dockerfile
     container_name: q3_filter_fechas_01
     restart: always
     depends_on:
@@ -870,16 +870,16 @@ services:
       MOM_VHOST: /
       PYTHONMALLOC: malloc
       INPUT_QUEUES: q3_usd_filtered
-      OUTPUT_QUEUES: '[{"type": "conditional", "condition_field": "Timestamp", "cases": [{"operator": "between", "value": "2022/09/01,2022/09/05", "routing": {"queue_shard_prefix": "q3_temprano", "total_workers": 2, "hash_field": "Payment Format", "include_client_id": true}}, {"operator": "between", "value": "2022/09/06,2022/09/14 23:59:59", "routing": {"queue_shard_prefix": "q3_tardio", "total_workers": 2, "hash_field": "Payment Format", "include_client_id": true}}]}]'
+      OUTPUT_QUEUES: '[{"type": "conditional", "condition_field": "Timestamp", "cases": [{"operator": "entre", "value": "2022/09/01,2022/09/05", "routing": {"queue_shard_prefix": "q3_temprano", "total_workers": 2, "hash_field": "Payment Format", "include_client_id": true}}, {"operator": "entre", "value": "2022/09/06,2022/09/14 23:59:59", "routing": {"queue_shard_prefix": "q3_tardio", "total_workers": 2, "hash_field": "Payment Format", "include_client_id": true}}]}]'
       NODE_PREFIX: q3_filter_fechas
       ID: '1'
       TOTAL_WORKERS: '4'
       HEARTBEAT_INTERVAL_SECONDS: '5'
       LOG_LEVEL: INFO
       LOG_FILE: /app/logs/q3_filter_fechas_01.txt
-      FILTER_FIELD: Timestamp
-      FILTER_VALUE: 2022/09/01,2022/09/14 23:59:59
-      FILTER_OPERATOR: between
+      CAMPO_FILTRO: Timestamp
+      VALOR_FILTRO: 2022/09/01,2022/09/14 23:59:59
+      OPERADOR_FILTRO: entre
       PREFETCH_COUNT: '50'
       CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
       CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
@@ -887,7 +887,7 @@ services:
   q3_filter_fechas_02:
     build:
       context: ./src
-      dockerfile: workers/filter/Dockerfile
+      dockerfile: workers/filtro/Dockerfile
     container_name: q3_filter_fechas_02
     restart: always
     depends_on:
@@ -905,16 +905,16 @@ services:
       MOM_VHOST: /
       PYTHONMALLOC: malloc
       INPUT_QUEUES: q3_usd_filtered
-      OUTPUT_QUEUES: '[{"type": "conditional", "condition_field": "Timestamp", "cases": [{"operator": "between", "value": "2022/09/01,2022/09/05", "routing": {"queue_shard_prefix": "q3_temprano", "total_workers": 2, "hash_field": "Payment Format", "include_client_id": true}}, {"operator": "between", "value": "2022/09/06,2022/09/14 23:59:59", "routing": {"queue_shard_prefix": "q3_tardio", "total_workers": 2, "hash_field": "Payment Format", "include_client_id": true}}]}]'
+      OUTPUT_QUEUES: '[{"type": "conditional", "condition_field": "Timestamp", "cases": [{"operator": "entre", "value": "2022/09/01,2022/09/05", "routing": {"queue_shard_prefix": "q3_temprano", "total_workers": 2, "hash_field": "Payment Format", "include_client_id": true}}, {"operator": "entre", "value": "2022/09/06,2022/09/14 23:59:59", "routing": {"queue_shard_prefix": "q3_tardio", "total_workers": 2, "hash_field": "Payment Format", "include_client_id": true}}]}]'
       NODE_PREFIX: q3_filter_fechas
       ID: '2'
       TOTAL_WORKERS: '4'
       HEARTBEAT_INTERVAL_SECONDS: '5'
       LOG_LEVEL: INFO
       LOG_FILE: /app/logs/q3_filter_fechas_02.txt
-      FILTER_FIELD: Timestamp
-      FILTER_VALUE: 2022/09/01,2022/09/14 23:59:59
-      FILTER_OPERATOR: between
+      CAMPO_FILTRO: Timestamp
+      VALOR_FILTRO: 2022/09/01,2022/09/14 23:59:59
+      OPERADOR_FILTRO: entre
       PREFETCH_COUNT: '50'
       CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
       CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
@@ -922,7 +922,7 @@ services:
   q3_filter_fechas_03:
     build:
       context: ./src
-      dockerfile: workers/filter/Dockerfile
+      dockerfile: workers/filtro/Dockerfile
     container_name: q3_filter_fechas_03
     restart: always
     depends_on:
@@ -940,16 +940,16 @@ services:
       MOM_VHOST: /
       PYTHONMALLOC: malloc
       INPUT_QUEUES: q3_usd_filtered
-      OUTPUT_QUEUES: '[{"type": "conditional", "condition_field": "Timestamp", "cases": [{"operator": "between", "value": "2022/09/01,2022/09/05", "routing": {"queue_shard_prefix": "q3_temprano", "total_workers": 2, "hash_field": "Payment Format", "include_client_id": true}}, {"operator": "between", "value": "2022/09/06,2022/09/14 23:59:59", "routing": {"queue_shard_prefix": "q3_tardio", "total_workers": 2, "hash_field": "Payment Format", "include_client_id": true}}]}]'
+      OUTPUT_QUEUES: '[{"type": "conditional", "condition_field": "Timestamp", "cases": [{"operator": "entre", "value": "2022/09/01,2022/09/05", "routing": {"queue_shard_prefix": "q3_temprano", "total_workers": 2, "hash_field": "Payment Format", "include_client_id": true}}, {"operator": "entre", "value": "2022/09/06,2022/09/14 23:59:59", "routing": {"queue_shard_prefix": "q3_tardio", "total_workers": 2, "hash_field": "Payment Format", "include_client_id": true}}]}]'
       NODE_PREFIX: q3_filter_fechas
       ID: '3'
       TOTAL_WORKERS: '4'
       HEARTBEAT_INTERVAL_SECONDS: '5'
       LOG_LEVEL: INFO
       LOG_FILE: /app/logs/q3_filter_fechas_03.txt
-      FILTER_FIELD: Timestamp
-      FILTER_VALUE: 2022/09/01,2022/09/14 23:59:59
-      FILTER_OPERATOR: between
+      CAMPO_FILTRO: Timestamp
+      VALOR_FILTRO: 2022/09/01,2022/09/14 23:59:59
+      OPERADOR_FILTRO: entre
       PREFETCH_COUNT: '50'
       CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
       CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
@@ -957,7 +957,7 @@ services:
   q3_filter_fechas_04:
     build:
       context: ./src
-      dockerfile: workers/filter/Dockerfile
+      dockerfile: workers/filtro/Dockerfile
     container_name: q3_filter_fechas_04
     restart: always
     depends_on:
@@ -975,16 +975,16 @@ services:
       MOM_VHOST: /
       PYTHONMALLOC: malloc
       INPUT_QUEUES: q3_usd_filtered
-      OUTPUT_QUEUES: '[{"type": "conditional", "condition_field": "Timestamp", "cases": [{"operator": "between", "value": "2022/09/01,2022/09/05", "routing": {"queue_shard_prefix": "q3_temprano", "total_workers": 2, "hash_field": "Payment Format", "include_client_id": true}}, {"operator": "between", "value": "2022/09/06,2022/09/14 23:59:59", "routing": {"queue_shard_prefix": "q3_tardio", "total_workers": 2, "hash_field": "Payment Format", "include_client_id": true}}]}]'
+      OUTPUT_QUEUES: '[{"type": "conditional", "condition_field": "Timestamp", "cases": [{"operator": "entre", "value": "2022/09/01,2022/09/05", "routing": {"queue_shard_prefix": "q3_temprano", "total_workers": 2, "hash_field": "Payment Format", "include_client_id": true}}, {"operator": "entre", "value": "2022/09/06,2022/09/14 23:59:59", "routing": {"queue_shard_prefix": "q3_tardio", "total_workers": 2, "hash_field": "Payment Format", "include_client_id": true}}]}]'
       NODE_PREFIX: q3_filter_fechas
       ID: '4'
       TOTAL_WORKERS: '4'
       HEARTBEAT_INTERVAL_SECONDS: '5'
       LOG_LEVEL: INFO
       LOG_FILE: /app/logs/q3_filter_fechas_04.txt
-      FILTER_FIELD: Timestamp
-      FILTER_VALUE: 2022/09/01,2022/09/14 23:59:59
-      FILTER_OPERATOR: between
+      CAMPO_FILTRO: Timestamp
+      VALOR_FILTRO: 2022/09/01,2022/09/14 23:59:59
+      OPERADOR_FILTRO: entre
       PREFETCH_COUNT: '50'
       CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
       CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
@@ -1126,7 +1126,7 @@ services:
   q4_filter_period_01:
     build:
       context: ./src
-      dockerfile: workers/filter/Dockerfile
+      dockerfile: workers/filtro/Dockerfile
     container_name: q4_filter_period_01
     restart: always
     depends_on:
@@ -1151,9 +1151,9 @@ services:
       HEARTBEAT_INTERVAL_SECONDS: '5'
       LOG_LEVEL: INFO
       LOG_FILE: /app/logs/q4_filter_period_01.txt
-      FILTER_FIELD: Timestamp
-      FILTER_VALUE: 2022/09/01, 2022/09/05
-      FILTER_OPERATOR: between
+      CAMPO_FILTRO: Timestamp
+      VALOR_FILTRO: 2022/09/01, 2022/09/05
+      OPERADOR_FILTRO: entre
       PREFETCH_COUNT: '50'
       CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
       CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
@@ -1161,7 +1161,7 @@ services:
   q4_filter_period_02:
     build:
       context: ./src
-      dockerfile: workers/filter/Dockerfile
+      dockerfile: workers/filtro/Dockerfile
     container_name: q4_filter_period_02
     restart: always
     depends_on:
@@ -1186,9 +1186,9 @@ services:
       HEARTBEAT_INTERVAL_SECONDS: '5'
       LOG_LEVEL: INFO
       LOG_FILE: /app/logs/q4_filter_period_02.txt
-      FILTER_FIELD: Timestamp
-      FILTER_VALUE: 2022/09/01, 2022/09/05
-      FILTER_OPERATOR: between
+      CAMPO_FILTRO: Timestamp
+      VALOR_FILTRO: 2022/09/01, 2022/09/05
+      OPERADOR_FILTRO: entre
       PREFETCH_COUNT: '50'
       CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
       CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
@@ -1667,7 +1667,7 @@ services:
   q5_filter_period_01:
     build:
       context: ./src
-      dockerfile: workers/filter/Dockerfile
+      dockerfile: workers/filtro/Dockerfile
     container_name: q5_filter_period_01
     restart: always
     depends_on:
@@ -1692,9 +1692,9 @@ services:
       HEARTBEAT_INTERVAL_SECONDS: '5'
       LOG_LEVEL: INFO
       LOG_FILE: /app/logs/q5_filter_period_01.txt
-      FILTER_FIELD: Timestamp
-      FILTER_VALUE: 2022/09/01, 2022/09/05
-      FILTER_OPERATOR: between
+      CAMPO_FILTRO: Timestamp
+      VALOR_FILTRO: 2022/09/01, 2022/09/05
+      OPERADOR_FILTRO: entre
       PREFETCH_COUNT: '50'
       CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
       CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
@@ -1702,7 +1702,7 @@ services:
   q5_filter_period_02:
     build:
       context: ./src
-      dockerfile: workers/filter/Dockerfile
+      dockerfile: workers/filtro/Dockerfile
     container_name: q5_filter_period_02
     restart: always
     depends_on:
@@ -1727,9 +1727,9 @@ services:
       HEARTBEAT_INTERVAL_SECONDS: '5'
       LOG_LEVEL: INFO
       LOG_FILE: /app/logs/q5_filter_period_02.txt
-      FILTER_FIELD: Timestamp
-      FILTER_VALUE: 2022/09/01, 2022/09/05
-      FILTER_OPERATOR: between
+      CAMPO_FILTRO: Timestamp
+      VALOR_FILTRO: 2022/09/01, 2022/09/05
+      OPERADOR_FILTRO: entre
       PREFETCH_COUNT: '50'
       CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
       CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
@@ -1737,7 +1737,7 @@ services:
   q5_filter_period_03:
     build:
       context: ./src
-      dockerfile: workers/filter/Dockerfile
+      dockerfile: workers/filtro/Dockerfile
     container_name: q5_filter_period_03
     restart: always
     depends_on:
@@ -1762,9 +1762,9 @@ services:
       HEARTBEAT_INTERVAL_SECONDS: '5'
       LOG_LEVEL: INFO
       LOG_FILE: /app/logs/q5_filter_period_03.txt
-      FILTER_FIELD: Timestamp
-      FILTER_VALUE: 2022/09/01, 2022/09/05
-      FILTER_OPERATOR: between
+      CAMPO_FILTRO: Timestamp
+      VALOR_FILTRO: 2022/09/01, 2022/09/05
+      OPERADOR_FILTRO: entre
       PREFETCH_COUNT: '50'
       CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
       CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
@@ -1772,7 +1772,7 @@ services:
   q5_filter_period_04:
     build:
       context: ./src
-      dockerfile: workers/filter/Dockerfile
+      dockerfile: workers/filtro/Dockerfile
     container_name: q5_filter_period_04
     restart: always
     depends_on:
@@ -1797,9 +1797,9 @@ services:
       HEARTBEAT_INTERVAL_SECONDS: '5'
       LOG_LEVEL: INFO
       LOG_FILE: /app/logs/q5_filter_period_04.txt
-      FILTER_FIELD: Timestamp
-      FILTER_VALUE: 2022/09/01, 2022/09/05
-      FILTER_OPERATOR: between
+      CAMPO_FILTRO: Timestamp
+      VALOR_FILTRO: 2022/09/01, 2022/09/05
+      OPERADOR_FILTRO: entre
       PREFETCH_COUNT: '50'
       CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
       CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
@@ -1807,7 +1807,7 @@ services:
   q5_filter_format_01:
     build:
       context: ./src
-      dockerfile: workers/filter/Dockerfile
+      dockerfile: workers/filtro/Dockerfile
     container_name: q5_filter_format_01
     restart: always
     depends_on:
@@ -1832,9 +1832,9 @@ services:
       HEARTBEAT_INTERVAL_SECONDS: '5'
       LOG_LEVEL: INFO
       LOG_FILE: /app/logs/q5_filter_format_01.txt
-      FILTER_FIELD: Payment Format
-      FILTER_VALUE: Wire, ACH
-      FILTER_OPERATOR: in
+      CAMPO_FILTRO: Payment Format
+      VALOR_FILTRO: Wire, ACH
+      OPERADOR_FILTRO: en
       PREFETCH_COUNT: '50'
       CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
       CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
@@ -1842,7 +1842,7 @@ services:
   q5_filter_format_02:
     build:
       context: ./src
-      dockerfile: workers/filter/Dockerfile
+      dockerfile: workers/filtro/Dockerfile
     container_name: q5_filter_format_02
     restart: always
     depends_on:
@@ -1867,9 +1867,9 @@ services:
       HEARTBEAT_INTERVAL_SECONDS: '5'
       LOG_LEVEL: INFO
       LOG_FILE: /app/logs/q5_filter_format_02.txt
-      FILTER_FIELD: Payment Format
-      FILTER_VALUE: Wire, ACH
-      FILTER_OPERATOR: in
+      CAMPO_FILTRO: Payment Format
+      VALOR_FILTRO: Wire, ACH
+      OPERADOR_FILTRO: en
       PREFETCH_COUNT: '50'
       CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
       CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
@@ -1877,7 +1877,7 @@ services:
   q5_converter_01:
     build:
       context: ./src
-      dockerfile: workers/converter/Dockerfile
+      dockerfile: workers/convertidor/Dockerfile
     container_name: q5_converter_01
     restart: always
     depends_on:
@@ -1902,8 +1902,8 @@ services:
       HEARTBEAT_INTERVAL_SECONDS: '5'
       LOG_LEVEL: INFO
       LOG_FILE: /app/logs/q5_converter_01.txt
-      START_DATE: '2022-09-01'
-      END_DATE: '2022-09-05'
+      FECHA_INICIO: '2022-09-01'
+      FECHA_FIN: '2022-09-05'
       PREFETCH_COUNT: '50'
       CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
       CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
@@ -1911,7 +1911,7 @@ services:
   q5_converter_02:
     build:
       context: ./src
-      dockerfile: workers/converter/Dockerfile
+      dockerfile: workers/convertidor/Dockerfile
     container_name: q5_converter_02
     restart: always
     depends_on:
@@ -1936,8 +1936,8 @@ services:
       HEARTBEAT_INTERVAL_SECONDS: '5'
       LOG_LEVEL: INFO
       LOG_FILE: /app/logs/q5_converter_02.txt
-      START_DATE: '2022-09-01'
-      END_DATE: '2022-09-05'
+      FECHA_INICIO: '2022-09-01'
+      FECHA_FIN: '2022-09-05'
       PREFETCH_COUNT: '50'
       CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
       CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}

@@ -1,17 +1,16 @@
-import logging
 import json
 import threading
 import os
-from base import BaseWorker
-from common.logging_setup import setup_logging
-from common.persistencia import PersistidorEstado
+from base import WorkerBase
+from common.logger import Logger, obtener_logger
+from common.persistencia import PersistidorEstado, VOLUMEN_DIR
 
-logger = logging.getLogger(__name__)
+logger = obtener_logger(__name__)
 
-BASE_DIR = "/app/volumen"
+BASE_DIR = VOLUMEN_DIR
 
 
-class FormatShardWorker(BaseWorker):
+class FormatShardWorker(WorkerBase):
     def __init__(self):
         super().__init__()
         self.estado_clientes = {}
@@ -25,7 +24,7 @@ class FormatShardWorker(BaseWorker):
     # ------------------------------------------------------------------ #
 
     def _node_prefix(self) -> str:
-        return f"format_shard_{self.config.node_id}"
+        return f"format_shard_{self.configuracion.id_nodo}"
 
     def _get_persistidor(self, client_id: str) -> PersistidorEstado:
         return PersistidorEstado(f"{self._node_prefix()}_{client_id}", base_dir=BASE_DIR)
@@ -109,8 +108,7 @@ class FormatShardWorker(BaseWorker):
                 else:
                     # La barrera nunca se inició (o no completó). Encolamos para lanzarla al arrancar.
                     self.estado_clientes[client_id] = estado
-                    with self.coordinator._coordinacion_lock:
-                        self.coordinator._local_eof_completed.add(client_id)
+                    self.coordinador.marcar_eof_local_completo(client_id)
                     self._barreras_para_iniciar.append((client_id, estado["eof_mensaje"]))
                     logger.info(f"[Recuperación] Cliente {client_id}: barrera pendiente, se iniciará al arrancar.")
             else:
@@ -240,24 +238,23 @@ class FormatShardWorker(BaseWorker):
                 cache_size = os.path.getsize(cache_path) if os.path.exists(cache_path) else 0
                 logger.info(f"[Q3] Ambas fases cerradas para {client_id}. Procesando caché tardío ({cache_size} bytes).")
 
-                output_request_id = f"format_shard_output:{client_id}:{self.config.node_id}"
-                self._thread_local.current_request_id = output_request_id
+                output_request_id = f"format_shard_output:{client_id}:{self.configuracion.id_nodo}"
+                self._hilo_local.id_solicitud_actual = output_request_id
                 try:
                     self._procesar_cache_tardio(client_id, estado)
                 finally:
-                    self._thread_local.current_request_id = None
+                    self._hilo_local.id_solicitud_actual = None
 
                 estado["cache_procesado"] = True
                 self._guardar_estado(client_id, estado)
 
-                with self.coordinator._coordinacion_lock:
-                    self.coordinator._local_eof_completed.add(client_id)
+                self.coordinador.marcar_eof_local_completo(client_id)
 
                 disparar_flush = True
 
         if disparar_flush:
             logger.info(f"[Q3] Caché procesado. Iniciando barrera distribuida para {client_id}.")
-            self.coordinator.iniciar_barrera(client_id, estado["eof_mensaje"])
+            self.coordinador.iniciar_barrera(client_id, estado["eof_mensaje"])
 
         return True
 
@@ -360,7 +357,7 @@ class FormatShardWorker(BaseWorker):
     def al_iniciar_post_arranque(self):
         for client_id, eof_mensaje in self._barreras_para_iniciar:
             logger.info(f"[FormatShard] Iniciando barrera diferida para {client_id} post-recovery.")
-            self.coordinator.iniciar_barrera(client_id, eof_mensaje)
+            self.coordinador.iniciar_barrera(client_id, eof_mensaje)
         self._barreras_para_iniciar.clear()
 
     def al_desconectar_cliente(self, client_id: str):
@@ -382,7 +379,7 @@ class FormatShardWorker(BaseWorker):
 
 
 def __main__():
-    setup_logging("format_shard")
+    Logger.configurar("format_shard")
     worker = FormatShardWorker()
     worker.iniciar()
 

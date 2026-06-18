@@ -1,11 +1,11 @@
 from asyncio import IncompleteReadError
 import json
-import logging
+from common.logger import obtener_logger
 
 from . import external_serializer
 
 
-logger = logging.getLogger(__name__)
+logger = obtener_logger(__name__)
 
 
 class MsgType:

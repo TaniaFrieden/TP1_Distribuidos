@@ -13,7 +13,7 @@
       }
     },
     {
-      "type": "filter",
+      "type": "filtro",
       "prefix": "q4_filter_period",
       "replicas": "$CANT_Q4_FILTER",
       "input_queue": "q4_projected",
@@ -22,9 +22,9 @@
         {"queue_shard_prefix": "q4_to_joiner", "total_workers": "$CANT_Q4_SHARDS", "hash_fields": ["From Bank", "Account"]}
       ],
       "extra_env": {
-        "FILTER_FIELD": "Timestamp",
-        "FILTER_VALUE": "2022/09/01, 2022/09/05",
-        "FILTER_OPERATOR": "between"
+        "CAMPO_FILTRO": "Timestamp",
+        "VALOR_FILTRO": "2022/09/01, 2022/09/05",
+        "OPERADOR_FILTRO": "entre"
       }
     },
     {

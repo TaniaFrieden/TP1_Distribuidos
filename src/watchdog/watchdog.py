@@ -1,15 +1,14 @@
 import json
-import logging
 import signal
 import threading
 
-from common.logging_setup import setup_logging
+from common.logger import Logger, obtener_logger
 from common.middleware.middleware_rabbitmq import MessageMiddlewareQueueRabbitMQ
 from config import WatchdogConfig
 from detector import HeartbeatDetector
 from ring_election import RingElection
 
-logger = logging.getLogger(__name__)
+logger = obtener_logger(__name__)
 
 
 def _publicar_caidas_watchdogs(config: WatchdogConfig, dead_ids: list[int]):
@@ -26,7 +25,7 @@ def _publicar_caidas_watchdogs(config: WatchdogConfig, dead_ids: list[int]):
 
 
 def main():
-    setup_logging("watchdog")
+    Logger.configurar("watchdog")
     config = WatchdogConfig()
 
     if not config.stages:

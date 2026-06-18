@@ -1,13 +1,13 @@
 import socket
 import uuid
 import json
-import logging
+from common.logger import obtener_logger
 from common import message_protocol, middleware, sharding
 from config import GatewayConfig
 import gc
 import ctypes
 
-logger = logging.getLogger(__name__)
+logger = obtener_logger(__name__)
 
 class ClientHandler:
     FIRST_ELEMENT = 0

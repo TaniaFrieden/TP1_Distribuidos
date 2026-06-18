@@ -1,18 +1,17 @@
-import logging
 import json
 import threading
 import os
 
-from base import BaseWorker
-from common.logging_setup import setup_logging
-from common.persistencia import PersistidorEstado, TAMANIO_BATCH_PERSISTENCIA
+from base import WorkerBase
+from common.logger import Logger, obtener_logger
+from common.persistencia import PersistidorEstado, TAMANIO_BATCH_PERSISTENCIA, VOLUMEN_DIR
 
-logger = logging.getLogger(__name__)
+logger = obtener_logger(__name__)
 
-BASE_DIR = "/app/volumen"
+BASE_DIR = VOLUMEN_DIR
 
 
-class GroupDistinctCounterWorker(BaseWorker):
+class GroupDistinctCounterWorker(WorkerBase):
     """
     Worker genérico: agrupa mensajes por GROUP_FIELDS, acumula un set de valores
     distintos de VALUE_FIELDS y, al flush, emite los grupos donde |set| == EXPECTED_COUNT.
@@ -62,13 +61,13 @@ class GroupDistinctCounterWorker(BaseWorker):
         )
 
     def _nombre_nodo(self, client_id: str) -> str:
-        return f"gdc_{self.config.node_prefix}_{self.config.node_id}_{client_id}"
+        return f"gdc_{self.configuracion.prefijo_nodo}_{self.configuracion.id_nodo}_{client_id}"
 
     def _recover_state_from_disk(self):
         if not os.path.exists(BASE_DIR):
             logger.info(f"[GroupDistinctCounter] Directorio {BASE_DIR} no existe. Arrancando limpio.")
             return
-        prefijo = f"gdc_{self.config.node_prefix}_{self.config.node_id}_"
+        prefijo = f"gdc_{self.configuracion.prefijo_nodo}_{self.configuracion.id_nodo}_"
         carpetas = [c for c in os.listdir(BASE_DIR) if c.startswith(prefijo)]
         if not carpetas:
             logger.info(f"[GroupDistinctCounter] Sin estado previo en disco. Arrancando limpio.")
@@ -259,7 +258,7 @@ class GroupDistinctCounterWorker(BaseWorker):
 
 
 def main():
-    setup_logging("group_distinct_counter")
+    Logger.configurar("group_distinct_counter")
     GroupDistinctCounterWorker().iniciar()
 
 

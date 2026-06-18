@@ -1,0 +1,296 @@
+"""
+Tests de persistencia para AgregadorBancarioWorker (bank_shard)
+===============================================================
+Cubren:
+  - Caso 1: recovery del estado desde disco al reiniciarse
+  - Caso 4: dedup propio (_processed_request_ids) en ventana crash-entre-persist-y-ack
+  - Caso 7: recovery con ambas colas cerradas dispara barrera diferida
+  - Caso 8: barrier_completada previene re-flush tras caída
+"""
+import json
+import os
+import pytest
+from unittest.mock import MagicMock, patch
+from common.persistencia import PersistidorEstado
+
+
+BASE_ENV = {
+    "MOM_HOST": "rabbitmq",
+    "NODE_PREFIX": "q2_agregador_shard",
+    "ID": "1",
+    "TOTAL_WORKERS": "1",
+    "INPUT_QUEUES": '["q2_transactions_1", "q2_banks_1"]',
+    "OUTPUT_QUEUES": '["q2_results"]',
+    "HEARTBEAT_INTERVAL_SECONDS": "0",
+    "CRASH_PRE_BARRERA": "false",
+}
+
+NODE_PREFIX = "bank_shard_1"
+
+
+def _escribir_estado(tmp_path, client_id, estado):
+    PersistidorEstado(f"{NODE_PREFIX}_{client_id}", base_dir=str(tmp_path)).guardar(estado)
+
+
+def _crear_worker(tmp_path, extra_env=None):
+    import workers.bank_shard.bank_shard as mod
+    env = {**BASE_ENV, **(extra_env or {})}
+
+    original_init = mod.ShardConfig.__init__
+
+    def patched_init(self, nid):
+        self.base_dir = str(tmp_path)
+        self.node_name_prefix = NODE_PREFIX
+
+    with patch.dict("os.environ", env), \
+         patch("common.middleware.MessageMiddlewareQueueRabbitMQ"), \
+         patch("common.middleware.FanoutQueueRabbitMQ"), \
+         patch("common.middleware.FanoutExchangeRabbitMQ"), \
+         patch.object(mod.ShardConfig, "__init__", patched_init):
+        w = mod.AgregadorBancarioWorker()
+    return w
+
+
+# ──────────────────────────────────────────────────────────────────
+# Caso 1 — Recovery de estado desde disco
+# ──────────────────────────────────────────────────────────────────
+
+class TestBankShardRecovery:
+
+    def test_carga_bancos_y_request_ids_desde_disco(self, tmp_path):
+        _escribir_estado(tmp_path, "c1", {
+            "bancos": {"bank1": {"bank_name": "Test", "max_amount": 100.0}},
+            "processed_request_ids": ["r1", "r2"],
+            "transacciones_cerrado": False,
+            "bancos_cerrado": False,
+            "eof_mensaje_bytes_hex": None,
+            "flush_iniciado": False,
+            "barrier_completada": False,
+        })
+        w = _crear_worker(tmp_path)
+
+        assert "c1" in w.aggregator_state
+        assert w.aggregator_state["c1"]["bank1"]["bank_name"] == "Test"
+        assert w._processed_request_ids["c1"] == {"r1", "r2"}
+
+    def test_arranca_limpio_sin_estado_en_disco(self, tmp_path):
+        w = _crear_worker(tmp_path)
+        assert "c1" not in w.aggregator_state
+        assert "c1" not in w._processed_request_ids
+
+    def test_multiples_clientes_se_recuperan_independientemente(self, tmp_path):
+        _escribir_estado(tmp_path, "c1", {
+            "bancos": {"b1": {"bank_name": "A", "max_amount": 10.0}},
+            "processed_request_ids": [],
+            "transacciones_cerrado": False,
+            "bancos_cerrado": False,
+            "eof_mensaje_bytes_hex": None,
+            "flush_iniciado": False,
+            "barrier_completada": False,
+        })
+        _escribir_estado(tmp_path, "c2", {
+            "bancos": {"b2": {"bank_name": "B", "max_amount": 20.0}},
+            "processed_request_ids": ["x"],
+            "transacciones_cerrado": False,
+            "bancos_cerrado": False,
+            "eof_mensaje_bytes_hex": None,
+            "flush_iniciado": False,
+            "barrier_completada": False,
+        })
+        w = _crear_worker(tmp_path)
+
+        assert w.aggregator_state["c1"]["b1"]["bank_name"] == "A"
+        assert w.aggregator_state["c2"]["b2"]["bank_name"] == "B"
+        assert w._processed_request_ids["c2"] == {"x"}
+
+    def test_eof_state_se_recupera_correctamente(self, tmp_path):
+        _escribir_estado(tmp_path, "c1", {
+            "bancos": {},
+            "processed_request_ids": [],
+            "transacciones_cerrado": True,
+            "bancos_cerrado": False,
+            "eof_mensaje_bytes_hex": b"eof_msg".hex(),
+            "flush_iniciado": False,
+            "barrier_completada": False,
+        })
+        w = _crear_worker(tmp_path)
+
+        assert w.eof_state["c1"]["transacciones_cerrado"] is True
+        assert w.eof_state["c1"]["bancos_cerrado"] is False
+        assert w.eof_state["c1"]["eof_mensaje"] == b"eof_msg"
+
+
+# ──────────────────────────────────────────────────────────────────
+# Caso 8 — barrier_completada previene re-flush
+# ──────────────────────────────────────────────────────────────────
+
+class TestBankShardBarrierCompletada:
+
+    def test_estado_con_barrier_completada_no_se_carga_en_memoria(self, tmp_path):
+        _escribir_estado(tmp_path, "c1", {
+            "bancos": {"b1": {"bank_name": "X", "max_amount": 5.0}},
+            "processed_request_ids": ["r1"],
+            "transacciones_cerrado": True,
+            "bancos_cerrado": True,
+            "eof_mensaje_bytes_hex": None,
+            "flush_iniciado": True,
+            "barrier_completada": True,
+        })
+        w = _crear_worker(tmp_path)
+
+        assert "c1" not in w.aggregator_state
+        assert "c1" not in w._processed_request_ids
+
+    def test_estado_con_barrier_completada_se_borra_del_disco(self, tmp_path):
+        _escribir_estado(tmp_path, "c1", {
+            "bancos": {},
+            "processed_request_ids": [],
+            "transacciones_cerrado": True,
+            "bancos_cerrado": True,
+            "eof_mensaje_bytes_hex": None,
+            "flush_iniciado": True,
+            "barrier_completada": True,
+        })
+        _crear_worker(tmp_path)
+
+        filepath = tmp_path / f"{NODE_PREFIX}_c1" / "estado.json"
+        assert not filepath.exists()
+
+    def test_estado_sin_barrier_completada_si_se_carga(self, tmp_path):
+        _escribir_estado(tmp_path, "c1", {
+            "bancos": {"b1": {"bank_name": "Y", "max_amount": 7.0}},
+            "processed_request_ids": [],
+            "transacciones_cerrado": False,
+            "bancos_cerrado": False,
+            "eof_mensaje_bytes_hex": None,
+            "flush_iniciado": False,
+            "barrier_completada": False,
+        })
+        w = _crear_worker(tmp_path)
+
+        assert "c1" in w.aggregator_state
+
+
+# ──────────────────────────────────────────────────────────────────
+# Caso 4 — _processed_request_ids evita doble procesamiento
+# ──────────────────────────────────────────────────────────────────
+
+class TestBankShardDedupPropio:
+
+    def test_request_id_duplicado_no_modifica_estado(self, tmp_path):
+        _escribir_estado(tmp_path, "c1", {
+            "bancos": {"b1": {"bank_name": "Test", "max_amount": 100.0, "account": "acc1", "accounts": ["acc1"]}},
+            "processed_request_ids": ["req-dup"],
+            "transacciones_cerrado": False,
+            "bancos_cerrado": False,
+            "eof_mensaje_bytes_hex": None,
+            "flush_iniciado": False,
+            "barrier_completada": False,
+        })
+        w = _crear_worker(tmp_path)
+
+        ack = MagicMock()
+        nack = MagicMock()
+        payload = {
+            "client_id": "c1",
+            "request_id": "req-dup",
+            "batches": [{"header": {"schema": ["From Bank", "Account", "Amount Paid"], "client_id": "c1", "count": 1}, "payload": [["b1", "acc1", 999.0]]}],
+        }
+        w.procesar_payload("q2_transactions_1", "c1", payload, json.dumps(payload).encode(), ack, nack)
+
+        assert w.aggregator_state["c1"]["b1"]["max_amount"] == 100.0
+        ack.assert_called_once()
+        nack.assert_not_called()
+
+    def test_request_id_nuevo_modifica_estado(self, tmp_path):
+        _escribir_estado(tmp_path, "c1", {
+            "bancos": {},
+            "processed_request_ids": [],
+            "transacciones_cerrado": False,
+            "bancos_cerrado": False,
+            "eof_mensaje_bytes_hex": None,
+            "flush_iniciado": False,
+            "barrier_completada": False,
+        })
+        w = _crear_worker(tmp_path)
+
+        payload = {
+            "client_id": "c1",
+            "request_id": "req-nuevo",
+            "batches": [{"header": {"schema": ["From Bank", "Account", "Amount Paid"], "client_id": "c1", "count": 1}, "payload": [["b1", "acc1", 50.0]]}],
+        }
+        w.procesar_payload("q2_transactions_1", "c1", payload, json.dumps(payload).encode(), MagicMock(), MagicMock())
+
+        assert "req-nuevo" in w._processed_request_ids["c1"]
+        assert "c1" in w.aggregator_state
+
+
+# ──────────────────────────────────────────────────────────────────
+# Caso 7 — Recovery con ambas colas cerradas dispara barrera diferida
+# ──────────────────────────────────────────────────────────────────
+
+class TestBankShardCaso7BarreraDiferida:
+
+    def test_ambas_colas_cerradas_encola_barrera_para_iniciar(self, tmp_path):
+        eof_msg = json.dumps({"client_id": "c1", "eof": True}).encode()
+        _escribir_estado(tmp_path, "c1", {
+            "bancos": {"b1": {"bank_name": "Test", "max_amount": 10.0}},
+            "processed_request_ids": [],
+            "transacciones_cerrado": True,
+            "bancos_cerrado": True,
+            "eof_mensaje_bytes_hex": eof_msg.hex(),
+            "flush_iniciado": False,
+            "barrier_completada": False,
+        })
+        w = _crear_worker(tmp_path)
+
+        assert len(w._barreras_para_iniciar) == 1
+        assert w._barreras_para_iniciar[0][0] == "c1"
+
+    def test_al_iniciar_post_arranque_dispara_barrera_diferida(self, tmp_path):
+        eof_msg = json.dumps({"client_id": "c1", "eof": True}).encode()
+        _escribir_estado(tmp_path, "c1", {
+            "bancos": {"b1": {"bank_name": "Test", "max_amount": 10.0}},
+            "processed_request_ids": [],
+            "transacciones_cerrado": True,
+            "bancos_cerrado": True,
+            "eof_mensaje_bytes_hex": eof_msg.hex(),
+            "flush_iniciado": False,
+            "barrier_completada": False,
+        })
+        w = _crear_worker(tmp_path)
+
+        w.coordinador.iniciar_barrera = MagicMock()
+        w.al_iniciar_post_arranque()
+
+        w.coordinador.iniciar_barrera.assert_called_once_with("c1", eof_msg)
+        assert len(w._barreras_para_iniciar) == 0
+
+    def test_flush_iniciado_true_marca_eof_local_completo(self, tmp_path):
+        eof_msg = json.dumps({"client_id": "c1", "eof": True}).encode()
+        _escribir_estado(tmp_path, "c1", {
+            "bancos": {},
+            "processed_request_ids": [],
+            "transacciones_cerrado": True,
+            "bancos_cerrado": True,
+            "eof_mensaje_bytes_hex": eof_msg.hex(),
+            "flush_iniciado": False,
+            "barrier_completada": False,
+        })
+        w = _crear_worker(tmp_path)
+
+        assert w.eof_state["c1"]["flush_iniciado"] is True
+
+    def test_una_sola_cola_cerrada_no_encola_barrera(self, tmp_path):
+        _escribir_estado(tmp_path, "c1", {
+            "bancos": {},
+            "processed_request_ids": [],
+            "transacciones_cerrado": True,
+            "bancos_cerrado": False,
+            "eof_mensaje_bytes_hex": None,
+            "flush_iniciado": False,
+            "barrier_completada": False,
+        })
+        w = _crear_worker(tmp_path)
+
+        assert len(w._barreras_para_iniciar) == 0

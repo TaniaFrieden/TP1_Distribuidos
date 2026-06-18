@@ -7,6 +7,6 @@ ENV PYTHONPATH=/app:/app/base
 
 COPY common ./common
 COPY workers/base ./base
-COPY workers/filter ./
+COPY workers/filtro ./
 
-ENTRYPOINT ["python3", "filter.py"]
+ENTRYPOINT ["python3", "filtro.py"]
