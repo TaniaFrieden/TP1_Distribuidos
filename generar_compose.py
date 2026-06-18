@@ -114,6 +114,7 @@ def _generar_servicio(node, worker_config, workers_config, compose_data):
         compose_data['services'][worker_name] = {
             'build': {'context': './src', 'dockerfile': base_config['dockerfile']},
             'container_name': worker_name,
+            'restart': 'always',
             'depends_on': {
                 'rabbitmq': {'condition': 'service_healthy'},
                 'gateway': {'condition': 'service_started'}
@@ -203,7 +204,7 @@ def generar_compose():
         compose_data['services'][service_name] = {
             'build': {'context': './src', 'dockerfile': 'watchdog/Dockerfile'},
             'container_name': service_name,
-            'restart': 'on-failure',
+            'restart': 'always',
             'depends_on': {
                 'rabbitmq': {'condition': 'service_healthy'},
                 'gateway': {'condition': 'service_started'},

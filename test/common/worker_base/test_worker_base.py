@@ -119,7 +119,8 @@ class TestCicloDeVida:
         """Si start_consuming en el thread lanza, el middleware igual se cierra."""
         worker.router.input_queues[INPUT_QUEUE_NAME].start_consuming.side_effect = RuntimeError("fallo de red")
 
-        worker.iniciar()  # excepción en thread — no se propaga al caller
+        with patch("workers.base.base.os._exit"):
+            worker.iniciar()
 
         worker.router.input_queues[INPUT_QUEUE_NAME].close.assert_called_once()
 
@@ -279,3 +280,62 @@ class TestAlCerrar:
             q.close.assert_called_once()
         w.coordinator.control_queue.close.assert_called_once()
         w.coordinator.control_exchange.close.assert_called_once()
+
+
+# ------------------------------------------------------------------
+# Tests: prevención de estado zombi (caso 66)
+# ------------------------------------------------------------------
+
+class TestZombiePrevention:
+    """
+    Verifica que un hilo muerto inesperadamente provoque os._exit(1),
+    evitando que el contenedor quede en estado zombi.
+    """
+
+    @pytest.mark.filterwarnings("ignore::pytest.PytestUnhandledThreadExceptionWarning")
+    def test_excepcion_inesperada_en_hilo_consumo_llama_os_exit(self, worker, mock_middleware):
+        """Hilo de consumo muerto sin cierre solicitado → os._exit(1)."""
+        worker.router.input_queues[INPUT_QUEUE_NAME].start_consuming.side_effect = RuntimeError("ConnectionResetError")
+
+        with patch("workers.base.base.os._exit") as mock_exit:
+            worker.iniciar()
+
+        mock_exit.assert_called_once_with(1)
+
+    @pytest.mark.filterwarnings("ignore::pytest.PytestUnhandledThreadExceptionWarning")
+    def test_excepcion_en_hilo_consumo_no_llama_os_exit_si_cierre_solicitado(self, worker, mock_middleware):
+        """Hilo de consumo interrumpido por cierre graceful → no llama os._exit."""
+        def consumo_interrumpido_por_cierre(callback):
+            worker._cierre_solicitado = True
+            raise RuntimeError("consumo interrumpido por cierre")
+
+        worker.router.input_queues[INPUT_QUEUE_NAME].start_consuming.side_effect = consumo_interrumpido_por_cierre
+
+        with patch("workers.base.base.os._exit") as mock_exit:
+            worker.iniciar()
+
+        mock_exit.assert_not_called()
+
+    @pytest.mark.filterwarnings("ignore::pytest.PytestUnhandledThreadExceptionWarning")
+    def test_excepcion_inesperada_en_hilo_coordinador_llama_os_exit(self, worker, mock_middleware):
+        """Hilo coordinador muerto sin cierre solicitado → os._exit(1)."""
+        worker.coordinator.start_consuming = MagicMock(side_effect=RuntimeError("fallo coordinador"))
+
+        with patch("workers.base.base.os._exit") as mock_exit:
+            worker.iniciar()
+
+        mock_exit.assert_called_once_with(1)
+
+    @pytest.mark.filterwarnings("ignore::pytest.PytestUnhandledThreadExceptionWarning")
+    def test_excepcion_en_hilo_coordinador_no_llama_os_exit_si_cierre_solicitado(self, worker, mock_middleware):
+        """Hilo coordinador interrumpido por cierre graceful → no llama os._exit."""
+        def coordinador_interrumpido_por_cierre():
+            worker._cierre_solicitado = True
+            raise RuntimeError("coordinador cerrado por señal")
+
+        worker.coordinator.start_consuming = MagicMock(side_effect=coordinador_interrumpido_por_cierre)
+
+        with patch("workers.base.base.os._exit") as mock_exit:
+            worker.iniciar()
+
+        mock_exit.assert_not_called()

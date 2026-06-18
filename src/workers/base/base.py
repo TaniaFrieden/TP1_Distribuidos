@@ -1,3 +1,4 @@
+import os
 import signal
 import logging
 import threading
@@ -128,21 +129,45 @@ class BaseWorker(ABC):
                         f"[{self.__class__.__name__}] Error cerrando heartbeat: {e}"
                     )
 
+    def _ejecutar_hilo_consumo(self, nombre_cola, iq):
+        try:
+            iq.start_consuming(
+                lambda msg, ack, nack, q=nombre_cola: self._callback_interno(q, msg, ack, nack)
+            )
+        except Exception as e:
+            if not self._cierre_solicitado:
+                logger.critical(
+                    f"[{self.__class__.__name__}] Hilo de consumo '{nombre_cola}' terminó inesperadamente: {e}",
+                    exc_info=True,
+                )
+                os._exit(1)
+
+    def _ejecutar_coordinador(self):
+        try:
+            self.coordinator.start_consuming()
+        except Exception as e:
+            if not self._cierre_solicitado:
+                logger.critical(
+                    f"[{self.__class__.__name__}] Hilo coordinador terminó inesperadamente: {e}",
+                    exc_info=True,
+                )
+                os._exit(1)
+
     def iniciar(self):
         logger.info(f"[{self.__class__.__name__}] Arrancando worker…")
         try:
             input_threads = []
             self._iniciar_heartbeat()
-            
+
             for nombre_cola, iq in self.router.input_queues.items():
                 t = threading.Thread(
-                    target=iq.start_consuming,
-                    args=(lambda msg, ack, nack, q=nombre_cola: self._callback_interno(q, msg, ack, nack),)
+                    target=self._ejecutar_hilo_consumo,
+                    args=(nombre_cola, iq)
                 )
                 t.start()
                 input_threads.append(t)
 
-            control_thread = threading.Thread(target=self.coordinator.start_consuming)
+            control_thread = threading.Thread(target=self._ejecutar_coordinador)
             control_thread.start()
             
             self.coordinator.procesar_barreras_recuperadas()
