@@ -14,15 +14,16 @@ from workers.base.coordinacion.coordinador import CoordinadorDistribuido
 from workers.base.coordinacion.persistencia import PersistenciaCoordinacion
 from workers.base.coordinacion.estado_cliente import EstadoClienteCoordinacion
 from workers.base.coordinacion.contador_vuelos import ContadorVuelos
-from common.constantes_protocolo import (
+from common.constantes_protocolo import ID_CLIENTE
+from base.constantes import (
     TIPO_MENSAJE,
     TIPO_EOF_RECIBIDO,
     TIPO_WORKER_FINALIZADO,
     TIPO_BARRERA_COMPLETA,
-    ID_CLIENTE,
     ORIGINADOR,
     ID_WORKER,
 )
+
 
 
 def _crear_config(id_nodo=0, total_workers=2, sharded=True):

@@ -1,8 +1,8 @@
 import threading
 from common.logger import obtener_logger
 from common.message_protocol.internal import ParseadorMensajes
-from common.constantes_protocolo import (
-    ID_CLIENTE,
+from common.constantes_protocolo import ID_CLIENTE
+from base.constantes import (
     TIPO_MENSAJE,
     TIPO_EOF_RECIBIDO,
     TIPO_WORKER_FINALIZADO,

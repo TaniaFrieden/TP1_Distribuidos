@@ -68,12 +68,12 @@ class TestBankShardRecovery:
     def test_carga_bancos_y_request_ids_desde_disco(self, tmp_path):
         _escribir_estado(tmp_path, "c1", {
             "bancos": {"bank1": {"bank_name": "Test", "max_amount": 100.0}},
-            "processed_request_ids": ["r1", "r2"],
+            "ids_procesados": ["r1", "r2"],
             "tx_eof_count": 0,
             "bank_eof_count": 0,
-            "eof_mensaje_bytes_hex": None,
+            "mensaje_eof_hex": None,
             "flush_iniciado": False,
-            "barrier_completada": False,
+            "barrera_completada": False,
         })
         w = _crear_worker(tmp_path)
 
@@ -89,21 +89,21 @@ class TestBankShardRecovery:
     def test_multiples_clientes_se_recuperan_independientemente(self, tmp_path):
         _escribir_estado(tmp_path, "c1", {
             "bancos": {"b1": {"bank_name": "A", "max_amount": 10.0}},
-            "processed_request_ids": [],
+            "ids_procesados": [],
             "tx_eof_count": 0,
             "bank_eof_count": 0,
-            "eof_mensaje_bytes_hex": None,
+            "mensaje_eof_hex": None,
             "flush_iniciado": False,
-            "barrier_completada": False,
+            "barrera_completada": False,
         })
         _escribir_estado(tmp_path, "c2", {
             "bancos": {"b2": {"bank_name": "B", "max_amount": 20.0}},
-            "processed_request_ids": ["x"],
+            "ids_procesados": ["x"],
             "tx_eof_count": 0,
             "bank_eof_count": 0,
-            "eof_mensaje_bytes_hex": None,
+            "mensaje_eof_hex": None,
             "flush_iniciado": False,
-            "barrier_completada": False,
+            "barrera_completada": False,
         })
         w = _crear_worker(tmp_path)
 
@@ -114,12 +114,12 @@ class TestBankShardRecovery:
     def test_eof_state_se_recupera_correctamente(self, tmp_path):
         _escribir_estado(tmp_path, "c1", {
             "bancos": {},
-            "processed_request_ids": [],
+            "ids_procesados": [],
             "tx_eof_count": 1,
             "bank_eof_count": 0,
-            "eof_mensaje_bytes_hex": b"eof_msg".hex(),
+            "mensaje_eof_hex": b"eof_msg".hex(),
             "flush_iniciado": False,
-            "barrier_completada": False,
+            "barrera_completada": False,
         })
         w = _crear_worker(tmp_path)
 
@@ -129,7 +129,7 @@ class TestBankShardRecovery:
 
 
 # ──────────────────────────────────────────────────────────────────
-# Caso 8 — barrier_completada previene re-flush
+# Caso 8 — barrera_completada previene re-flush
 # ──────────────────────────────────────────────────────────────────
 
 class TestBankShardBarrierCompletada:
@@ -137,12 +137,12 @@ class TestBankShardBarrierCompletada:
     def test_estado_con_barrier_completada_no_se_carga_en_memoria(self, tmp_path):
         _escribir_estado(tmp_path, "c1", {
             "bancos": {"b1": {"bank_name": "X", "max_amount": 5.0}},
-            "processed_request_ids": ["r1"],
+            "ids_procesados": ["r1"],
             "tx_eof_count": 1,
             "bank_eof_count": 1,
-            "eof_mensaje_bytes_hex": None,
+            "mensaje_eof_hex": None,
             "flush_iniciado": True,
-            "barrier_completada": True,
+            "barrera_completada": True,
         })
         w = _crear_worker(tmp_path)
 
@@ -152,12 +152,12 @@ class TestBankShardBarrierCompletada:
     def test_estado_con_barrier_completada_se_borra_del_disco(self, tmp_path):
         _escribir_estado(tmp_path, "c1", {
             "bancos": {},
-            "processed_request_ids": [],
+            "ids_procesados": [],
             "tx_eof_count": 1,
             "bank_eof_count": 1,
-            "eof_mensaje_bytes_hex": None,
+            "mensaje_eof_hex": None,
             "flush_iniciado": True,
-            "barrier_completada": True,
+            "barrera_completada": True,
         })
         _crear_worker(tmp_path)
 
@@ -167,12 +167,12 @@ class TestBankShardBarrierCompletada:
     def test_estado_sin_barrier_completada_si_se_carga(self, tmp_path):
         _escribir_estado(tmp_path, "c1", {
             "bancos": {"b1": {"bank_name": "Y", "max_amount": 7.0}},
-            "processed_request_ids": [],
+            "ids_procesados": [],
             "tx_eof_count": 0,
             "bank_eof_count": 0,
-            "eof_mensaje_bytes_hex": None,
+            "mensaje_eof_hex": None,
             "flush_iniciado": False,
-            "barrier_completada": False,
+            "barrera_completada": False,
         })
         w = _crear_worker(tmp_path)
 
@@ -188,12 +188,12 @@ class TestBankShardDedupPropio:
     def test_request_id_duplicado_no_modifica_estado(self, tmp_path):
         _escribir_estado(tmp_path, "c1", {
             "bancos": {"b1": {"bank_name": "Test", "max_amount": 100.0, "account": "acc1", "accounts": ["acc1"]}},
-            "processed_request_ids": ["req-dup"],
+            "ids_procesados": ["req-dup"],
             "tx_eof_count": 0,
             "bank_eof_count": 0,
-            "eof_mensaje_bytes_hex": None,
+            "mensaje_eof_hex": None,
             "flush_iniciado": False,
-            "barrier_completada": False,
+            "barrera_completada": False,
         })
         w = _crear_worker(tmp_path)
 
@@ -213,12 +213,12 @@ class TestBankShardDedupPropio:
     def test_request_id_nuevo_modifica_estado(self, tmp_path):
         _escribir_estado(tmp_path, "c1", {
             "bancos": {},
-            "processed_request_ids": [],
+            "ids_procesados": [],
             "tx_eof_count": 0,
             "bank_eof_count": 0,
-            "eof_mensaje_bytes_hex": None,
+            "mensaje_eof_hex": None,
             "flush_iniciado": False,
-            "barrier_completada": False,
+            "barrera_completada": False,
         })
         w = _crear_worker(tmp_path)
 
@@ -243,12 +243,12 @@ class TestBankShardCaso7BarreraDiferida:
         eof_msg = json.dumps({"client_id": "c1", "eof": True}).encode()
         _escribir_estado(tmp_path, "c1", {
             "bancos": {"b1": {"bank_name": "Test", "max_amount": 10.0}},
-            "processed_request_ids": [],
+            "ids_procesados": [],
             "tx_eof_count": 1,
             "bank_eof_count": 1,
-            "eof_mensaje_bytes_hex": eof_msg.hex(),
+            "mensaje_eof_hex": eof_msg.hex(),
             "flush_iniciado": False,
-            "barrier_completada": False,
+            "barrera_completada": False,
         })
         w = _crear_worker(tmp_path)
 
@@ -259,12 +259,12 @@ class TestBankShardCaso7BarreraDiferida:
         eof_msg = json.dumps({"client_id": "c1", "eof": True}).encode()
         _escribir_estado(tmp_path, "c1", {
             "bancos": {"b1": {"bank_name": "Test", "max_amount": 10.0}},
-            "processed_request_ids": [],
+            "ids_procesados": [],
             "tx_eof_count": 1,
             "bank_eof_count": 1,
-            "eof_mensaje_bytes_hex": eof_msg.hex(),
+            "mensaje_eof_hex": eof_msg.hex(),
             "flush_iniciado": False,
-            "barrier_completada": False,
+            "barrera_completada": False,
         })
         w = _crear_worker(tmp_path)
 
@@ -278,12 +278,12 @@ class TestBankShardCaso7BarreraDiferida:
         eof_msg = json.dumps({"client_id": "c1", "eof": True}).encode()
         _escribir_estado(tmp_path, "c1", {
             "bancos": {},
-            "processed_request_ids": [],
+            "ids_procesados": [],
             "tx_eof_count": 1,
             "bank_eof_count": 1,
-            "eof_mensaje_bytes_hex": eof_msg.hex(),
+            "mensaje_eof_hex": eof_msg.hex(),
             "flush_iniciado": False,
-            "barrier_completada": False,
+            "barrera_completada": False,
         })
         w = _crear_worker(tmp_path)
 
@@ -292,12 +292,12 @@ class TestBankShardCaso7BarreraDiferida:
     def test_una_sola_cola_cerrada_no_encola_barrera(self, tmp_path):
         _escribir_estado(tmp_path, "c1", {
             "bancos": {},
-            "processed_request_ids": [],
+            "ids_procesados": [],
             "tx_eof_count": 1,
             "bank_eof_count": 0,
-            "eof_mensaje_bytes_hex": None,
+            "mensaje_eof_hex": None,
             "flush_iniciado": False,
-            "barrier_completada": False,
+            "barrera_completada": False,
         })
         w = _crear_worker(tmp_path)
 

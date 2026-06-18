@@ -9,6 +9,8 @@ from common.constantes_protocolo import (
     ESQUEMA,
     PAYLOAD,
     CANTIDAD,
+)
+from base.constantes import (
     CONF_PREFIJO_SHARD,
     CONF_PREFIJO_SHARD_ALT,
     CONF_TOTAL_WORKERS,
@@ -20,6 +22,7 @@ from common.constantes_protocolo import (
     CONF_INCLUIR_CLIENT_ID,
     CONF_VALOR,
 )
+
 
 
 def _normalizar_parte_hash(valor):

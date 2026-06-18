@@ -1,7 +1,7 @@
-import json
-
 from base.worker_base import WorkerBase
 from common.logger import Logger, obtener_logger
+from common.message_protocol.internal import ParseadorMensajes
+from common.constantes_protocolo import ID_CLIENTE, ID_SOLICITUD, FIN_DE_ARCHIVO, LOTES
 from projection_config import ProjectionConfig
 from processor import ProjectionProcessor
 
@@ -24,19 +24,19 @@ class ProjectionWorker(WorkerBase):
 
     def procesar_payload(self, queue_name: str, client_id: str, payload: dict, mensaje_original: bytes, ack, nack):
         try:
-            if payload.get("EOF"):
+            if payload.get(FIN_DE_ARCHIVO):
                 self._enviar(mensaje_original)
                 ack()
                 return
 
-            if "batches" in payload:
+            if LOTES in payload:
                 result = self.processor.process_payload(payload, client_id)
                 if result:
-                    msg_bytes = json.dumps(result).encode("utf-8")
+                    msg_bytes = ParseadorMensajes.serializar(result)
                     self._enviar(msg_bytes, payload=result)
             else:
                 projected = self.processor.process_single(payload, client_id)
-                msg_bytes = json.dumps(projected).encode("utf-8")
+                msg_bytes = ParseadorMensajes.serializar(projected)
                 self._enviar(msg_bytes, payload=projected)
             
             ack()
@@ -47,15 +47,16 @@ class ProjectionWorker(WorkerBase):
     def al_completar_cliente(self, client_id: str):
         # Cada worker envía su propio EOF por su propia conexión TCP, garantizando
         # que sus datos lleguen a RabbitMQ antes que este EOF (ordering por conexión).
-        eof_sintetico = json.dumps({
-            "client_id": client_id,
-            "EOF": True,
-            "request_id": f"_peof_{self.config.node_id}_{client_id[:8]}"
-        }).encode('utf-8')
+        eof_sintetico = ParseadorMensajes.serializar({
+            ID_CLIENTE: client_id,
+            FIN_DE_ARCHIVO: True,
+            ID_SOLICITUD: f"_peof_{self.configuracion.id_nodo}_{client_id[:8]}"
+        })
         self._enviar(eof_sintetico)
 
     def al_cerrar(self):
         logger.info("ProjectionWorker apagado.")
+
 
 
 def main():

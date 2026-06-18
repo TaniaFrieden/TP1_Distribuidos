@@ -114,7 +114,7 @@ class TestJoinerQ4BarrierCompletada:
             "scatter": {"10|acc1": [["20", "acc2"]]},
             "txns": {"10|acc1": [["30", "acc3"]]},
             "vistos": ["r1"],
-            "barrier_completada": True,
+            "barrera_completada": True,
         }
         _escribir_estado(tmp_path, "c1", estado)
         w = _crear_worker(tmp_path)
@@ -123,7 +123,7 @@ class TestJoinerQ4BarrierCompletada:
         assert "c1" not in w._vistos
 
     def test_estado_con_barrier_completada_se_borra_del_disco(self, tmp_path):
-        _escribir_estado(tmp_path, "c1", {"scatter": {}, "txns": {}, "vistos": [], "barrier_completada": True})
+        _escribir_estado(tmp_path, "c1", {"scatter": {}, "txns": {}, "vistos": [], "barrera_completada": True})
         _crear_worker(tmp_path)
         filepath = tmp_path / _nombre_nodo("c1") / "estado.json"
         assert not filepath.exists()
@@ -133,7 +133,7 @@ class TestJoinerQ4BarrierCompletada:
             "scatter": {"10|acc1": [["20", "acc2"]]},
             "txns": {},
             "vistos": [],
-            "barrier_completada": False,
+            "barrera_completada": False,
         }
         _escribir_estado(tmp_path, "c1", estado)
         w = _crear_worker(tmp_path)

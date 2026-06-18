@@ -1,4 +1,8 @@
 from common.constantes_protocolo import COL_BANCO_ORIGEN, COL_CUENTA, COL_MONTO_PAGADO
+from base.constantes import (
+    CLAVE_BARRERA_COMPLETADA, CLAVE_EOF_MENSAJE,
+    CLAVE_EOF_MENSAJE_HEX, CLAVE_IDS_PROCESADOS
+)
 
 PREFIJO_BANK_SHARD = "bank_shard"
 
@@ -21,12 +25,8 @@ CLAVE_CUENTAS = "accounts"
 # Claves de persistencia
 CLAVE_TX_EOF_COUNT = "tx_eof_count"
 CLAVE_BANK_EOF_COUNT = "bank_eof_count"
-CLAVE_EOF_MENSAJE = "eof_mensaje"
-CLAVE_EOF_MENSAJE_HEX = "eof_mensaje_bytes_hex"
 CLAVE_FLUSH_INICIADO = "flush_iniciado"
-CLAVE_BARRERA_COMPLETADA = "barrier_completada"
 CLAVE_BANCOS = "bancos"
-CLAVE_IDS_PROCESADOS = "processed_request_ids"
 
 # Identificadores de cola upstream
 COLA_TRANSACCIONES = "transactions"
@@ -37,3 +37,4 @@ ENV_TOTAL_TX_UPSTREAM = "TOTAL_TX_UPSTREAM"
 ENV_TOTAL_BANK_UPSTREAM = "TOTAL_BANK_UPSTREAM"
 # Persistencia por lotes
 INTERVALO_PERSISTENCIA = 500
+

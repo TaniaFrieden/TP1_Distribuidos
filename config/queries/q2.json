@@ -33,7 +33,11 @@
       "prefix": "q2_agregador_shard",
       "replicas": "$CANT_Q2_AGREGADOR",
       "input_queue": ["q2_shard_transactions_{id}", "q2_shard_banks_{id}"],
-      "output_queue": "q2_results"
+      "output_queue": "q2_results",
+      "extra_env": {
+        "TOTAL_TX_UPSTREAM": "$CANT_Q2_PROJECTION",
+        "TOTAL_BANK_UPSTREAM": "$CANT_Q2_BANK_PROJECTION"
+      }
     }
   ]
 }

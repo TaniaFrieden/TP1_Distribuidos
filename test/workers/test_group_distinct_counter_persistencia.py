@@ -100,14 +100,14 @@ class TestGDCBarrierCompletada:
         _escribir_estado(tmp_path, "c1", {
             "grupos": _grupos_serializados(grupos),
             "vistos": ["r1"],
-            "barrier_completada": True,
+            "barrera_completada": True,
         })
         w = _crear_worker(tmp_path)
         assert "c1" not in w._grupos
         assert "c1" not in w._vistos
 
     def test_estado_con_barrier_completada_se_borra_del_disco(self, tmp_path):
-        _escribir_estado(tmp_path, "c1", {"grupos": {}, "vistos": [], "barrier_completada": True})
+        _escribir_estado(tmp_path, "c1", {"grupos": {}, "vistos": [], "barrera_completada": True})
         _crear_worker(tmp_path)
         filepath = tmp_path / _nombre_nodo("c1") / "estado.json"
         assert not filepath.exists()
@@ -117,7 +117,7 @@ class TestGDCBarrierCompletada:
         _escribir_estado(tmp_path, "c1", {
             "grupos": _grupos_serializados(grupos),
             "vistos": [],
-            "barrier_completada": False,
+            "barrera_completada": False,
         })
         w = _crear_worker(tmp_path)
         assert "c1" in w._grupos

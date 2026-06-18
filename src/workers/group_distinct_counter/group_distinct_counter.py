@@ -3,6 +3,7 @@ import threading
 import os
 
 from base import WorkerBase
+from base.constantes import CLAVE_BARRERA_COMPLETADA
 from common.logger import Logger, obtener_logger
 from common.persistencia import PersistidorEstado, TAMANIO_BATCH_PERSISTENCIA, VOLUMEN_DIR
 
@@ -78,9 +79,9 @@ class GroupDistinctCounterWorker(WorkerBase):
             estado = persistidor.cargar()
             if not estado:
                 continue
-            if estado.get("barrier_completada", False):
+            if estado.get(CLAVE_BARRERA_COMPLETADA, False):
                 persistidor.borrar()
-                logger.info(f"[GroupDistinctCounter] barrier_completada detectada para client_id={client_id}. Limpiando remanente.")
+                logger.info(f"[GroupDistinctCounter] {CLAVE_BARRERA_COMPLETADA} detectada para client_id={client_id}. Limpiando remanente.")
                 continue
             grupos_serial = estado.get("grupos", {})
             grupos = {}
@@ -239,7 +240,7 @@ class GroupDistinctCounterWorker(WorkerBase):
                 logger.warning("[GroupDistinctCounter] CRASH_AFTER_FLUSH — muriendo después del envío, antes de barrier_completada")
                 os._exit(1)
 
-        PersistidorEstado(self._nombre_nodo(client_id), base_dir=BASE_DIR).guardar({"barrier_completada": True})
+        PersistidorEstado(self._nombre_nodo(client_id), base_dir=BASE_DIR).guardar({CLAVE_BARRERA_COMPLETADA: True})
         PersistidorEstado(self._nombre_nodo(client_id), base_dir=BASE_DIR).borrar()
 
     def al_desconectar_cliente(self, client_id: str):

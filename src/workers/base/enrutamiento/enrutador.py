@@ -6,6 +6,8 @@ from common.constantes_protocolo import (
     ID_CLIENTE,
     FIN_DE_ARCHIVO,
     DESCONEXION_CLIENTE,
+)
+from base.constantes import (
     CONF_TIPO,
     CONF_CONDICIONAL,
     CONF_TOTAL_WORKERS,

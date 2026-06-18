@@ -1,3 +1,13 @@
+from common.constantes_protocolo import (
+    CABECERA,
+    ESQUEMA,
+    PAYLOAD,
+    ID_CLIENTE,
+    CANTIDAD,
+    LOTES,
+    ID_SOLICITUD
+)
+
 class ProjectionProcessor:
     def __init__(self, fields: list, int_fields: set):
         self.fields = fields
@@ -14,8 +24,8 @@ class ProjectionProcessor:
 
     def process_batch(self, batch: dict, client_id: str) -> dict | None:
         """Projects a single batch of records."""
-        schema = batch["header"]["schema"]
-        records = batch["payload"]
+        schema = batch[CABECERA][ESQUEMA]
+        records = batch[PAYLOAD]
 
         new_schema = [col for col in self.fields if col in schema]
         col_indices = {col: i for i, col in enumerate(schema)}
@@ -32,18 +42,18 @@ class ProjectionProcessor:
             return None
             
         return {
-            "header": {
-                "schema": new_schema,
-                "client_id": batch["header"].get("client_id", client_id),
-                "count": len(projected_records)
+            CABECERA: {
+                ESQUEMA: new_schema,
+                ID_CLIENTE: batch[CABECERA].get(ID_CLIENTE, client_id),
+                CANTIDAD: len(projected_records)
             },
-            "payload": projected_records
+            PAYLOAD: projected_records
         }
 
     def process_payload(self, payload: dict, client_id: str) -> dict | None:
         """Filters and projects all batches inside a payload."""
         projected_batches = []
-        for batch in payload.get("batches", []):
+        for batch in payload.get(LOTES, []):
             projected = self.process_batch(batch, client_id)
             if projected:
                 projected_batches.append(projected)
@@ -52,17 +62,18 @@ class ProjectionProcessor:
             return None
 
         resultado = {
-            "client_id": client_id,
-            "batches": projected_batches
+            ID_CLIENTE: client_id,
+            LOTES: projected_batches
         }
-        if "request_id" in payload:
-            resultado["request_id"] = payload["request_id"]
+        if ID_SOLICITUD in payload:
+            resultado[ID_SOLICITUD] = payload[ID_SOLICITUD]
         return resultado
 
     def process_single(self, transaction: dict, client_id: str) -> dict:
         """Projects a single transaction dictionary."""
-        projected = {"client_id": transaction.get("client_id", client_id)}
+        projected = {ID_CLIENTE: transaction.get(ID_CLIENTE, client_id)}
         for campo in self.fields:
             if campo in transaction:
                 projected[campo] = self._cast_value(campo, transaction[campo])
         return projected
+

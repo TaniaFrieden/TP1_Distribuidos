@@ -1,5 +1,5 @@
-from common.constantes_protocolo import (
-    ID_CLIENTE,
+from common.constantes_protocolo import ID_CLIENTE
+from base.constantes import (
     TIPO_MENSAJE,
     TIPO_EOF_RECIBIDO,
     TIPO_WORKER_FINALIZADO,
@@ -7,6 +7,7 @@ from common.constantes_protocolo import (
     ORIGINADOR,
     ID_WORKER,
 )
+
 
 
 def msg_eof_recibido(client_id, id_nodo):
