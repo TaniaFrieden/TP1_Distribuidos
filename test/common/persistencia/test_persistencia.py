@@ -117,6 +117,7 @@ class TestDedupFilter:
         d1 = DedupFilter("nodo", base_dir=str(tmp_path))
         d1.marcar_procesado("c1", "req-1")
         d1.marcar_procesado("c1", "req-2")
+        d1._persistir()  # fuerza flush antes del "restart" (batch size es 50)
 
         d2 = DedupFilter("nodo", base_dir=str(tmp_path))
         assert d2.es_duplicado("c1", "req-1")

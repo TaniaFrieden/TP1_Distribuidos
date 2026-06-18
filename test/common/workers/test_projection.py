@@ -18,12 +18,14 @@ def _make_worker(campos="From Bank,Amount Paid", int_fields=""):
         "OUTPUT_QUEUES": '["q_test_out"]',
         "CAMPOS": campos,
         "INT_FIELDS": int_fields,
+        "HEARTBEAT_INTERVAL_SECONDS": "0",
     }
-    with patch.dict("os.environ", env):
-        with patch("workers.base.base.MessageRouter"), \
-             patch("workers.base.base.DistributedCoordinator"):
-            from workers.projection.main import ProjectionWorker
-            w = ProjectionWorker()
+    with patch.dict("os.environ", env), \
+         patch("common.middleware.MessageMiddlewareQueueRabbitMQ"), \
+         patch("common.middleware.FanoutQueueRabbitMQ"), \
+         patch("common.middleware.FanoutExchangeRabbitMQ"):
+        from workers.projection.projection import ProjectionWorker
+        w = ProjectionWorker()
     w._enviar = MagicMock()
     return w
 

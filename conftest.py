@@ -2,7 +2,12 @@ import sys
 import os
 
 _SRC = os.path.join(os.path.dirname(__file__), "src")
+_WORKERS = os.path.join(_SRC, "workers")
+
 sys.path.insert(0, _SRC)
-# Los workers usan `from base import BaseWorker` (path Docker donde todo queda en /app/).
-# En tests exponemos src/workers/base directamente para que ese import resuelva.
-sys.path.insert(0, os.path.join(_SRC, "workers", "base"))
+sys.path.insert(0, _WORKERS)
+
+for _worker_dir in os.listdir(_WORKERS):
+    _full = os.path.join(_WORKERS, _worker_dir)
+    if os.path.isdir(_full) and _worker_dir != "base":
+        sys.path.append(_full)
