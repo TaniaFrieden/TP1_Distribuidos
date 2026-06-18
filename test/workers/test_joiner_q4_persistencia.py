@@ -60,16 +60,16 @@ class TestJoinerQ4Recovery:
         _escribir_estado(tmp_path, "c1", estado)
         w = _crear_worker(tmp_path)
 
-        assert "10|acc1" in w._scatter["c1"]
-        assert ("20", "acc2") in w._scatter["c1"]["10|acc1"]
-        assert ("30", "acc3") in w._scatter["c1"]["10|acc1"]
-        assert ("40", "acc4") in w._txns["c1"]["10|acc1"]
-        assert w._vistos["c1"] == {"r1"}
+        assert "10|acc1" in w.acumulador._scatter["c1"]
+        assert ("20", "acc2") in w.acumulador._scatter["c1"]["10|acc1"]
+        assert ("30", "acc3") in w.acumulador._scatter["c1"]["10|acc1"]
+        assert ("40", "acc4") in w.acumulador._txns["c1"]["10|acc1"]
+        assert w.acumulador._vistos["c1"] == {"r1"}
 
     def test_arranca_limpio_sin_estado_en_disco(self, tmp_path):
         w = _crear_worker(tmp_path)
-        assert "c1" not in w._scatter
-        assert "c1" not in w._txns
+        assert "c1" not in w.acumulador._scatter
+        assert "c1" not in w.acumulador._txns
 
     def test_txns_se_recuperan_como_set(self, tmp_path):
         """_txns debe ser un set de tuples, no una lista."""
@@ -80,7 +80,7 @@ class TestJoinerQ4Recovery:
         }
         _escribir_estado(tmp_path, "c1", estado)
         w = _crear_worker(tmp_path)
-        assert isinstance(w._txns["c1"]["bank|acc"], set)
+        assert isinstance(w.acumulador._txns["c1"]["bank|acc"], set)
 
     def test_scatter_se_recupera_como_lista_de_tuples(self, tmp_path):
         """_scatter debe ser una lista de tuples, no de listas."""
@@ -91,16 +91,16 @@ class TestJoinerQ4Recovery:
         }
         _escribir_estado(tmp_path, "c1", estado)
         w = _crear_worker(tmp_path)
-        elementos = w._scatter["c1"]["bank|acc"]
+        elementos = w.acumulador._scatter["c1"]["bank|acc"]
         assert all(isinstance(e, tuple) for e in elementos)
 
     def test_multiples_clientes_se_recuperan_independientemente(self, tmp_path):
         _escribir_estado(tmp_path, "c1", {"scatter": {"k1|v1": [["a", "b"]]}, "txns": {}, "vistos": []})
         _escribir_estado(tmp_path, "c2", {"scatter": {}, "txns": {"k2|v2": [["c", "d"]]}, "vistos": ["x"]})
         w = _crear_worker(tmp_path)
-        assert "k1|v1" in w._scatter["c1"]
-        assert "k2|v2" in w._txns["c2"]
-        assert w._vistos["c2"] == {"x"}
+        assert "k1|v1" in w.acumulador._scatter["c1"]
+        assert "k2|v2" in w.acumulador._txns["c2"]
+        assert w.acumulador._vistos["c2"] == {"x"}
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -118,9 +118,9 @@ class TestJoinerQ4BarrierCompletada:
         }
         _escribir_estado(tmp_path, "c1", estado)
         w = _crear_worker(tmp_path)
-        assert "c1" not in w._scatter
-        assert "c1" not in w._txns
-        assert "c1" not in w._vistos
+        assert "c1" not in w.acumulador._scatter
+        assert "c1" not in w.acumulador._txns
+        assert "c1" not in w.acumulador._vistos
 
     def test_estado_con_barrier_completada_se_borra_del_disco(self, tmp_path):
         _escribir_estado(tmp_path, "c1", {"scatter": {}, "txns": {}, "vistos": [], "barrier_completada": True})
@@ -137,7 +137,7 @@ class TestJoinerQ4BarrierCompletada:
         }
         _escribir_estado(tmp_path, "c1", estado)
         w = _crear_worker(tmp_path)
-        assert "c1" in w._scatter
+        assert "c1" in w.acumulador._scatter
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -176,8 +176,7 @@ class TestJoinerQ4DedupPropio:
         with patch.object(mod, "BASE_DIR", str(tmp_path)):
             w.procesar_payload("q4_scatter_edges_1", "c1", payload, json.dumps(payload).encode(), ack, nack)
 
-        # La lista sigue con solo 1 elemento (no se duplicó)
-        assert len(w._scatter["c1"]["10|acc1"]) == 1
+        assert len(w.acumulador._scatter["c1"]["10|acc1"]) == 1
         ack.assert_called_once()
         nack.assert_not_called()
 
@@ -205,8 +204,8 @@ class TestJoinerQ4DedupPropio:
         with patch.object(mod, "BASE_DIR", str(tmp_path)):
             w.procesar_payload("q4_scatter_edges_1", "c1", payload, json.dumps(payload).encode(), MagicMock(), MagicMock())
 
-        assert ("30", "acc3") in w._scatter["c1"]["10|acc1"]
-        assert "req-nuevo" in w._vistos["c1"]
+        assert ("30", "acc3") in w.acumulador._scatter["c1"]["10|acc1"]
+        assert "req-nuevo" in w.acumulador._vistos["c1"]
 
     def test_txns_son_idempotentes_pero_vistos_igual_protege(self, tmp_path):
         """
@@ -237,6 +236,5 @@ class TestJoinerQ4DedupPropio:
         with patch.object(mod, "BASE_DIR", str(tmp_path)):
             w.procesar_payload("q4_to_joiner_1", "c1", payload, json.dumps(payload).encode(), ack, MagicMock())
 
-        # Set sigue con solo 1 elemento
-        assert len(w._txns["c1"]["10|acc1"]) == 1
+        assert len(w.acumulador._txns["c1"]["10|acc1"]) == 1
         ack.assert_called_once()
