@@ -2,7 +2,7 @@
   "gateway_queue": "raw_data",
   "workers": [
     {
-      "type": "projection",
+      "type": "proyeccion",
       "prefix": "q4_projection",
       "replicas": "$CANT_Q4_PROJECTION",
       "input_queue": "q4_pre_projection",
@@ -28,7 +28,7 @@
       }
     },
     {
-      "type": "group_distinct_counter",
+      "type": "contador_distinto",
       "prefix": "q4_sumador",
       "replicas": "$CANT_Q4_SHARDS",
       "input_queue": "q4_to_sumador_{id}",
@@ -51,7 +51,7 @@
       "output_queue": [{"queue_shard_prefix": "q4_paths", "total_workers": "$CANT_Q4_SHARDS", "hash_fields": ["a_bank", "a_account", "c_bank", "c_account"]}]
     },
     {
-      "type": "group_distinct_counter",
+      "type": "contador_distinto",
       "prefix": "q4_contador",
       "replicas": "$CANT_Q4_SHARDS",
       "input_queue": "q4_paths_{id}",

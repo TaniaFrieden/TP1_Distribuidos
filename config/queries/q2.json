@@ -7,7 +7,7 @@
   },
   "workers": [
     {
-      "type": "projection",
+      "type": "proyeccion",
       "prefix": "q2_bank_projection",
       "replicas": "$CANT_Q2_BANK_PROJECTION",
       "input_queue": "q2_raw_banks_{id}",
@@ -18,7 +18,7 @@
       }
     },
     {
-      "type": "projection",
+      "type": "proyeccion",
       "prefix": "q2_projection",
       "replicas": "$CANT_Q2_PROJECTION",
       "input_queue": "q2_pre_projection",

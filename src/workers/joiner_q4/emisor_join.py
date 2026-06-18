@@ -1,12 +1,12 @@
 import json
 
 from common.constantes_protocolo import ID_CLIENTE, LOTES, CABECERA, ESQUEMA, CANTIDAD, PAYLOAD
+from common.persistencia import TAMANIO_BATCH_EMISION
 from common.logger import obtener_logger
 
 logger = obtener_logger(__name__)
 
 _ESQUEMA_SALIDA = ["a_bank", "a_account", "b_bank", "b_account", "c_bank", "c_account"]
-_TAMANIO_BATCH = 1000
 
 
 class EmisorResultados:
@@ -45,7 +45,7 @@ class EmisorResultados:
                         continue
                     batch.append([a_bank, a_account, b_bank, b_account, c_bank, c_account])
 
-                    if len(batch) >= _TAMANIO_BATCH:
+                    if len(batch) >= TAMANIO_BATCH_EMISION:
                         self._enviar_batch(client_id, batch)
                         enviados += len(batch)
                         batch = []

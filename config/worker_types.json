@@ -1,6 +1,6 @@
 {
-  "projection": {
-    "dockerfile": "workers/projection/Dockerfile"
+  "proyeccion": {
+    "dockerfile": "workers/proyeccion/Dockerfile"
   },
   "filtro": {
     "dockerfile": "workers/filtro/Dockerfile"
@@ -18,8 +18,8 @@
     "dockerfile": "workers/format_shard/Dockerfile",
     "default_env": {}
   },
-  "group_distinct_counter": {
-    "dockerfile": "workers/group_distinct_counter/Dockerfile"
+  "contador_distinto": {
+    "dockerfile": "workers/contador_distinto/Dockerfile"
   },
   "joiner_q4": {
     "dockerfile": "workers/joiner_q4/Dockerfile"

@@ -3,9 +3,9 @@ import json
 from config_contador import ConfigContador
 from operadores_contador import OP_MAYOR_QUE, OP_MAYOR_IGUAL
 from common.constantes_protocolo import ID_CLIENTE, LOTES, CABECERA, ESQUEMA, CANTIDAD, PAYLOAD
+from common.persistencia import TAMANIO_BATCH_EMISION
 
 MODO_EXPLODE = "explode"
-TAMANIO_BATCH_EMISION = 1000
 
 
 class EmisorResultados:

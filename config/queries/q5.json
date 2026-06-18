@@ -1,7 +1,7 @@
 {
   "workers": [
     {
-      "type": "projection",
+      "type": "proyeccion",
       "prefix": "q5_projection",
       "replicas": "$CANT_Q5_PROJECTION",
       "input_queue": "q5_raw_data",

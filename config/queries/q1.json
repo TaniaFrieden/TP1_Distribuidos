@@ -2,7 +2,7 @@
   "gateway_queue": "raw_data",
   "workers": [
     {
-      "type": "projection",
+      "type": "proyeccion",
       "prefix": "q1_projection",
       "replicas": "$CANT_Q1_PROJECTION",
       "input_queue": "q1_pre_projection",

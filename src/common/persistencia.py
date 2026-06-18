@@ -7,6 +7,7 @@ logger = obtener_logger(__name__)
 
 VOLUMEN_DIR = "/app/volumen"
 TAMANIO_BATCH_PERSISTENCIA = 50
+TAMANIO_BATCH_EMISION = 1000
 
 class PersistidorEstado:
     """
