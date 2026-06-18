@@ -3,11 +3,11 @@ import threading
 import os
 from base import WorkerBase
 from common.logger import Logger, obtener_logger
-from common.persistencia import PersistidorEstado
+from common.persistencia import PersistidorEstado, VOLUMEN_DIR
 
 logger = obtener_logger(__name__)
 
-BASE_DIR = "/app/volumen"
+BASE_DIR = VOLUMEN_DIR
 
 
 class FormatShardWorker(WorkerBase):

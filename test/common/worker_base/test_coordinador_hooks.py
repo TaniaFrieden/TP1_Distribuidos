@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 from workers.base.coordinacion.coordinador import CoordinadorDistribuido
 from workers.base.coordinacion.contador_vuelos import ContadorVuelos
+from workers.base.coordinacion.hooks import HOOK_PRE_FINISHED
 from common.constantes_protocolo import (
     TIPO_MENSAJE,
     TIPO_EOF_RECIBIDO,
@@ -56,34 +57,34 @@ class TestEjecutarHook:
     def test_hook_registrado_se_ejecuta(self, mocks_infra):
         invocado = []
         coord = _crear_coordinador(mocks_infra, hooks={
-            "pre_finished": lambda: invocado.append(True),
+            HOOK_PRE_FINISHED: lambda: invocado.append(True),
         })
 
-        coord._ejecutar_hook("pre_finished")
+        coord._ejecutar_hook(HOOK_PRE_FINISHED)
 
         assert invocado == [True]
 
     def test_hook_no_registrado_no_falla(self, mocks_infra):
         coord = _crear_coordinador(mocks_infra, hooks={})
 
-        coord._ejecutar_hook("pre_finished")
+        coord._ejecutar_hook(HOOK_PRE_FINISHED)
 
     def test_sin_hooks_no_falla(self, mocks_infra):
         coord = _crear_coordinador(mocks_infra)
 
-        coord._ejecutar_hook("pre_finished")
+        coord._ejecutar_hook(HOOK_PRE_FINISHED)
 
     def test_multiples_hooks_independientes(self, mocks_infra):
         registro = []
         coord = _crear_coordinador(mocks_infra, hooks={
-            "pre_finished": lambda: registro.append("pre_finished"),
+            HOOK_PRE_FINISHED: lambda: registro.append(HOOK_PRE_FINISHED),
             "post_barrera": lambda: registro.append("post_barrera"),
         })
 
-        coord._ejecutar_hook("pre_finished")
+        coord._ejecutar_hook(HOOK_PRE_FINISHED)
         coord._ejecutar_hook("post_barrera")
 
-        assert registro == ["pre_finished", "post_barrera"]
+        assert registro == [HOOK_PRE_FINISHED, "post_barrera"]
 
 
 class TestHookPreFinished:
@@ -91,7 +92,7 @@ class TestHookPreFinished:
     def test_hook_pre_finished_se_ejecuta_durante_flush(self, mocks_infra):
         invocado = []
         coord = _crear_coordinador(mocks_infra, hooks={
-            "pre_finished": lambda: invocado.append(True),
+            HOOK_PRE_FINISHED: lambda: invocado.append(True),
         })
 
         coord._ejecutar_flush_y_notificar("c1", 0)
@@ -104,7 +105,7 @@ class TestHookPreFinished:
         transporte.enviar.side_effect = lambda msg: orden.append("envio")
 
         coord = _crear_coordinador(mocks_infra, hooks={
-            "pre_finished": lambda: orden.append("hook"),
+            HOOK_PRE_FINISHED: lambda: orden.append("hook"),
         })
 
         coord._ejecutar_flush_y_notificar("c1", 0)
@@ -116,7 +117,7 @@ class TestHookPreFinished:
             raise RuntimeError("crash simulado")
 
         coord = _crear_coordinador(mocks_infra, hooks={
-            "pre_finished": hook_crash,
+            HOOK_PRE_FINISHED: hook_crash,
         })
 
         with pytest.raises(RuntimeError, match="crash simulado"):

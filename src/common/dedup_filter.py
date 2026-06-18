@@ -1,6 +1,6 @@
 import threading
 from common.logger import obtener_logger
-from common.persistencia import PersistidorEstado, TAMANIO_BATCH_PERSISTENCIA
+from common.persistencia import PersistidorEstado, TAMANIO_BATCH_PERSISTENCIA, VOLUMEN_DIR
 
 logger = obtener_logger(__name__)
 
@@ -13,7 +13,7 @@ class DedupFilter:
     State is persisted atomically to disk so it survives worker restarts.
     """
 
-    def __init__(self, node_name: str, base_dir: str = "/app/volumen"):
+    def __init__(self, node_name: str, base_dir: str = VOLUMEN_DIR):
         self._persistidor = PersistidorEstado(f"dedup_{node_name}", base_dir=base_dir)
         self._seen: dict[str, set[str]] = {}
         self._lock = threading.Lock()

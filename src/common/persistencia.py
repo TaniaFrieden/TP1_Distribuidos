@@ -5,6 +5,7 @@ import tempfile
 
 logger = obtener_logger(__name__)
 
+VOLUMEN_DIR = "/app/volumen"
 TAMANIO_BATCH_PERSISTENCIA = 50
 
 class PersistidorEstado:
@@ -13,7 +14,7 @@ class PersistidorEstado:
     Garantiza consistencia ante caídas mediante escritura atómica (write-and-replace).
     Cada worker/nodo tiene su propia carpeta mapeada a un volumen.
     """
-    def __init__(self, node_name: str, base_dir: str = "/app/volumen"):
+    def __init__(self, node_name: str, base_dir: str = VOLUMEN_DIR):
         self.node_name = node_name
         self.directory = os.path.join(base_dir, node_name)
         self.filepath = os.path.join(self.directory, "estado.json")

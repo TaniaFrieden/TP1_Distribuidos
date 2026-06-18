@@ -11,6 +11,7 @@ from common.constantes_protocolo import (
     ID_WORKER,
 )
 from .estado_cliente import EstadoClienteCoordinacion
+from .hooks import HOOK_PRE_FINISHED
 from .mensajes_control import msg_eof_recibido, msg_worker_finalizado, msg_barrera_completa
 from .persistencia import PersistenciaCoordinacion
 from .transporte import TransporteControl
@@ -170,7 +171,7 @@ class CoordinadorDistribuido:
         else:
             logger.info(f"Ya flusheado para client_id={client_id}. Skip.")
 
-        self._ejecutar_hook("pre_finished")
+        self._ejecutar_hook(HOOK_PRE_FINISHED)
 
         logger.info(
             f"Flush completo. Enviando {TIPO_WORKER_FINALIZADO} "

@@ -15,6 +15,7 @@ from common.constantes_protocolo import (
 from .configuracion import ConfiguracionWorker
 from .enrutamiento import EnrutadorMensajes
 from .coordinacion import CoordinadorDistribuido, ManejadorCoordinacionEof, ContadorVuelos
+from .coordinacion.hooks import HOOK_PRE_FINISHED, crear_hook_crash_pre_finished
 from .latido import Latido
 
 from common.dedup_filter import DedupFilter
@@ -262,25 +263,9 @@ class WorkerBase(ABC):
 
     def _crear_hooks_coordinador(self):
         hooks = {}
-        self._registrar_hook_crash(hooks)
-        return hooks
-
-    def _registrar_hook_crash(self, hooks):
-        if os.environ.get("CRASH_BEFORE_FINISHED_CONFIRMATION") != "true":
-            return
-        cfg = self.configuracion
-        bandera = os.path.join(
-            "/app/volumen",
-            f"{cfg.prefijo_nodo}_{cfg.id_nodo}_crash_before_finished_done",
+        hook = crear_hook_crash_pre_finished(
+            self.configuracion.prefijo_nodo, self.configuracion.id_nodo,
         )
-
-        def hook():
-            if not os.path.exists(bandera):
-                open(bandera, "w").close()
-                logger.warning(
-                    "CRASH_BEFORE_FINISHED_CONFIRMATION activado "
-                    "— muriendo ANTES de enviar WORKER_FINALIZADO"
-                )
-                os._exit(1)
-
-        hooks["pre_finished"] = hook
+        if hook:
+            hooks[HOOK_PRE_FINISHED] = hook
+        return hooks

@@ -4,11 +4,11 @@ import os
 
 from base import WorkerBase
 from common.logger import Logger, obtener_logger
-from common.persistencia import PersistidorEstado, TAMANIO_BATCH_PERSISTENCIA
+from common.persistencia import PersistidorEstado, TAMANIO_BATCH_PERSISTENCIA, VOLUMEN_DIR
 
 logger = obtener_logger(__name__)
 
-BASE_DIR = "/app/volumen"
+BASE_DIR = VOLUMEN_DIR
 
 
 class JoinerQ4Worker(WorkerBase):
