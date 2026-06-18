@@ -21,13 +21,13 @@ BASE_ENV = {
 
 
 @pytest.fixture
-def worker(tmp_path, monkeypatch):
-    monkeypatch.setattr("workers.counter.counter.BASE_DIR", str(tmp_path))
+def worker(tmp_path):
     with patch.dict("os.environ", BASE_ENV), \
          patch("common.middleware.MessageMiddlewareQueueRabbitMQ"), \
          patch("common.middleware.FanoutQueueRabbitMQ"), \
-         patch("common.middleware.FanoutExchangeRabbitMQ"):
-        from workers.counter.counter import CounterWorker
+         patch("common.middleware.FanoutExchangeRabbitMQ"), \
+         patch("persistencia_conteo.VOLUMEN_DIR", str(tmp_path)):
+        from contador import CounterWorker
         w = CounterWorker()
     w._enviar = MagicMock()
     return w
@@ -49,7 +49,7 @@ class TestContar:
 
         worker.procesar_payload("q_in", "c1", payload, _msg(payload), ack, MagicMock())
 
-        assert worker._conteos["c1"] == 1
+        assert worker.estado._conteos["c1"] == 1
         ack.assert_called_once()
 
     def test_multiples_mensajes_acumulan_conteo(self, worker):
@@ -57,7 +57,7 @@ class TestContar:
             payload = {"client_id": "c1", "request_id": f"r{i}"}
             worker.procesar_payload("q_in", "c1", payload, _msg(payload), MagicMock(), MagicMock())
 
-        assert worker._conteos["c1"] == 4
+        assert worker.estado._conteos["c1"] == 4
 
     def test_batch_usa_count_del_header(self, worker):
         payload = {
@@ -68,7 +68,7 @@ class TestContar:
 
         worker.procesar_payload("q_in", "c1", payload, _msg(payload), MagicMock(), MagicMock())
 
-        assert worker._conteos["c1"] == 7
+        assert worker.estado._conteos["c1"] == 7
 
     def test_multiples_batches_se_suman(self, worker):
         payload = {
@@ -82,15 +82,15 @@ class TestContar:
 
         worker.procesar_payload("q_in", "c1", payload, _msg(payload), MagicMock(), MagicMock())
 
-        assert worker._conteos["c1"] == 8
+        assert worker.estado._conteos["c1"] == 8
 
     def test_clientes_distintos_conteos_independientes(self, worker):
         for cid in ["c1", "c2"]:
             payload = {"client_id": cid, "request_id": f"r_{cid}"}
             worker.procesar_payload("q_in", cid, payload, _msg(payload), MagicMock(), MagicMock())
 
-        assert worker._conteos["c1"] == 1
-        assert worker._conteos["c2"] == 1
+        assert worker.estado._conteos["c1"] == 1
+        assert worker.estado._conteos["c2"] == 1
 
     def test_excepcion_llama_nack(self, worker):
         nack = MagicMock()
@@ -135,7 +135,7 @@ class TestFlush:
 
         worker.al_completar_cliente("c1")
 
-        assert "c1" not in worker._conteos
+        assert "c1" not in worker.estado._conteos
 
     def test_schema_del_output_es_count(self, worker):
         payload = {"client_id": "c1", "request_id": "r1"}
@@ -162,4 +162,4 @@ class TestCicloDeVida:
 
         worker.al_desconectar_cliente("c1")
 
-        assert "c1" not in worker._conteos
+        assert "c1" not in worker.estado._conteos

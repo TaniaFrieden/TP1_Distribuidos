@@ -25,6 +25,8 @@ URL_API_FRANKFURTER = "https://api.frankfurter.app/"
 COL_MONEDA_PAGO = "Payment Currency"
 COL_MARCA_TIEMPO = "Timestamp"
 COL_MONTO_PAGADO = "Amount Paid"
+COL_BANCO_ORIGEN = "From Bank"
+COL_CUENTA = "Account"
 
 CONF_PREFIJO_SHARD = "queue_shard_prefix"
 CONF_PREFIJO_SHARD_ALT = "shard_prefix"

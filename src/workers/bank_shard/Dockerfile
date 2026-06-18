@@ -9,4 +9,4 @@ COPY common ./common
 COPY workers/base ./base
 COPY workers/bank_shard ./
 
-ENTRYPOINT ["python3", "bank_shard.py"]
+ENTRYPOINT ["python3", "agregador_bancario.py"]

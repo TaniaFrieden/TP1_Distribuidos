@@ -3,7 +3,7 @@ from common.logger import Logger, obtener_logger
 from common.constantes_protocolo import ID_CLIENTE, LOTES, CABECERA, ESQUEMA, CANTIDAD, PAYLOAD
 from common.message_protocol.internal import ParseadorMensajes
 from estado_conteo import EstadoConteo, calcular_cantidad
-from hooks_counter import crear_hook_crash_despues_persistir, crear_hook_crash_despues_flush
+from base.coordinacion.hooks import crear_hook_crash_despues_persistir, crear_hook_crash_despues_flush
 
 logger = obtener_logger(__name__)
 
