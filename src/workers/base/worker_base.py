@@ -50,6 +50,7 @@ class WorkerBase(ABC):
             al_completar_sincronizacion=self._manejador_eof.al_completar_sincronizacion,
             al_completar_barrera=self._manejador_eof.al_completar_barrera,
             contador_vuelos=self.contador_vuelos,
+            hooks=self._crear_hooks_coordinador(),
         )
         self._manejador_eof.coordinador = self.coordinador
 
@@ -258,3 +259,28 @@ class WorkerBase(ABC):
 
     def al_desconectar_cliente(self, client_id):
         pass
+
+    def _crear_hooks_coordinador(self):
+        hooks = {}
+        self._registrar_hook_crash(hooks)
+        return hooks
+
+    def _registrar_hook_crash(self, hooks):
+        if os.environ.get("CRASH_BEFORE_FINISHED_CONFIRMATION") != "true":
+            return
+        cfg = self.configuracion
+        bandera = os.path.join(
+            "/app/volumen",
+            f"{cfg.prefijo_nodo}_{cfg.id_nodo}_crash_before_finished_done",
+        )
+
+        def hook():
+            if not os.path.exists(bandera):
+                open(bandera, "w").close()
+                logger.warning(
+                    "CRASH_BEFORE_FINISHED_CONFIRMATION activado "
+                    "— muriendo ANTES de enviar WORKER_FINALIZADO"
+                )
+                os._exit(1)
+
+        hooks["pre_finished"] = hook

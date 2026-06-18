@@ -1,4 +1,3 @@
-import os
 import threading
 from common.logger import obtener_logger
 from common.message_protocol.internal import ParseadorMensajes
@@ -12,6 +11,7 @@ from common.constantes_protocolo import (
     ID_WORKER,
 )
 from .estado_cliente import EstadoClienteCoordinacion
+from .mensajes_control import msg_eof_recibido, msg_worker_finalizado, msg_barrera_completa
 from .persistencia import PersistenciaCoordinacion
 from .transporte import TransporteControl
 
@@ -20,11 +20,12 @@ logger = obtener_logger(__name__)
 
 class CoordinadorDistribuido:
     def __init__(self, config, al_completar_sincronizacion, al_completar_barrera,
-                 contador_vuelos):
+                 contador_vuelos, hooks=None):
         self._config = config
         self._al_completar_sincronizacion = al_completar_sincronizacion
         self._al_completar_barrera = al_completar_barrera
         self._contador_vuelos = contador_vuelos
+        self._hooks = hooks or {}
         self._coordinacion_lock = threading.Lock()
 
         self._persistencia = PersistenciaCoordinacion(
@@ -34,7 +35,6 @@ class CoordinadorDistribuido:
             self._persistencia.cargar(config.id_nodo, config.total_workers)
         )
 
-        self._tiene_cola_sharded = self._detectar_cola_sharded()
         self._transporte = TransporteControl(config)
 
         self._evento_cierre = threading.Event()
@@ -56,24 +56,20 @@ class CoordinadorDistribuido:
             self._clientes[client_id] = EstadoClienteCoordinacion()
         return self._clientes[client_id]
 
-    def _detectar_cola_sharded(self):
-        if self._config.total_workers <= 1:
-            return True
-        id_str = str(self._config.id_nodo)
-        return any(
-            q.endswith(f"_{id_str}") or f"_{id_str}_" in q or f"_{id_str}" in q
-            for q in self._config.colas_entrada
-        )
-
     def _persistir(self):
         self._persistencia.guardar(self._clientes)
+
+    def _ejecutar_hook(self, nombre):
+        hook = self._hooks.get(nombre)
+        if hook:
+            hook()
 
     def procesar_barreras_recuperadas(self):
         for cid, msg in self._barreras_pendientes:
             with self._coordinacion_lock:
                 self._obtener(cid).marcar_finalizado()
                 self._persistir()
-                self._transporte.enviar(self._msg_barrera_completa(cid))
+                self._transporte.enviar(msg_barrera_completa(cid))
             self._al_completar_sincronizacion(cid, msg)
         self._barreras_pendientes.clear()
 
@@ -82,7 +78,7 @@ class CoordinadorDistribuido:
                 f"Reenviando {TIPO_WORKER_FINALIZADO} pendiente "
                 f"para {cid} al originador {originador}."
             )
-            self._transporte.enviar(self._msg_worker_finalizado(cid, originador))
+            self._transporte.enviar(msg_worker_finalizado(cid, originador, self._config.id_nodo))
         self._worker_finished_pendientes.clear()
 
     def registrar_eof_local(self, client_id, nombre_cola, total_esperados) -> bool:
@@ -116,7 +112,7 @@ class CoordinadorDistribuido:
             ec = self._obtener(client_id)
             ec.eof_local_completo = True
 
-            if ec.originador is not None and self._tiene_cola_sharded:
+            if ec.originador is not None and self._config.tiene_cola_sharded:
                 logger.info(
                     f"Barrera ya activa para {client_id} "
                     f"(originador: {ec.originador}). Disparando flush diferido."
@@ -133,7 +129,7 @@ class CoordinadorDistribuido:
                     f"EOF local completo para client_id={client_id} "
                     f"(somos originador). Difundiendo control."
                 )
-                self._transporte.enviar(self._msg_eof_recibido(client_id))
+                self._transporte.enviar(msg_eof_recibido(client_id, self._config.id_nodo))
 
         if ejecutar_flush:
             self._ejecutar_flush_y_notificar(client_id, originador_para_flush)
@@ -174,57 +170,19 @@ class CoordinadorDistribuido:
         else:
             logger.info(f"Ya flusheado para client_id={client_id}. Skip.")
 
-        self._crash_test_antes_de_finished()
+        self._ejecutar_hook("pre_finished")
 
         logger.info(
             f"Flush completo. Enviando {TIPO_WORKER_FINALIZADO} "
             f"a originator {originador}."
         )
-        self._transporte.enviar(self._msg_worker_finalizado(client_id, originador))
-
-    def _crash_test_antes_de_finished(self):
-        if os.environ.get("CRASH_BEFORE_FINISHED_CONFIRMATION") != "true":
-            return
-        base_dir = os.path.dirname(self._persistencia.directorio)
-        bandera = os.path.join(
-            base_dir,
-            f"{self._config.prefijo_nodo}_{self._config.id_nodo}"
-            f"_crash_before_finished_done",
-        )
-        if not os.path.exists(bandera):
-            open(bandera, "w").close()
-            logger.warning(
-                "CRASH_BEFORE_FINISHED_CONFIRMATION activado "
-                f"— muriendo ANTES de enviar {TIPO_WORKER_FINALIZADO}"
-            )
-            os._exit(1)
+        self._transporte.enviar(msg_worker_finalizado(client_id, originador, self._config.id_nodo))
 
     def limpiar_cliente(self, client_id):
         with self._coordinacion_lock:
             self._clientes.pop(client_id, None)
         self._contador_vuelos.limpiar(client_id)
         self._persistir()
-
-    def _msg_eof_recibido(self, client_id):
-        return {
-            TIPO_MENSAJE: TIPO_EOF_RECIBIDO,
-            ID_CLIENTE: client_id,
-            ORIGINADOR: self._config.id_nodo,
-        }
-
-    def _msg_worker_finalizado(self, client_id, originador):
-        return {
-            TIPO_MENSAJE: TIPO_WORKER_FINALIZADO,
-            ID_CLIENTE: client_id,
-            ORIGINADOR: originador,
-            ID_WORKER: self._config.id_nodo,
-        }
-
-    def _msg_barrera_completa(self, client_id):
-        return {
-            TIPO_MENSAJE: TIPO_BARRERA_COMPLETA,
-            ID_CLIENTE: client_id,
-        }
 
     def _procesar_mensaje_control(self, mensaje, ack, nack):
         try:
@@ -247,7 +205,7 @@ class CoordinadorDistribuido:
                 f"{TIPO_EOF_RECIBIDO} recibido para cliente {client_id} "
                 f"ya finalizado. Respondiendo {TIPO_WORKER_FINALIZADO}."
             )
-            self._transporte.enviar(self._msg_worker_finalizado(client_id, originador))
+            self._transporte.enviar(msg_worker_finalizado(client_id, originador, self._config.id_nodo))
             return
 
         if not self._resolver_colision_originador(client_id, originador):
@@ -255,7 +213,7 @@ class CoordinadorDistribuido:
 
         with self._coordinacion_lock:
             ec = self._obtener(client_id)
-            local_completo = ec.eof_local_completo or not self._tiene_cola_sharded
+            local_completo = ec.eof_local_completo or not self._config.tiene_cola_sharded
             originador_final = ec.originador
 
         if local_completo:
@@ -281,7 +239,7 @@ class CoordinadorDistribuido:
                 ec.originador = originador_nuevo
                 return True
 
-            if not self._tiene_cola_sharded:
+            if not self._config.tiene_cola_sharded:
                 if originador_nuevo != originador_actual:
                     logger.info(
                         f"Cola no sharded: actualizando originador "
@@ -304,11 +262,9 @@ class CoordinadorDistribuido:
                     f"pero yo ({originador_actual}) tengo menor ID. "
                     f"Reenviando mi reclamo."
                 )
-                self._transporte.enviar({
-                    TIPO_MENSAJE: TIPO_EOF_RECIBIDO,
-                    ID_CLIENTE: client_id,
-                    ORIGINADOR: originador_actual,
-                })
+                self._transporte.enviar(
+                    msg_eof_recibido(client_id, originador_actual)
+                )
                 return False
 
             return True
@@ -330,7 +286,7 @@ class CoordinadorDistribuido:
             ec = self._clientes.get(client_id)
 
             if ec is not None and ec.finalizado:
-                self._transporte.enviar(self._msg_barrera_completa(client_id))
+                self._transporte.enviar(msg_barrera_completa(client_id))
                 return
 
             if ec is None or not ec.barrera_activa:
@@ -355,7 +311,7 @@ class CoordinadorDistribuido:
             f"Barrera completa para client_id={client_id}. "
             f"Difundiendo {TIPO_BARRERA_COMPLETA}."
         )
-        self._transporte.enviar(self._msg_barrera_completa(client_id))
+        self._transporte.enviar(msg_barrera_completa(client_id))
         self._al_completar_sincronizacion(client_id, msg_original)
 
     def _manejar_barrera_completa(self, datos):
@@ -389,7 +345,7 @@ class CoordinadorDistribuido:
                     f"client_id={client_id} para despertar posibles "
                     f"workers reiniciados."
                 )
-                self._transporte.enviar(self._msg_eof_recibido(client_id))
+                self._transporte.enviar(msg_eof_recibido(client_id, self._config.id_nodo))
 
     def cerrar(self):
         self._evento_cierre.set()
