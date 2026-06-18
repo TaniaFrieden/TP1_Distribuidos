@@ -99,7 +99,7 @@ def _generar_servicio(node, worker_config, workers_config, compose_data):
         else:
             env.setdefault('PREFETCH_COUNT', '50')
 
-        if worker_type == 'counter':
+        if worker_type == 'contador':
             env['CRASH_AFTER_PERSIST'] = '${CRASH_AFTER_PERSIST:-false}'
             
         env['CRASH_BEFORE_FINISHED_CONFIRMATION'] = '${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}'
@@ -108,7 +108,7 @@ def _generar_servicio(node, worker_config, workers_config, compose_data):
         env['CRASH_AFTER_FLUSH'] = '${CRASH_AFTER_FLUSH:-false}'
 
         volumes = ['./logs:/app/logs']
-        if worker_type in ['bank_shard', 'format_shard', 'joiner_q4', 'counter', 'group_distinct_counter']:
+        if worker_type in ['bank_shard', 'format_shard', 'joiner_q4', 'contador', 'group_distinct_counter']:
             volumes.append(f'./volume/{worker_name}:/app/volumen')
 
         compose_data['services'][worker_name] = {
