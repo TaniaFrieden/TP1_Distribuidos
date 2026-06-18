@@ -2,8 +2,8 @@
   "projection": {
     "dockerfile": "workers/projection/Dockerfile"
   },
-  "filter": {
-    "dockerfile": "workers/filter/Dockerfile"
+  "filtro": {
+    "dockerfile": "workers/filtro/Dockerfile"
   },
   "converter": {
     "dockerfile": "workers/converter/Dockerfile"

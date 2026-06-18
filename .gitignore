@@ -1,7 +1,7 @@
 # Datasets y archivos de csv de notebooks
 *.csv
 datasets
-logs/*.txt
+logs
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

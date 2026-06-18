@@ -9,7 +9,7 @@ import pytest
 from unittest.mock import MagicMock, patch
 
 
-def _crear_worker(filter_field: str, filter_value: str, filter_operator: str = "eq"):
+def _crear_worker(filter_field: str, filter_value: str, filter_operator: str = "igual"):
     env = {
         "MOM_HOST": "rabbitmq",
         "NODE_PREFIX": "test_filter",
@@ -18,15 +18,15 @@ def _crear_worker(filter_field: str, filter_value: str, filter_operator: str = "
         "INPUT_QUEUES": '["q_test_in"]',
         "OUTPUT_QUEUES": "[]",
         "HEARTBEAT_INTERVAL_SECONDS": "0",
-        "FILTER_FIELD": filter_field,
-        "FILTER_VALUE": filter_value,
-        "FILTER_OPERATOR": filter_operator,
+        "CAMPO_FILTRO": filter_field,
+        "VALOR_FILTRO": filter_value,
+        "OPERADOR_FILTRO": filter_operator,
     }
     with patch.dict("os.environ", env), \
          patch("common.middleware.MessageMiddlewareQueueRabbitMQ"), \
          patch("common.middleware.FanoutQueueRabbitMQ"), \
          patch("common.middleware.FanoutExchangeRabbitMQ"):
-        from workers.filter.filter import GenericFilterWorker
+        from workers.filtro.filtro import GenericFilterWorker
         w = GenericFilterWorker()
     return w
 
@@ -50,14 +50,14 @@ class TestInicializacion:
             "INPUT_QUEUES": '["q_test_in"]',
             "OUTPUT_QUEUES": "[]",
             "HEARTBEAT_INTERVAL_SECONDS": "0",
-            # FILTER_FIELD omitido
-            "FILTER_VALUE": "USD",
+            # CAMPO_FILTRO omitido
+            "VALOR_FILTRO": "USD",
         }
         with patch.dict("os.environ", env, clear=False), \
              patch("common.middleware.MessageMiddlewareQueueRabbitMQ"), \
              patch("common.middleware.FanoutQueueRabbitMQ"), \
              patch("common.middleware.FanoutExchangeRabbitMQ"):
-            from workers.filter.filter import GenericFilterWorker
+            from workers.filtro.filtro import GenericFilterWorker
             with pytest.raises(KeyError):
                 GenericFilterWorker()
 
@@ -71,10 +71,10 @@ class TestProcesarMensaje:
     @pytest.mark.parametrize(
         "filter_field,filter_value,filter_operator,payload,espera_envio",
         [
-            ("payment_currency", "USD", "eq",  {"client_id": "c1", "payment_currency": "USD"}, True),
-            ("payment_currency", "USD", "eq",  {"client_id": "c1", "payment_currency": "EUR"}, False),
-            ("amount_paid",      "50",  "lte", {"client_id": "c1", "amount_paid": 30},          True),
-            ("amount_paid",      "50",  "lte", {"client_id": "c1", "amount_paid": 60},          False),
+            ("payment_currency", "USD", "igual",  {"client_id": "c1", "payment_currency": "USD"}, True),
+            ("payment_currency", "USD", "igual",  {"client_id": "c1", "payment_currency": "EUR"}, False),
+            ("amount_paid",      "50",  "menor", {"client_id": "c1", "amount_paid": 30},          True),
+            ("amount_paid",      "50",  "menor", {"client_id": "c1", "amount_paid": 60},          False),
         ],
     )
     def test_filtro_aplica_segun_configuracion(self, filter_field, filter_value, filter_operator, payload, espera_envio):
@@ -95,7 +95,7 @@ class TestProcesarMensaje:
         nack.assert_not_called()
 
     def test_campo_faltante_se_descarta_con_ack(self):
-        worker = _crear_worker("payment_currency", "USD", "eq")
+        worker = _crear_worker("payment_currency", "USD", "igual")
         ack  = MagicMock()
         nack = MagicMock()
         payload = {"client_id": "c1", "otro_campo": "valor"}
@@ -109,7 +109,7 @@ class TestProcesarMensaje:
         nack.assert_not_called()
 
     def test_eof_se_reenvia_via_enviar(self):
-        worker = _crear_worker("payment_currency", "USD", "eq")
+        worker = _crear_worker("payment_currency", "USD", "igual")
         ack  = MagicMock()
         nack = MagicMock()
         payload = {"client_id": "c1", "EOF": True}
@@ -123,5 +123,5 @@ class TestProcesarMensaje:
         nack.assert_not_called()
 
     def test_al_cerrar_no_falla(self):
-        worker = _crear_worker("payment_currency", "USD", "eq")
+        worker = _crear_worker("payment_currency", "USD", "igual")
         worker.al_cerrar()

@@ -23,15 +23,15 @@
 
   "shared_workers": [
     {
-      "type": "filter",
+      "type": "filtro",
       "prefix": "shared_filter_usd",
       "replicas": "$CANT_FILTERS_USD",
       "input_queue": "raw_data",
       "output_queue": ["q1_pre_projection", "q2_pre_projection", "q3_usd_filtered", "q4_pre_projection"],
       "extra_env": {
-        "FILTER_FIELD": "Payment Currency",
-        "FILTER_VALUE": "US Dollar",
-        "FILTER_OPERATOR": "eq"
+        "CAMPO_FILTRO": "Payment Currency",
+        "VALOR_FILTRO": "US Dollar",
+        "OPERADOR_FILTRO": "igual"
       }
     }
   ]
