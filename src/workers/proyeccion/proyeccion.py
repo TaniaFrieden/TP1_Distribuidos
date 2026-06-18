@@ -4,7 +4,7 @@ from base.worker_base import WorkerBase
 from common.logger import Logger, obtener_logger
 from common.constantes_protocolo import FIN_DE_ARCHIVO, LOTES, ID_CLIENTE, ID_SOLICITUD
 from config_proyeccion import ConfigProyeccion
-from procesador_lotes import ProcesadorLotes
+from procesador_proyeccion import ProcesadorLotes
 
 logger = obtener_logger(__name__)
 

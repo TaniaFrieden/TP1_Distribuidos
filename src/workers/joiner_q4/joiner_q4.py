@@ -6,8 +6,8 @@ from common.persistencia import TAMANIO_BATCH_PERSISTENCIA
 from common.constantes_protocolo import ID_SOLICITUD
 from acumulador_joiner import AcumuladorJoiner
 from persistencia_joiner import PersistenciaJoiner, BASE_DIR
-from procesador_lotes import ProcesadorLotes
-from emisor_resultados import EmisorResultados
+from procesador_join import ProcesadorLotes
+from emisor_join import EmisorResultados
 
 logger = obtener_logger(__name__)
 

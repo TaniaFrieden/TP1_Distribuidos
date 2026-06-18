@@ -1,5 +1,5 @@
 import os
-from operadores import OP_IGUAL
+from operadores_contador import OP_IGUAL
 
 
 def _parsear_campos(nombre_env: str, default: str = "") -> list[str]:

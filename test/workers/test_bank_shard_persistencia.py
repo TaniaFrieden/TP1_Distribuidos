@@ -41,6 +41,8 @@ def _crear_worker(tmp_path, extra_env=None):
     def patched_init(self, nid):
         self.base_dir = str(tmp_path)
         self.node_name_prefix = NODE_PREFIX
+        self.total_tx_upstream = 1
+        self.total_bank_upstream = 1
 
     with patch.dict("os.environ", env), \
          patch("common.middleware.MessageMiddlewareQueueRabbitMQ"), \
@@ -115,8 +117,9 @@ class TestBankShardRecovery:
         })
         w = _crear_worker(tmp_path)
 
-        assert w.eof_state["c1"]["transacciones_cerrado"] is True
-        assert w.eof_state["c1"]["bancos_cerrado"] is False
+        # tx_eof_count=1 porque transacciones_cerrado=True se convierte al nuevo formato
+        assert w.eof_state["c1"]["tx_eof_count"] >= 1
+        assert w.eof_state["c1"]["bank_eof_count"] == 0
         assert w.eof_state["c1"]["eof_mensaje"] == b"eof_msg"
 
 

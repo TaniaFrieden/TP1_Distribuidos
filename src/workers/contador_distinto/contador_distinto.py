@@ -6,9 +6,9 @@ from common.persistencia import TAMANIO_BATCH_PERSISTENCIA
 from common.constantes_protocolo import ID_SOLICITUD
 from config_contador import ConfigContador
 from acumulador_grupos import AcumuladorGrupos
-from procesador_lotes import ProcesadorLotes
+from procesador_grupos import ProcesadorLotes
 from persistencia_contador import PersistenciaContador, BASE_DIR
-from emisor_resultados import EmisorResultados
+from emisor_grupos import EmisorResultados
 
 logger = obtener_logger(__name__)
 
@@ -41,7 +41,7 @@ class ContadorDistintoWorker(WorkerBase):
         prefijo = f"gdc_{self.configuracion.prefijo_nodo}_{self.configuracion.id_nodo}"
         self.persistencia = PersistenciaContador(prefijo, BASE_DIR)
         self.procesador = ProcesadorLotes(self.acumulador, self.config.campos_grupo, self.config.campos_valor)
-        self.emisor = EmisorResultados(self.config, self._enviar)
+        self.emisor = EmisorResultados(self.config, lambda *a, **kw: self._enviar(*a, **kw))
         self._recuperar_estado()
         logger.info(
             f"[ContadorDistinto] group={self.config.campos_grupo} value={self.config.campos_valor} "

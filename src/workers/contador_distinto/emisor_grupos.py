@@ -1,7 +1,7 @@
 import json
 
 from config_contador import ConfigContador
-from operadores import OP_MAYOR_QUE, OP_MAYOR_IGUAL
+from operadores_contador import OP_MAYOR_QUE, OP_MAYOR_IGUAL
 from common.constantes_protocolo import ID_CLIENTE, LOTES, CABECERA, ESQUEMA, CANTIDAD, PAYLOAD
 
 MODO_EXPLODE = "explode"
