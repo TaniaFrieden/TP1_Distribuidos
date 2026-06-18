@@ -1196,7 +1196,7 @@ services:
   q4_sumador_01:
     build:
       context: ./src
-      dockerfile: workers/group_distinct_counter/Dockerfile
+      dockerfile: workers/contador_distinto/Dockerfile
     container_name: q4_sumador_01
     restart: always
     depends_on:
@@ -1236,7 +1236,7 @@ services:
   q4_sumador_02:
     build:
       context: ./src
-      dockerfile: workers/group_distinct_counter/Dockerfile
+      dockerfile: workers/contador_distinto/Dockerfile
     container_name: q4_sumador_02
     restart: always
     depends_on:
@@ -1276,7 +1276,7 @@ services:
   q4_sumador_03:
     build:
       context: ./src
-      dockerfile: workers/group_distinct_counter/Dockerfile
+      dockerfile: workers/contador_distinto/Dockerfile
     container_name: q4_sumador_03
     restart: always
     depends_on:
@@ -1415,7 +1415,7 @@ services:
   q4_contador_01:
     build:
       context: ./src
-      dockerfile: workers/group_distinct_counter/Dockerfile
+      dockerfile: workers/contador_distinto/Dockerfile
     container_name: q4_contador_01
     restart: always
     depends_on:
@@ -1455,7 +1455,7 @@ services:
   q4_contador_02:
     build:
       context: ./src
-      dockerfile: workers/group_distinct_counter/Dockerfile
+      dockerfile: workers/contador_distinto/Dockerfile
     container_name: q4_contador_02
     restart: always
     depends_on:
@@ -1495,7 +1495,7 @@ services:
   q4_contador_03:
     build:
       context: ./src
-      dockerfile: workers/group_distinct_counter/Dockerfile
+      dockerfile: workers/contador_distinto/Dockerfile
     container_name: q4_contador_03
     restart: always
     depends_on:

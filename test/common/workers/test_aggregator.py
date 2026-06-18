@@ -1,5 +1,5 @@
 """
-Tests para GroupDistinctCounterWorker
+Tests para ContadorDistintoWorker
 ======================================
 Cubren la agrupación por campos, acumulación de valores distintos, filtrado
 por EXPECTED_COUNT y los modos de emisión aggregate y explode.
@@ -19,7 +19,7 @@ def _make_worker(
     count_field="Amount Transactions",
     operator="eq",
 ):
-    monkeypatch.setattr("workers.group_distinct_counter.group_distinct_counter.BASE_DIR", str(tmp_path))
+    monkeypatch.setattr("workers.contador_distinto.contador_distinto.BASE_DIR", str(tmp_path))
     env = {
         "MOM_HOST": "rabbitmq",
         "NODE_PREFIX": "test_gdc",
@@ -39,8 +39,8 @@ def _make_worker(
          patch("common.middleware.MessageMiddlewareQueueRabbitMQ"), \
          patch("common.middleware.FanoutQueueRabbitMQ"), \
          patch("common.middleware.FanoutExchangeRabbitMQ"):
-        from workers.group_distinct_counter.group_distinct_counter import GroupDistinctCounterWorker
-        w = GroupDistinctCounterWorker()
+        from workers.contador_distinto.contador_distinto import ContadorDistintoWorker
+        w = ContadorDistintoWorker()
     w._enviar = MagicMock()
     return w
 
@@ -65,30 +65,30 @@ class TestAgregar:
         _procesar(w, "c1", "r1", bank="A", destination="x")
         _procesar(w, "c1", "r2", bank="A", destination="y")
 
-        assert len(w._grupos["c1"][("A",)]) == 2
+        assert len(w.acumulador._grupos["c1"][("A",)]) == 2
 
     def test_valores_duplicados_no_se_cuentan_doble(self, tmp_path, monkeypatch):
         w = _make_worker(tmp_path, monkeypatch)
         _procesar(w, "c1", "r1", bank="A", destination="x")
         _procesar(w, "c1", "r2", bank="A", destination="x")
 
-        assert len(w._grupos["c1"][("A",)]) == 1
+        assert len(w.acumulador._grupos["c1"][("A",)]) == 1
 
     def test_grupos_distintos_se_acumulan_separados(self, tmp_path, monkeypatch):
         w = _make_worker(tmp_path, monkeypatch)
         _procesar(w, "c1", "r1", bank="A", destination="x")
         _procesar(w, "c1", "r2", bank="B", destination="x")
 
-        assert ("A",) in w._grupos["c1"]
-        assert ("B",) in w._grupos["c1"]
+        assert ("A",) in w.acumulador._grupos["c1"]
+        assert ("B",) in w.acumulador._grupos["c1"]
 
     def test_clientes_distintos_grupos_independientes(self, tmp_path, monkeypatch):
         w = _make_worker(tmp_path, monkeypatch)
         _procesar(w, "c1", "r1", bank="A", destination="x")
         _procesar(w, "c2", "r2", bank="A", destination="y")
 
-        assert len(w._grupos["c1"][("A",)]) == 1
-        assert len(w._grupos["c2"][("A",)]) == 1
+        assert len(w.acumulador._grupos["c1"][("A",)]) == 1
+        assert len(w.acumulador._grupos["c2"][("A",)]) == 1
 
 
 # ------------------------------------------------------------------
@@ -196,7 +196,7 @@ class TestCicloDeVida:
 
         w.al_desconectar_cliente("c1")
 
-        assert "c1" not in w._grupos
+        assert "c1" not in w.acumulador._grupos
 
     def test_flush_limpia_estado_interno(self, tmp_path, monkeypatch):
         w = _make_worker(tmp_path, monkeypatch, expected=1)
@@ -204,4 +204,4 @@ class TestCicloDeVida:
 
         w.al_completar_cliente("c1")
 
-        assert "c1" not in w._grupos
+        assert "c1" not in w.acumulador._grupos

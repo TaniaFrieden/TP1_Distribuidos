@@ -1,5 +1,5 @@
 """
-Tests de persistencia para GroupDistinctCounterWorker
+Tests de persistencia para ContadorDistintoWorker
 ======================================================
 Cubren:
   - Caso 1: recovery de grupos y vistos desde disco al reiniciarse
@@ -40,14 +40,14 @@ def _escribir_estado(tmp_path, client_id, estado):
 
 
 def _crear_worker(tmp_path, extra_env=None):
-    import workers.group_distinct_counter.group_distinct_counter as mod
+    import workers.contador_distinto.contador_distinto as mod
     env = {**BASE_ENV, **(extra_env or {})}
     with patch.dict("os.environ", env), \
          patch("common.middleware.MessageMiddlewareQueueRabbitMQ"), \
          patch("common.middleware.FanoutQueueRabbitMQ"), \
          patch("common.middleware.FanoutExchangeRabbitMQ"), \
          patch.object(mod, "BASE_DIR", str(tmp_path)):
-        w = mod.GroupDistinctCounterWorker()
+        w = mod.ContadorDistintoWorker()
     return w
 
 
@@ -72,21 +72,21 @@ class TestGDCRecovery:
             "vistos": ["r1"],
         })
         w = _crear_worker(tmp_path)
-        assert ("bank1", "acc1") in w._grupos["c1"]
-        assert ("bank2", "acc2") in w._grupos["c1"][("bank1", "acc1")]
-        assert w._vistos["c1"] == {"r1"}
+        assert ("bank1", "acc1") in w.acumulador._grupos["c1"]
+        assert ("bank2", "acc2") in w.acumulador._grupos["c1"][("bank1", "acc1")]
+        assert w.acumulador._vistos["c1"] == {"r1"}
 
     def test_arranca_limpio_sin_estado_en_disco(self, tmp_path):
         w = _crear_worker(tmp_path)
-        assert "c1" not in w._grupos
+        assert "c1" not in w.acumulador._grupos
 
     def test_multiples_clientes_se_recuperan_independientemente(self, tmp_path):
         _escribir_estado(tmp_path, "c1", {"grupos": _grupos_serializados({("b1", "a1"): {("b2", "a2")}}), "vistos": []})
         _escribir_estado(tmp_path, "c2", {"grupos": _grupos_serializados({("b3", "a3"): {("b4", "a4")}}), "vistos": ["x"]})
         w = _crear_worker(tmp_path)
-        assert ("b1", "a1") in w._grupos["c1"]
-        assert ("b3", "a3") in w._grupos["c2"]
-        assert w._vistos["c2"] == {"x"}
+        assert ("b1", "a1") in w.acumulador._grupos["c1"]
+        assert ("b3", "a3") in w.acumulador._grupos["c2"]
+        assert w.acumulador._vistos["c2"] == {"x"}
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -103,8 +103,8 @@ class TestGDCBarrierCompletada:
             "barrier_completada": True,
         })
         w = _crear_worker(tmp_path)
-        assert "c1" not in w._grupos
-        assert "c1" not in w._vistos
+        assert "c1" not in w.acumulador._grupos
+        assert "c1" not in w.acumulador._vistos
 
     def test_estado_con_barrier_completada_se_borra_del_disco(self, tmp_path):
         _escribir_estado(tmp_path, "c1", {"grupos": {}, "vistos": [], "barrier_completada": True})
@@ -120,7 +120,7 @@ class TestGDCBarrierCompletada:
             "barrier_completada": False,
         })
         w = _crear_worker(tmp_path)
-        assert "c1" in w._grupos
+        assert "c1" in w.acumulador._grupos
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -147,12 +147,12 @@ class TestGDCDedupPropio:
                 "payload": [["bank1", "acc1", "bank3", "acc3"]],
             }],
         }
-        import workers.group_distinct_counter.group_distinct_counter as mod
+        import workers.contador_distinto.contador_distinto as mod
         with patch.object(mod, "BASE_DIR", str(tmp_path)):
             w.procesar_payload("q4_to_sumador_1", "c1", payload, json.dumps(payload).encode(), ack, nack)
 
         # el grupo sigue con solo 1 valor (no se agregó bank3/acc3)
-        assert len(w._grupos["c1"][("bank1", "acc1")]) == 1
+        assert len(w.acumulador._grupos["c1"][("bank1", "acc1")]) == 1
         ack.assert_called_once()
         nack.assert_not_called()
 
@@ -172,9 +172,9 @@ class TestGDCDedupPropio:
                 "payload": [["bank1", "acc1", "bank3", "acc3"]],
             }],
         }
-        import workers.group_distinct_counter.group_distinct_counter as mod
+        import workers.contador_distinto.contador_distinto as mod
         with patch.object(mod, "BASE_DIR", str(tmp_path)):
             w.procesar_payload("q4_to_sumador_1", "c1", payload, json.dumps(payload).encode(), MagicMock(), MagicMock())
 
-        assert ("bank3", "acc3") in w._grupos["c1"][("bank1", "acc1")]
-        assert "req-nuevo" in w._vistos["c1"]
+        assert ("bank3", "acc3") in w.acumulador._grupos["c1"][("bank1", "acc1")]
+        assert "req-nuevo" in w.acumulador._vistos["c1"]
