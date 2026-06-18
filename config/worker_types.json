@@ -5,8 +5,8 @@
   "filtro": {
     "dockerfile": "workers/filtro/Dockerfile"
   },
-  "converter": {
-    "dockerfile": "workers/converter/Dockerfile"
+  "convertidor": {
+    "dockerfile": "workers/convertidor/Dockerfile"
   },
   "counter": {
     "dockerfile": "workers/counter/Dockerfile"

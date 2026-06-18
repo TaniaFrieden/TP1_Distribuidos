@@ -1877,7 +1877,7 @@ services:
   q5_converter_01:
     build:
       context: ./src
-      dockerfile: workers/converter/Dockerfile
+      dockerfile: workers/convertidor/Dockerfile
     container_name: q5_converter_01
     restart: always
     depends_on:
@@ -1902,8 +1902,8 @@ services:
       HEARTBEAT_INTERVAL_SECONDS: '5'
       LOG_LEVEL: INFO
       LOG_FILE: /app/logs/q5_converter_01.txt
-      START_DATE: '2022-09-01'
-      END_DATE: '2022-09-05'
+      FECHA_INICIO: '2022-09-01'
+      FECHA_FIN: '2022-09-05'
       PREFETCH_COUNT: '50'
       CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
       CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
@@ -1911,7 +1911,7 @@ services:
   q5_converter_02:
     build:
       context: ./src
-      dockerfile: workers/converter/Dockerfile
+      dockerfile: workers/convertidor/Dockerfile
     container_name: q5_converter_02
     restart: always
     depends_on:
@@ -1936,8 +1936,8 @@ services:
       HEARTBEAT_INTERVAL_SECONDS: '5'
       LOG_LEVEL: INFO
       LOG_FILE: /app/logs/q5_converter_02.txt
-      START_DATE: '2022-09-01'
-      END_DATE: '2022-09-05'
+      FECHA_INICIO: '2022-09-01'
+      FECHA_FIN: '2022-09-05'
       PREFETCH_COUNT: '50'
       CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
       CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}

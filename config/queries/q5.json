@@ -35,14 +35,14 @@
       }
     },
     {
-      "type": "converter",
+      "type": "convertidor",
       "prefix": "q5_converter",
       "replicas": "$CANT_Q5_CONVERTER",
       "input_queue": "q5_format_to_convert",
       "output_queue": "q5_filtered",
       "extra_env": {
-        "START_DATE": "2022-09-01",
-        "END_DATE": "2022-09-05"
+        "FECHA_INICIO": "2022-09-01",
+        "FECHA_FIN": "2022-09-05"
       }
     },
     {
