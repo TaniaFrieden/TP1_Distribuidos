@@ -60,8 +60,16 @@ class AgregadorBancarioWorker(BaseWorker):
             if not saved_state:
                 continue
 
-            trans_cerrado = saved_state.get("transacciones_cerrado", False)
-            bancos_cerrado = saved_state.get("bancos_cerrado", False)
+            tx_eof_count = saved_state.get("tx_eof_count", 0)
+            bank_eof_count = saved_state.get("bank_eof_count", 0)
+            # Compatibilidad con estado antiguo que usaba booleanos
+            if tx_eof_count == 0 and saved_state.get("transacciones_cerrado", False):
+                tx_eof_count = self.shard_config.total_tx_upstream
+            if bank_eof_count == 0 and saved_state.get("bancos_cerrado", False):
+                bank_eof_count = self.shard_config.total_bank_upstream
+
+            trans_cerrado = tx_eof_count >= self.shard_config.total_tx_upstream
+            bancos_cerrado = bank_eof_count >= self.shard_config.total_bank_upstream
             barrier_completada = saved_state.get("barrier_completada", False)
             eof_hex = saved_state.get("eof_mensaje_bytes_hex")
 
@@ -76,8 +84,8 @@ class AgregadorBancarioWorker(BaseWorker):
                 self.aggregator_state[client_id] = saved_state.get("bancos", {})
                 self._processed_request_ids[client_id] = set(saved_state.get("processed_request_ids", []))
                 self.eof_state[client_id] = {
-                    "transacciones_cerrado": trans_cerrado,
-                    "bancos_cerrado": bancos_cerrado,
+                    "tx_eof_count": tx_eof_count,
+                    "bank_eof_count": bank_eof_count,
                     "eof_mensaje": bytes.fromhex(eof_hex) if eof_hex else None,
                     "flush_iniciado": saved_state.get("flush_iniciado", False),
                     "barrier_completada": False,
@@ -93,15 +101,17 @@ class AgregadorBancarioWorker(BaseWorker):
                     self._barreras_para_iniciar.append((client_id, self.eof_state[client_id]["eof_mensaje"]))
                     logger.info(f"[Recuperación] Cliente {client_id}: barrera pendiente, se iniciará al arrancar.")
                 else:
-                    logger.info(f"[Recuperación] Estado parcial cargado para cliente {client_id}.")
+                    logger.info(f"[Recuperación] Estado parcial cargado para cliente {client_id} "
+                                f"(tx_eof_count={tx_eof_count}/{self.shard_config.total_tx_upstream}, "
+                                f"bank_eof_count={bank_eof_count}/{self.shard_config.total_bank_upstream}).")
 
     def _build_serializable_state(self, client_id: str) -> dict:
         current_eof_state = self.eof_state.get(client_id, {})
         eof_msg = current_eof_state.get("eof_mensaje")
         return {
             "client_id": client_id,
-            "transacciones_cerrado": current_eof_state.get("transacciones_cerrado", False),
-            "bancos_cerrado": current_eof_state.get("bancos_cerrado", False),
+            "tx_eof_count": current_eof_state.get("tx_eof_count", 0),
+            "bank_eof_count": current_eof_state.get("bank_eof_count", 0),
             "eof_mensaje_bytes_hex": eof_msg.hex() if eof_msg else None,
             "flush_iniciado": current_eof_state.get("flush_iniciado", False),
             "barrier_completada": current_eof_state.get("barrier_completada", False),
@@ -173,8 +183,8 @@ class AgregadorBancarioWorker(BaseWorker):
         with client_lock:
             if client_id not in self.eof_state:
                 self.eof_state[client_id] = {
-                    "transacciones_cerrado": False,
-                    "bancos_cerrado": False,
+                    "tx_eof_count": 0,
+                    "bank_eof_count": 0,
                     "eof_mensaje": None,
                     "flush_iniciado": False,
                     "barrier_completada": False,
@@ -186,11 +196,16 @@ class AgregadorBancarioWorker(BaseWorker):
                 state["eof_mensaje"] = mensaje_original
 
             if "transactions" in queue_name:
-                logger.info(f"[BankShard] EOF Transacciones recibido para {client_id}.")
-                state["transacciones_cerrado"] = True
+                state["tx_eof_count"] += 1
+                logger.info(f"[BankShard] EOF Transacciones recibido para {client_id} "
+                            f"({state['tx_eof_count']}/{self.shard_config.total_tx_upstream}).")
             elif "banks" in queue_name:
-                logger.info(f"[BankShard] EOF Bancos recibido para {client_id}.")
-                state["bancos_cerrado"] = True
+                state["bank_eof_count"] += 1
+                logger.info(f"[BankShard] EOF Bancos recibido para {client_id} "
+                            f"({state['bank_eof_count']}/{self.shard_config.total_bank_upstream}).")
+
+            trans_cerrado = state["tx_eof_count"] >= self.shard_config.total_tx_upstream
+            bancos_cerrado = state["bank_eof_count"] >= self.shard_config.total_bank_upstream
 
             persistidor = self._get_persistidor(client_id)
             persistidor.guardar(self._build_serializable_state(client_id))
@@ -199,7 +214,7 @@ class AgregadorBancarioWorker(BaseWorker):
                 pending_ack()
             self._pending_acks.pop(client_id, None)
 
-            if state["transacciones_cerrado"] and state["bancos_cerrado"] and not state["flush_iniciado"]:
+            if trans_cerrado and bancos_cerrado and not state["flush_iniciado"]:
                 logger.info(f"[BankShard] Ambas colas cerradas para {client_id}. Solicitando barrera de flush.")
 
                 if os.environ.get("CRASH_PRE_BARRERA") == "true":

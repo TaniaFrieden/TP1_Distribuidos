@@ -45,6 +45,16 @@ class ProjectionWorker(BaseWorker):
             logger.error(f"Error proyectando payload: {e}", exc_info=True)
             nack()
 
+    def al_completar_cliente(self, client_id: str):
+        # Cada worker envía su propio EOF por su propia conexión TCP, garantizando
+        # que sus datos lleguen a RabbitMQ antes que este EOF (ordering por conexión).
+        eof_sintetico = json.dumps({
+            "client_id": client_id,
+            "EOF": True,
+            "request_id": f"_peof_{self.config.node_id}_{client_id[:8]}"
+        }).encode('utf-8')
+        self._enviar(eof_sintetico)
+
     def al_cerrar(self):
         logger.info("ProjectionWorker apagado.")
 

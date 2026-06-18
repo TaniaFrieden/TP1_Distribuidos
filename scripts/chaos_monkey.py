@@ -39,13 +39,15 @@ def run_chaos_monkey(intervalo_min=10, intervalo_max=20, filtros=None):
             contenedores = []
             for _ in range(3):
                 try:
+                    client = docker.from_env(timeout=10)
                     contenedores = client.containers.list(filters={"status": "running"})
                     break
                 except docker.errors.NotFound:
                     time.sleep(0.1)
                 except Exception as e:
                     log(f"Error al listar contenedores: {e}")
-                    break
+                    time.sleep(2)
+                    continue
 
             if filtros:
                 # Modo apuntado: solo contenedores que matcheen algún filtro

@@ -62,13 +62,18 @@ def main():
     output_base.mkdir(exist_ok=True)
     directorio_anterior = None
 
+    pid = os.getpid()
+
     for indice in range(1, cantidad_iteraciones + 1):
         imprimir_titulo(f"Iteración {indice}/{cantidad_iteraciones}")
 
         if directorio_anterior:
             os.system(f"rm -rf '{directorio_anterior}' 2>/dev/null")
 
-        dirs_previos = {d for d in output_base.iterdir() if d.is_dir()}
+        # Directorio aislado por PID e iteración para evitar interferencia con otras instancias paralelas
+        run_dir = output_base / f"run_{pid}_{indice}"
+        run_dir.mkdir(exist_ok=True)
+        run_output_dir = f"output/run_{pid}_{indice}"
 
         try:
             subprocess.run(
@@ -78,7 +83,7 @@ def main():
                     "client",
                     f"TRANSACTIONS_FILE={transactions_file}",
                     f"ACCOUNTS_FILE={accounts_file}",
-                    f"OUTPUT_DIR={ACTUAL_TEMPLATE.split('/')[0]}"
+                    f"OUTPUT_DIR={run_output_dir}"
                 ],
                 check=True
             )
@@ -86,15 +91,15 @@ def main():
             print(f"\n[ERROR] El cliente falló con código de salida {e.returncode} en la iteración {indice}.")
             for query in queries:
                 fallas_por_query[query] += 1
+            os.system(f"rm -rf '{run_dir}' 2>/dev/null")
             continue
 
-        dirs_nuevos = {d for d in output_base.iterdir() if d.is_dir()} - dirs_previos
-        if dirs_nuevos:
-            client_output_dir = max(dirs_nuevos, key=lambda d: d.stat().st_mtime)
+        subdirs = [d for d in run_dir.iterdir() if d.is_dir()]
+        if subdirs:
+            client_output_dir = max(subdirs, key=lambda d: d.stat().st_mtime)
         else:
-            all_dirs = [d for d in output_base.iterdir() if d.is_dir()]
-            client_output_dir = max(all_dirs, key=lambda d: d.stat().st_mtime) if all_dirs else output_base
-        directorio_anterior = client_output_dir
+            client_output_dir = run_dir
+        directorio_anterior = run_dir
 
         for query in queries:
             actual_csv = client_output_dir / f"q{query}_solucion.csv"
