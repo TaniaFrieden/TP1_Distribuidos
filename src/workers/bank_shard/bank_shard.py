@@ -1,21 +1,20 @@
-import logging
 import json
 import threading
 import os
-from base.base import BaseWorker
+from base.worker_base import WorkerBase
 from common.sharding import normalizar_valor_hash
-from common.logging_setup import setup_logging
+from common.logger import Logger, obtener_logger
 from common.persistencia import PersistidorEstado
 from bank_shard_config import ShardConfig
 from processor import PayloadProcessor
 
-logger = logging.getLogger(__name__)
+logger = obtener_logger(__name__)
 
 
 INTERVALO_PERSISTENCIA = 500
 
 
-class AgregadorBancarioWorker(BaseWorker):
+class AgregadorBancarioWorker(WorkerBase):
     def __init__(self):
         super().__init__()
         self.aggregator_state = {}
@@ -27,7 +26,7 @@ class AgregadorBancarioWorker(BaseWorker):
         self._mensajes_desde_flush = {}
         self._pending_acks = {}
 
-        self.shard_config = ShardConfig(self.config.node_id)
+        self.shard_config = ShardConfig(self.configuracion.id_nodo)
         self.processor = PayloadProcessor()
 
         self._recover_state_from_disk()
@@ -88,8 +87,7 @@ class AgregadorBancarioWorker(BaseWorker):
                     # Forzamos flush_iniciado=True en memoria para que el EOF reenviado no dispare
                     # un segundo iniciar_barrera() cuando llegue a interceptar_eof.
                     self.eof_state[client_id]["flush_iniciado"] = True
-                    with self.coordinator._coordinacion_lock:
-                        self.coordinator._local_eof_completed.add(client_id)
+                    self.coordinador.marcar_eof_local_completo(client_id)
                     self._barreras_para_iniciar.append((client_id, self.eof_state[client_id]["eof_mensaje"]))
                     logger.info(f"[Recuperación] Cliente {client_id}: barrera pendiente, se iniciará al arrancar.")
                 else:
@@ -217,14 +215,14 @@ class AgregadorBancarioWorker(BaseWorker):
                 barrier_message = state["eof_mensaje"]
 
         if trigger_flush:
-            self.coordinator.iniciar_barrera(client_id, barrier_message)
+            self.coordinador.iniciar_barrera(client_id, barrier_message)
 
         return True
 
     def al_iniciar_post_arranque(self):
         for client_id, eof_mensaje in self._barreras_para_iniciar:
             logger.info(f"[BankShard] Iniciando barrera diferida para {client_id} post-recovery.")
-            self.coordinator.iniciar_barrera(client_id, eof_mensaje)
+            self.coordinador.iniciar_barrera(client_id, eof_mensaje)
         self._barreras_para_iniciar.clear()
 
     def al_completar_cliente(self, client_id: str):
@@ -260,11 +258,11 @@ class AgregadorBancarioWorker(BaseWorker):
                         ]
                     }
                     mensaje_bytes = json.dumps(batch_payload).encode('utf-8')
-                    self._thread_local.current_request_id = f"bank_shard_output:{client_id}:{self.config.node_id}"
+                    self._hilo_local.id_solicitud_actual = f"bank_shard_output:{client_id}:{self.configuracion.id_nodo}"
                     try:
                         self._enviar(mensaje_bytes, payload=batch_payload)
                     finally:
-                        self._thread_local.current_request_id = None
+                        self._hilo_local.id_solicitud_actual = None
 
                 logger.info(f"[BARRERA CONTROL] Envío finalizado con éxito para cliente {client_id}.")
                 del self.aggregator_state[client_id]
@@ -303,7 +301,7 @@ class AgregadorBancarioWorker(BaseWorker):
 
 
 def __main__():
-    setup_logging("bank_shard")
+    Logger.configurar("bank_shard")
     worker = AgregadorBancarioWorker()
     worker.iniciar()
 

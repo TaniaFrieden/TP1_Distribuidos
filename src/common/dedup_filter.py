@@ -1,8 +1,8 @@
 import threading
-import logging
+from common.logger import obtener_logger
 from common.persistencia import PersistidorEstado, TAMANIO_BATCH_PERSISTENCIA
 
-logger = logging.getLogger(__name__)
+logger = obtener_logger(__name__)
 
 
 class DedupFilter:
@@ -25,7 +25,7 @@ class DedupFilter:
         for client_id, ids in estado.items():
             self._seen[client_id] = set(ids)
         if self._seen:
-            logger.info(f"[DedupFilter] Recuperados IDs procesados de {len(self._seen)} clientes.")
+            logger.info(f"Recuperados IDs procesados de {len(self._seen)} clientes.")
 
     def _persistir(self):
         self._persistidor.guardar({

@@ -1,9 +1,9 @@
-import logging
+from common.logger import obtener_logger
 import requests
 from datetime import date, timedelta
 from common.constantes_protocolo import URL_API_FRANKFURTER
 
-logger = logging.getLogger(__name__)
+logger = obtener_logger(__name__)
 
 class ClienteCotizaciones:
     def __init__(self, fecha_inicio: str, fecha_fin: str):

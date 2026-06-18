@@ -1,18 +1,17 @@
-import logging
 import json
 import threading
 import os
 
-from base import BaseWorker
-from common.logging_setup import setup_logging
+from base import WorkerBase
+from common.logger import Logger, obtener_logger
 from common.persistencia import PersistidorEstado, TAMANIO_BATCH_PERSISTENCIA
 
-logger = logging.getLogger(__name__)
+logger = obtener_logger(__name__)
 
 BASE_DIR = "/app/volumen"
 
 
-class JoinerQ4Worker(BaseWorker):
+class JoinerQ4Worker(WorkerBase):
     """
     Box 2 (Gather join): sharded por B = (to_bank, to_account) del scatter /
                                           (From Bank, Account) de las transacciones.
@@ -39,13 +38,13 @@ class JoinerQ4Worker(BaseWorker):
         self._recover_state_from_disk()
 
     def _nombre_nodo(self, client_id: str) -> str:
-        return f"joiner_q4_{self.config.node_id}_{client_id}"
+        return f"joiner_q4_{self.configuracion.id_nodo}_{client_id}"
 
     def _recover_state_from_disk(self):
         if not os.path.exists(BASE_DIR):
             logger.info(f"[JoinerQ4] Directorio {BASE_DIR} no existe. Arrancando limpio.")
             return
-        prefijo = f"joiner_q4_{self.config.node_id}_"
+        prefijo = f"joiner_q4_{self.configuracion.id_nodo}_"
         carpetas = [c for c in os.listdir(BASE_DIR) if c.startswith(prefijo)]
         if not carpetas:
             logger.info(f"[JoinerQ4] Sin estado previo en disco. Arrancando limpio.")
@@ -260,7 +259,7 @@ class JoinerQ4Worker(BaseWorker):
 
 
 def main():
-    setup_logging("joiner_q4")
+    Logger.configurar("joiner_q4")
     JoinerQ4Worker().iniciar()
 
 

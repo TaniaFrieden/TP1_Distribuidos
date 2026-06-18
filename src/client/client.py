@@ -7,13 +7,13 @@ import uuid
 import time
 import json
 from common import message_protocol
-from common.logging_setup import setup_logging
+from common.logger import Logger
 from config import SERVER_HOST, SERVER_PORT, TRANSACTIONS_FILE, ACCOUNTS_FILE
 from receiver import escuchar_respuesta
 from sender import enviar_archivo
 
 def main():
-    setup_logging("client")
+    Logger.configurar("client")
     inicio_cliente = time.perf_counter()
 
     sock = _conectar_socket()

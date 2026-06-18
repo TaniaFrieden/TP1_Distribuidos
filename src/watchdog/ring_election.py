@@ -1,5 +1,5 @@
 import json
-import logging
+from common.logger import obtener_logger
 import random
 import threading
 import time
@@ -10,7 +10,7 @@ from common.middleware.middleware_rabbitmq import (
     MessageMiddlewareQueueRabbitMQ,
 )
 
-logger = logging.getLogger(__name__)
+logger = obtener_logger(__name__)
 
 LEADER_HB_EXCHANGE = "heartbeat.watchdog"
 

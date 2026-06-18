@@ -1,6 +1,6 @@
 
 import os
-import logging
+from common.logger import obtener_logger
 import random
 import socket
 import time
@@ -28,7 +28,7 @@ _ERRORES_TRANSIENTES = tuple(filter(None, [
     getattr(pika.exceptions, "AMQPConnectionWorkflowFailed", None),
 ]))
 
-logger = logging.getLogger(__name__)
+logger = obtener_logger(__name__)
 
 def handle_pika_errors(action_name):
     """Decorador para atrapar excepciones de Pika sin repetir código."""

@@ -1,18 +1,17 @@
 import socket
 import threading
-import logging
 import signal
 import sys
 from config import GatewayConfig
 from state import GatewayState
 from backend import BackendListener
 from client_handler import ClientHandler
-from common.logging_setup import setup_logging
+from common.logger import Logger, obtener_logger
 
-logger = logging.getLogger(__name__)
+logger = obtener_logger(__name__)
 
 def main():
-    setup_logging("gateway")
+    Logger.configurar("gateway")
 
     config = GatewayConfig()
     state = GatewayState()

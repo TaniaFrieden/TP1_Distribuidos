@@ -1,14 +1,13 @@
-import logging
 import signal
 
-from common.logging_setup import setup_logging
+from common.logger import Logger, obtener_logger
 from actuador import Actuador
 
-logger = logging.getLogger(__name__)
+logger = obtener_logger(__name__)
 
 
 def main():
-    setup_logging("actuador")
+    Logger.configurar("actuador")
 
     actuador = Actuador()
 

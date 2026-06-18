@@ -1,15 +1,14 @@
-import logging
 import json
 
-from base.base import BaseWorker
-from common.logging_setup import setup_logging
+from base.worker_base import WorkerBase
+from common.logger import Logger, obtener_logger
 from projection_config import ProjectionConfig
 from processor import ProjectionProcessor
 
-logger = logging.getLogger(__name__)
+logger = obtener_logger(__name__)
 
 
-class ProjectionWorker(BaseWorker):
+class ProjectionWorker(WorkerBase):
     def __init__(self):
         super().__init__()
         self.projection_config = ProjectionConfig()
@@ -50,7 +49,7 @@ class ProjectionWorker(BaseWorker):
 
 
 def main():
-    setup_logging("projection")
+    Logger.configurar("projection")
     ProjectionWorker().iniciar()
 
 

@@ -1,9 +1,9 @@
 import os
 import json
-import logging
+from common.logger import obtener_logger
 import tempfile
 
-logger = logging.getLogger(__name__)
+logger = obtener_logger(__name__)
 
 TAMANIO_BATCH_PERSISTENCIA = 50
 

@@ -1,6 +1,5 @@
-import logging
-from base.base import BaseWorker
-from common.logging_setup import setup_logging
+from base.worker_base import WorkerBase
+from common.logger import Logger, obtener_logger
 from common.message_protocol.internal import ParseadorMensajes
 from common.constantes_protocolo import (
     ID_CLIENTE,
@@ -12,9 +11,9 @@ from cliente_cotizaciones import ClienteCotizaciones
 from conversor_moneda import ConversorMoneda
 from procesador_lotes import ProcesadorLotesConvertidor
 
-logger = logging.getLogger(__name__)
+logger = obtener_logger(__name__)
 
-class WorkerConvertidorMonedas(BaseWorker):
+class WorkerConvertidorMonedas(WorkerBase):
     def __init__(self):
         super().__init__()
         self.config_convertidor = ConfigConvertidor()
@@ -55,7 +54,7 @@ class WorkerConvertidorMonedas(BaseWorker):
         logger.info("Convertidor apagado.")
 
 def main():
-    setup_logging("converter")
+    Logger.configurar("converter")
     WorkerConvertidorMonedas().iniciar()
 
 if __name__ == "__main__":

@@ -1,17 +1,16 @@
-import logging
 import os
 import json
 import threading
-from base import BaseWorker
-from common.logging_setup import setup_logging
+from base import WorkerBase
+from common.logger import Logger, obtener_logger
 from common.persistencia import PersistidorEstado
 
-logger = logging.getLogger(__name__)
+logger = obtener_logger(__name__)
 
 BASE_DIR = "/app/volumen"
 
 
-class CounterWorker(BaseWorker):
+class CounterWorker(WorkerBase):
 
     def __init__(self):
         super().__init__()
@@ -21,13 +20,13 @@ class CounterWorker(BaseWorker):
         self._recover_state_from_disk()
 
     def _nombre_nodo(self, client_id: str) -> str:
-        return f"counter_{self.config.node_id}_{client_id}"
+        return f"counter_{self.configuracion.id_nodo}_{client_id}"
 
     def _recover_state_from_disk(self):
         if not os.path.exists(BASE_DIR):
             logger.info(f"[Counter] Directorio de persistencia {BASE_DIR} no existe. Arrancando limpio.")
             return
-        prefijo = f"counter_{self.config.node_id}_"
+        prefijo = f"counter_{self.configuracion.id_nodo}_"
         carpetas_encontradas = [c for c in os.listdir(BASE_DIR) if c.startswith(prefijo)]
         if not carpetas_encontradas:
             logger.info(f"[Counter] Sin estado previo en disco (prefijo={prefijo}). Arrancando limpio.")
@@ -139,7 +138,7 @@ class CounterWorker(BaseWorker):
 
 
 def main():
-    setup_logging("counter")
+    Logger.configurar("counter")
     CounterWorker().iniciar()
 
 

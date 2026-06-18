@@ -1,15 +1,14 @@
-import logging
-from base.base import BaseWorker
-from common.logging_setup import setup_logging
+from base.worker_base import WorkerBase
+from common.logger import Logger, obtener_logger
 from config_filtro import ConfigFiltro
 from procesador_lotes import ProcesadorLotes
 from reglas import FabricaReglas
 from common.constantes_protocolo import FIN_DE_ARCHIVO, LOTES
 from common.message_protocol.internal import ParseadorMensajes
 
-logger = logging.getLogger(__name__)
+logger = obtener_logger(__name__)
 
-class GenericFilterWorker(BaseWorker):
+class GenericFilterWorker(WorkerBase):
     def __init__(self):
         super().__init__()
         self.config_filtro = ConfigFiltro()
@@ -53,7 +52,7 @@ class GenericFilterWorker(BaseWorker):
         logger.info("Filtro genérico apagado.")
 
 def main():
-    setup_logging("filter")
+    Logger.configurar("filter")
     worker = GenericFilterWorker()
     worker.iniciar()
 
