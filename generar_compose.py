@@ -99,7 +99,7 @@ def _generar_servicio(node, worker_config, workers_config, compose_data):
         else:
             env.setdefault('PREFETCH_COUNT', '50')
 
-        if worker_type == 'counter':
+        if worker_type == 'contador':
             env['CRASH_AFTER_PERSIST'] = '${CRASH_AFTER_PERSIST:-false}'
             
         env['CRASH_BEFORE_FINISHED_CONFIRMATION'] = '${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}'

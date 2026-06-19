@@ -40,14 +40,20 @@ def _escribir_cache(tmp_path, client_id, lineas):
 
 
 def _crear_worker(tmp_path, extra_env=None):
-    import workers.format_shard.format_shard as mod
+    import format_shard as mod
+    import config_format
     env = {**BASE_ENV, **(extra_env or {})}
+
+    def patched_init(self, nid):
+        self.base_dir = str(tmp_path)
+        self.prefijo_nodo = NODE_PREFIX
+
     with patch.dict("os.environ", env), \
          patch("common.middleware.MessageMiddlewareQueueRabbitMQ"), \
          patch("common.middleware.FanoutQueueRabbitMQ"), \
          patch("common.middleware.FanoutExchangeRabbitMQ"), \
-         patch.object(mod, "BASE_DIR", str(tmp_path)):
-        w = mod.FormatShardWorker()
+         patch.object(config_format.ConfigFormateador, "__init__", patched_init):
+        w = mod.FormateadorShardWorker()
     return w
 
 
@@ -64,10 +70,10 @@ class TestFormatShardRecovery:
             "promedios_listos": True,
             "promedios": {"CreditCard": 150.0},
             "datos_temprano": {"CreditCard": {"suma": 15000, "count": 100}},
-            "eof_mensaje_bytes_hex": None,
+            "mensaje_eof_hex": None,
             "cache_procesado": False,
-            "barrier_completada": False,
-            "processed_request_ids": ["r1", "r2"],
+            "barrera_completada": False,
+            "ids_procesados": ["r1", "r2"],
         })
         w = _crear_worker(tmp_path)
 
@@ -76,7 +82,7 @@ class TestFormatShardRecovery:
         assert estado["temprano_cerrado"] is True
         assert estado["tardio_cerrado"] is False
         assert estado["promedios"]["CreditCard"] == 150.0
-        assert estado["processed_request_ids"] == {"r1", "r2"}
+        assert estado["ids_procesados"] == {"r1", "r2"}
 
     def test_arranca_limpio_sin_estado_en_disco(self, tmp_path):
         w = _crear_worker(tmp_path)
@@ -86,43 +92,43 @@ class TestFormatShardRecovery:
         _escribir_estado(tmp_path, "c1", {
             "temprano_cerrado": True, "tardio_cerrado": False,
             "promedios_listos": False, "promedios": {},
-            "datos_temprano": {}, "eof_mensaje_bytes_hex": None,
-            "cache_procesado": False, "barrier_completada": False,
-            "processed_request_ids": [],
+            "datos_temprano": {}, "mensaje_eof_hex": None,
+            "cache_procesado": False, "barrera_completada": False,
+            "ids_procesados": [],
         })
         _escribir_estado(tmp_path, "c2", {
             "temprano_cerrado": False, "tardio_cerrado": True,
             "promedios_listos": False, "promedios": {},
-            "datos_temprano": {}, "eof_mensaje_bytes_hex": None,
-            "cache_procesado": False, "barrier_completada": False,
-            "processed_request_ids": ["x"],
+            "datos_temprano": {}, "mensaje_eof_hex": None,
+            "cache_procesado": False, "barrera_completada": False,
+            "ids_procesados": ["x"],
         })
         w = _crear_worker(tmp_path)
 
         assert w.estado_clientes["c1"]["temprano_cerrado"] is True
         assert w.estado_clientes["c2"]["tardio_cerrado"] is True
-        assert w.estado_clientes["c2"]["processed_request_ids"] == {"x"}
+        assert w.estado_clientes["c2"]["ids_procesados"] == {"x"}
 
     def test_eof_mensaje_se_recupera_como_bytes(self, tmp_path):
         eof_msg = b'{"client_id": "c1", "eof": true}'
         _escribir_estado(tmp_path, "c1", {
             "temprano_cerrado": True, "tardio_cerrado": False,
             "promedios_listos": False, "promedios": {},
-            "datos_temprano": {}, "eof_mensaje_bytes_hex": eof_msg.hex(),
-            "cache_procesado": False, "barrier_completada": False,
-            "processed_request_ids": [],
+            "datos_temprano": {}, "mensaje_eof_hex": eof_msg.hex(),
+            "cache_procesado": False, "barrera_completada": False,
+            "ids_procesados": [],
         })
         w = _crear_worker(tmp_path)
 
-        assert w.estado_clientes["c1"]["eof_mensaje"] == eof_msg
+        assert w.estado_clientes["c1"]["mensaje_eof"] == eof_msg
 
     def test_request_ids_de_cache_jsonl_se_agregan_en_recovery(self, tmp_path):
         _escribir_estado(tmp_path, "c1", {
             "temprano_cerrado": False, "tardio_cerrado": False,
             "promedios_listos": False, "promedios": {},
-            "datos_temprano": {}, "eof_mensaje_bytes_hex": None,
-            "cache_procesado": False, "barrier_completada": False,
-            "processed_request_ids": ["r1"],
+            "datos_temprano": {}, "mensaje_eof_hex": None,
+            "cache_procesado": False, "barrera_completada": False,
+            "ids_procesados": ["r1"],
         })
         _escribir_cache(tmp_path, "c1", [
             {"request_id": "r2", "schema": ["col"], "records": [["v"]]},
@@ -130,7 +136,7 @@ class TestFormatShardRecovery:
         ])
         w = _crear_worker(tmp_path)
 
-        assert w.estado_clientes["c1"]["processed_request_ids"] == {"r1", "r2", "r3"}
+        assert w.estado_clientes["c1"]["ids_procesados"] == {"r1", "r2", "r3"}
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -143,9 +149,9 @@ class TestFormatShardBarrierCompletada:
         _escribir_estado(tmp_path, "c1", {
             "temprano_cerrado": True, "tardio_cerrado": True,
             "promedios_listos": True, "promedios": {"CC": 100.0},
-            "datos_temprano": {}, "eof_mensaje_bytes_hex": None,
-            "cache_procesado": True, "barrier_completada": True,
-            "processed_request_ids": ["r1"],
+            "datos_temprano": {}, "mensaje_eof_hex": None,
+            "cache_procesado": True, "barrera_completada": True,
+            "ids_procesados": ["r1"],
         })
         w = _crear_worker(tmp_path)
 
@@ -155,9 +161,9 @@ class TestFormatShardBarrierCompletada:
         _escribir_estado(tmp_path, "c1", {
             "temprano_cerrado": True, "tardio_cerrado": True,
             "promedios_listos": True, "promedios": {},
-            "datos_temprano": {}, "eof_mensaje_bytes_hex": None,
-            "cache_procesado": True, "barrier_completada": True,
-            "processed_request_ids": [],
+            "datos_temprano": {}, "mensaje_eof_hex": None,
+            "cache_procesado": True, "barrera_completada": True,
+            "ids_procesados": [],
         })
         _crear_worker(tmp_path)
 
@@ -168,9 +174,9 @@ class TestFormatShardBarrierCompletada:
         _escribir_estado(tmp_path, "c1", {
             "temprano_cerrado": True, "tardio_cerrado": False,
             "promedios_listos": False, "promedios": {},
-            "datos_temprano": {}, "eof_mensaje_bytes_hex": None,
-            "cache_procesado": False, "barrier_completada": False,
-            "processed_request_ids": [],
+            "datos_temprano": {}, "mensaje_eof_hex": None,
+            "cache_procesado": False, "barrera_completada": False,
+            "ids_procesados": [],
         })
         w = _crear_worker(tmp_path)
 
@@ -188,9 +194,9 @@ class TestFormatShardDedupPropio:
             "temprano_cerrado": False, "tardio_cerrado": False,
             "promedios_listos": False, "promedios": {},
             "datos_temprano": {"CC": {"suma": 10000, "count": 1}},
-            "eof_mensaje_bytes_hex": None,
-            "cache_procesado": False, "barrier_completada": False,
-            "processed_request_ids": ["req-dup"],
+            "mensaje_eof_hex": None,
+            "cache_procesado": False, "barrera_completada": False,
+            "ids_procesados": ["req-dup"],
         })
         w = _crear_worker(tmp_path)
 
@@ -201,9 +207,7 @@ class TestFormatShardDedupPropio:
             "request_id": "req-dup",
             "batches": [{"header": {"schema": ["Payment Format", "Amount Paid"], "client_id": "c1", "count": 1}, "payload": [["CC", 999.0]]}],
         }
-        import workers.format_shard.format_shard as mod
-        with patch.object(mod, "BASE_DIR", str(tmp_path)):
-            w.procesar_payload("q3_temprano_1", "c1", payload, json.dumps(payload).encode(), ack, nack)
+        w.procesar_payload("q3_temprano_1", "c1", payload, json.dumps(payload).encode(), ack, nack)
 
         assert w.estado_clientes["c1"]["datos_temprano"]["CC"]["suma"] == 10000
         ack.assert_called_once()
@@ -214,9 +218,9 @@ class TestFormatShardDedupPropio:
             "temprano_cerrado": False, "tardio_cerrado": False,
             "promedios_listos": False, "promedios": {},
             "datos_temprano": {"CC": {"suma": 10000, "count": 1}},
-            "eof_mensaje_bytes_hex": None,
-            "cache_procesado": False, "barrier_completada": False,
-            "processed_request_ids": [],
+            "mensaje_eof_hex": None,
+            "cache_procesado": False, "barrera_completada": False,
+            "ids_procesados": [],
         })
         w = _crear_worker(tmp_path)
 
@@ -225,11 +229,9 @@ class TestFormatShardDedupPropio:
             "request_id": "req-nuevo",
             "batches": [{"header": {"schema": ["Payment Format", "Amount Paid"], "client_id": "c1", "count": 1}, "payload": [["CC", 50.0]]}],
         }
-        import workers.format_shard.format_shard as mod
-        with patch.object(mod, "BASE_DIR", str(tmp_path)):
-            w.procesar_payload("q3_temprano_1", "c1", payload, json.dumps(payload).encode(), MagicMock(), MagicMock())
+        w.procesar_payload("q3_temprano_1", "c1", payload, json.dumps(payload).encode(), MagicMock(), MagicMock())
 
-        assert "req-nuevo" in w.estado_clientes["c1"]["processed_request_ids"]
+        assert "req-nuevo" in w.estado_clientes["c1"]["ids_procesados"]
         assert w.estado_clientes["c1"]["datos_temprano"]["CC"]["suma"] == 15000
 
     def test_request_id_duplicado_no_duplica_en_cache_tardio(self, tmp_path):
@@ -239,9 +241,9 @@ class TestFormatShardDedupPropio:
         _escribir_estado(tmp_path, "c1", {
             "temprano_cerrado": False, "tardio_cerrado": False,
             "promedios_listos": False, "promedios": {},
-            "datos_temprano": {}, "eof_mensaje_bytes_hex": None,
-            "cache_procesado": False, "barrier_completada": False,
-            "processed_request_ids": ["req-dup"],
+            "datos_temprano": {}, "mensaje_eof_hex": None,
+            "cache_procesado": False, "barrera_completada": False,
+            "ids_procesados": ["req-dup"],
         })
         w = _crear_worker(tmp_path)
 
@@ -251,9 +253,7 @@ class TestFormatShardDedupPropio:
             "request_id": "req-dup",
             "batches": [{"header": {"schema": ["From Bank", "Amount Paid", "Payment Format", "Account"], "client_id": "c1", "count": 1}, "payload": [["b1", 10.0, "CC", "acc1"]]}],
         }
-        import workers.format_shard.format_shard as mod
-        with patch.object(mod, "BASE_DIR", str(tmp_path)):
-            w.procesar_payload("q3_tardio_1", "c1", payload, json.dumps(payload).encode(), ack, MagicMock())
+        w.procesar_payload("q3_tardio_1", "c1", payload, json.dumps(payload).encode(), ack, MagicMock())
 
         ack.assert_called_once()
         cache_path = tmp_path / f"{NODE_PREFIX}_c1" / "cache_tardio.jsonl"
@@ -273,9 +273,9 @@ class TestFormatShardCaso7BarreraDiferida:
         _escribir_estado(tmp_path, "c1", {
             "temprano_cerrado": True, "tardio_cerrado": True,
             "promedios_listos": True, "promedios": {"CC": 100.0},
-            "datos_temprano": {}, "eof_mensaje_bytes_hex": eof_msg.hex(),
-            "cache_procesado": True, "barrier_completada": False,
-            "processed_request_ids": [],
+            "datos_temprano": {}, "mensaje_eof_hex": eof_msg.hex(),
+            "cache_procesado": True, "barrera_completada": False,
+            "ids_procesados": [],
         })
         w = _crear_worker(tmp_path)
 
@@ -287,9 +287,9 @@ class TestFormatShardCaso7BarreraDiferida:
         _escribir_estado(tmp_path, "c1", {
             "temprano_cerrado": True, "tardio_cerrado": True,
             "promedios_listos": True, "promedios": {},
-            "datos_temprano": {}, "eof_mensaje_bytes_hex": eof_msg.hex(),
-            "cache_procesado": True, "barrier_completada": False,
-            "processed_request_ids": [],
+            "datos_temprano": {}, "mensaje_eof_hex": eof_msg.hex(),
+            "cache_procesado": True, "barrera_completada": False,
+            "ids_procesados": [],
         })
         w = _crear_worker(tmp_path)
 
@@ -303,9 +303,9 @@ class TestFormatShardCaso7BarreraDiferida:
         _escribir_estado(tmp_path, "c1", {
             "temprano_cerrado": True, "tardio_cerrado": False,
             "promedios_listos": False, "promedios": {},
-            "datos_temprano": {}, "eof_mensaje_bytes_hex": None,
-            "cache_procesado": False, "barrier_completada": False,
-            "processed_request_ids": [],
+            "datos_temprano": {}, "mensaje_eof_hex": None,
+            "cache_procesado": False, "barrera_completada": False,
+            "ids_procesados": [],
         })
         w = _crear_worker(tmp_path)
 
@@ -315,9 +315,9 @@ class TestFormatShardCaso7BarreraDiferida:
         _escribir_estado(tmp_path, "c1", {
             "temprano_cerrado": True, "tardio_cerrado": True,
             "promedios_listos": True, "promedios": {},
-            "datos_temprano": {}, "eof_mensaje_bytes_hex": None,
-            "cache_procesado": False, "barrier_completada": False,
-            "processed_request_ids": [],
+            "datos_temprano": {}, "mensaje_eof_hex": None,
+            "cache_procesado": False, "barrera_completada": False,
+            "ids_procesados": [],
         })
         w = _crear_worker(tmp_path)
 

@@ -46,7 +46,7 @@
       }
     },
     {
-      "type": "counter",
+      "type": "contador",
       "prefix": "q5_counter",
       "replicas": "$CANT_Q5_COUNTER",
       "input_queue": "q5_filtered",

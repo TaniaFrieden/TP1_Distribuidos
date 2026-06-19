@@ -7,6 +7,6 @@ ENV PYTHONPATH=/app:/app/base
 
 COPY common ./common
 COPY workers/base ./base
-COPY workers/counter ./
+COPY workers/contador ./
 
-ENTRYPOINT ["python3", "counter.py"]
+ENTRYPOINT ["python3", "contador.py"]

@@ -1957,7 +1957,7 @@ services:
   q5_counter_01:
     build:
       context: ./src
-      dockerfile: workers/counter/Dockerfile
+      dockerfile: workers/contador/Dockerfile
     container_name: q5_counter_01
     restart: always
     depends_on:

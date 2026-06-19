@@ -1,6 +1,7 @@
 import os
 
 from base import WorkerBase
+from base.constantes import CLAVE_BARRERA_COMPLETADA
 from common.logger import Logger, obtener_logger
 from common.persistencia import TAMANIO_BATCH_PERSISTENCIA
 from common.constantes_protocolo import ID_SOLICITUD
@@ -36,12 +37,60 @@ class JoinerQ4Worker(WorkerBase):
         self._recuperar_estado()
         logger.info("[JoinerQ4] Iniciado.")
 
+<<<<<<< HEAD
     def _recuperar_estado(self):
         """Restaura el estado de todos los clientes desde disco al iniciar."""
         datos = self.persistencia.recuperar_todos()
         for client_id, (scatter, txns, vistos) in datos.items():
             with self.acumulador.lock:
                 self.acumulador.restaurar(client_id, scatter, txns, vistos)
+=======
+    def _nombre_nodo(self, client_id: str) -> str:
+        return f"joiner_q4_{self.configuracion.id_nodo}_{client_id}"
+
+    def _recover_state_from_disk(self):
+        if not os.path.exists(BASE_DIR):
+            logger.info(f"[JoinerQ4] Directorio {BASE_DIR} no existe. Arrancando limpio.")
+            return
+        prefijo = f"joiner_q4_{self.configuracion.id_nodo}_"
+        carpetas = [c for c in os.listdir(BASE_DIR) if c.startswith(prefijo)]
+        if not carpetas:
+            logger.info(f"[JoinerQ4] Sin estado previo en disco. Arrancando limpio.")
+            return
+        for carpeta in carpetas:
+            client_id = carpeta[len(prefijo):]
+            persistidor = PersistidorEstado(carpeta, base_dir=BASE_DIR)
+            estado = persistidor.cargar()
+            if not estado:
+                continue
+            if estado.get(CLAVE_BARRERA_COMPLETADA, False):
+                persistidor.borrar()
+                logger.info(f"[JoinerQ4] {CLAVE_BARRERA_COMPLETADA} detectada para client_id={client_id}. Limpiando remanente.")
+                continue
+            scatter = {k: [tuple(a) for a in v] for k, v in estado.get("scatter", {}).items()}
+            txns = {k: set(tuple(c) for c in v) for k, v in estado.get("txns", {}).items()}
+            with self._lock:
+                self._scatter[client_id] = scatter
+                self._txns[client_id] = txns
+                self._vistos[client_id] = set(estado.get("vistos", []))
+            logger.info(
+                f"[JoinerQ4] Recuperado estado para client_id={client_id}: "
+                f"scatter_keys={len(scatter)}, txns_keys={len(txns)}, vistos={len(self._vistos[client_id])}"
+            )
+
+    def _guardar_estado(self, client_id: str):
+        scatter_serial = {k: [list(a) for a in v] for k, v in self._scatter.get(client_id, {}).items()}
+        txns_serial = {k: [list(c) for c in v] for k, v in self._txns.get(client_id, {}).items()}
+        PersistidorEstado(self._nombre_nodo(client_id), base_dir=BASE_DIR).guardar({
+            "client_id": client_id,
+            "scatter": scatter_serial,
+            "txns": txns_serial,
+            "vistos": list(self._vistos.get(client_id, set())),
+        })
+
+    def _norm(self, v) -> str:
+        return str(v).strip().lstrip("0") or "0"
+>>>>>>> refactor
 
     def procesar_payload(self, queue_name: str, client_id: str, payload: dict,
                          mensaje_original: bytes, ack, nack):
@@ -115,8 +164,13 @@ class JoinerQ4Worker(WorkerBase):
                 logger.warning("[JoinerQ4] CRASH_AFTER_FLUSH — muriendo después del envío, antes de barrier_completada")
                 os._exit(1)
 
+<<<<<<< HEAD
         self.persistencia.marcar_barrera_completada(client_id)
         self.persistencia.borrar(client_id)
+=======
+        PersistidorEstado(self._nombre_nodo(client_id), base_dir=BASE_DIR).guardar({CLAVE_BARRERA_COMPLETADA: True})
+        PersistidorEstado(self._nombre_nodo(client_id), base_dir=BASE_DIR).borrar()
+>>>>>>> refactor
 
     def al_desconectar_cliente(self, client_id: str):
         """Descarta el estado del cliente sin emitir resultados."""

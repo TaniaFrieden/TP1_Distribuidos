@@ -2,7 +2,9 @@ import threading
 from common.logger import obtener_logger
 from common import middleware
 from common.message_protocol.internal import ParseadorMensajes
-from common.constantes_protocolo import TIPO_MENSAJE, ID_CLIENTE
+from common.constantes_protocolo import ID_CLIENTE
+from base.constantes import TIPO_MENSAJE
+
 
 logger = obtener_logger(__name__)
 

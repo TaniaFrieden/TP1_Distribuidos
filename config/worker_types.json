@@ -8,8 +8,8 @@
   "convertidor": {
     "dockerfile": "workers/convertidor/Dockerfile"
   },
-  "counter": {
-    "dockerfile": "workers/counter/Dockerfile"
+  "contador": {
+    "dockerfile": "workers/contador/Dockerfile"
   },
   "bank_shard": {
     "dockerfile": "workers/bank_shard/Dockerfile"
