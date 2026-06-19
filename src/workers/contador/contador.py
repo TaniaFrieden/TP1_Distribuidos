@@ -1,6 +1,6 @@
 from base.worker_base import WorkerBase
 from common.logger import Logger, obtener_logger
-from common.constantes_protocolo import ID_CLIENTE, LOTES, CABECERA, ESQUEMA, CANTIDAD, PAYLOAD
+from common.constantes_protocolo import ID_CLIENTE, LOTES, CABECERA, ESQUEMA, CANTIDAD, PAYLOAD, ID_SOLICITUD
 from common.message_protocol.internal import ParseadorMensajes
 from estado_conteo import EstadoConteo, calcular_cantidad
 from base.coordinacion.hooks import crear_hook_crash_despues_persistir, crear_hook_crash_despues_flush
@@ -35,8 +35,14 @@ class CounterWorker(WorkerBase):
     def procesar_payload(self, nombre_cola: str, client_id: str, payload: dict,
                          mensaje_original: bytes, ack, nack):
         try:
+            request_id = payload.get(ID_SOLICITUD)
             cantidad = calcular_cantidad(payload)
-            self.estado.incrementar(client_id, cantidad)
+            ya_procesado = self.estado.incrementar(client_id, cantidad, request_id)
+
+            if ya_procesado:
+                logger.info(f"Mensaje duplicado detectado localmente por persistencia: request_id={request_id}")
+                ack()
+                return
 
             if self._hook_post_persistir:
                 self._hook_post_persistir()
