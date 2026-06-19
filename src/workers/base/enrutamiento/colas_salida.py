@@ -59,23 +59,33 @@ class ColaSalidaSharded:
             id_worker: middleware.MessageMiddlewareQueueRabbitMQ(host_mom, f"{prefijo}_{id_worker}")
             for id_worker in range(1, self._total_workers + 1)
         }
+        self._mensajes_enviados_por_shard = {}
 
     def enviar(self, mensaje, payload, es_eof, client_id, id_solicitud_origen):
         tiene_lotes = LOTES in payload and not es_eof
         if tiene_lotes:
             self._enviar_lotes(payload, client_id, id_solicitud_origen)
         elif es_eof:
-            self._broadcast(mensaje)
+            self._broadcast(mensaje, client_id)
         else:
-            self._enviar_simple(mensaje, payload)
+            self._enviar_simple(mensaje, payload, client_id)
 
-    def _broadcast(self, mensaje):
-        for cola in self._colas.values():
-            cola.send(mensaje)
+    def _broadcast(self, mensaje, client_id):
+        payload = ParseadorMensajes.deserializar(mensaje)
+        for shard_id, cola in self._colas.items():
+            total_shard = self._mensajes_enviados_por_shard.get(client_id, {}).get(shard_id, 0)
+            payload["total_mensajes_enviados"] = total_shard
+            payload["request_id"] = f"{client_id}:{cola.queue_name}:{total_shard + 1}"
+            cola.send(ParseadorMensajes.serializar(payload))
 
-    def _enviar_simple(self, mensaje, payload):
+    def _enviar_simple(self, mensaje, payload, client_id):
         valor_hash = self._valor_hash_desde_payload(payload)
         id_shard = sharding.obtener_id_shard(valor_hash, self._total_workers)
+        if client_id:
+            self._mensajes_enviados_por_shard.setdefault(client_id, {})
+            self._mensajes_enviados_por_shard[client_id][id_shard] = (
+                self._mensajes_enviados_por_shard[client_id].get(id_shard, 0) + 1
+            )
         self._colas[id_shard].send(mensaje)
 
     def _enviar_lotes(self, payload, client_id, id_solicitud_origen):
@@ -108,6 +118,11 @@ class ColaSalidaSharded:
                     PAYLOAD: registros,
                 }],
             }
+            if client_id:
+                self._mensajes_enviados_por_shard.setdefault(client_id, {})
+                self._mensajes_enviados_por_shard[client_id][id_shard] = (
+                    self._mensajes_enviados_por_shard[client_id].get(id_shard, 0) + len(registros)
+                )
             self._colas[id_shard].send(ParseadorMensajes.serializar(payload_shard))
 
     def _valor_hash_desde_registro(self, esquema, registro):
@@ -166,20 +181,25 @@ class ColaSalidaCondicional:
             CasoCondicional(host_mom, caso)
             for caso in config_item[CONF_CASOS]
         ]
+        self._mensajes_enviados_por_destino = {}
 
     def enviar(self, mensaje, payload, es_eof, client_id, id_solicitud_origen):
         tiene_lotes = LOTES in payload and not es_eof
         if tiene_lotes:
             self._enviar_lotes(payload, client_id, id_solicitud_origen)
         elif es_eof:
-            self._broadcast(mensaje)
+            self._broadcast(mensaje, client_id)
         else:
             self._enviar_simple(mensaje, payload, client_id)
 
-    def _broadcast(self, mensaje):
+    def _broadcast(self, mensaje, client_id):
+        payload = ParseadorMensajes.deserializar(mensaje)
         for caso in self._casos:
-            for cola in caso.colas.values():
-                cola.send(mensaje)
+            for shard_id, cola in caso.colas.items():
+                total_cola = self._mensajes_enviados_por_destino.get(client_id, {}).get(cola.queue_name, 0)
+                payload["total_mensajes_enviados"] = total_cola
+                payload["request_id"] = f"{client_id}:{cola.queue_name}:{total_cola + 1}"
+                cola.send(ParseadorMensajes.serializar(payload))
 
     def _enviar_simple(self, mensaje, payload, client_id):
         valor_campo = str(payload.get(self._campo_condicion, ""))[:10]
@@ -188,6 +208,11 @@ class ColaSalidaCondicional:
                 continue
             valor_hash = payload.get(caso.campo_hash, "default")
             cola = caso.resolver_destino(valor_hash, client_id)
+            if client_id:
+                self._mensajes_enviados_por_destino.setdefault(client_id, {})
+                self._mensajes_enviados_por_destino[client_id][cola.queue_name] = (
+                    self._mensajes_enviados_por_destino[client_id].get(cola.queue_name, 0) + 1
+                )
             cola.send(mensaje)
             break
 
@@ -232,6 +257,11 @@ class ColaSalidaCondicional:
                     PAYLOAD: registros,
                 }],
             }
+            if client_id:
+                self._mensajes_enviados_por_destino.setdefault(client_id, {})
+                self._mensajes_enviados_por_destino[client_id][cola_destino.queue_name] = (
+                    self._mensajes_enviados_por_destino[client_id].get(cola_destino.queue_name, 0) + len(registros)
+                )
             cola_destino.send(ParseadorMensajes.serializar(payload_cola))
 
     def _resolver_destino_registro(self, valor_campo, esquema, registro, client_id):

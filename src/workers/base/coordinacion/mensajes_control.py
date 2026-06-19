@@ -18,13 +18,18 @@ def msg_eof_recibido(client_id, id_nodo):
     }
 
 
-def msg_worker_finalizado(client_id, originador, id_nodo):
-    return {
+def msg_worker_finalizado(client_id, originador, id_nodo, mensajes_procesados=None, mensajes_emitidos=None):
+    payload = {
         TIPO_MENSAJE: TIPO_WORKER_FINALIZADO,
         ID_CLIENTE: client_id,
         ORIGINADOR: originador,
         ID_WORKER: id_nodo,
     }
+    if mensajes_procesados is not None:
+        payload["mensajes_procesados_local"] = mensajes_procesados
+    if mensajes_emitidos is not None:
+        payload["mensajes_emitidos_local"] = mensajes_emitidos
+    return payload
 
 
 def msg_barrera_completa(client_id):

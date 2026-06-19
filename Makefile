@@ -56,34 +56,7 @@ install:
 	$(PIP) install -r requirements.txt
 
 test:
-	@echo "\n══════════════════════════════════════════"
-	@echo " worker_base"
-	@echo "══════════════════════════════════════════"
-	@PYTHONPATH=src/workers:src $(PYTHON) -m pytest test/common/worker_base/test_worker_base.py -v --tb=short --no-header -q || true
-	@echo "\n══════════════════════════════════════════"
-	@echo " filter"
-	@echo "══════════════════════════════════════════"
-	@PYTHONPATH=src/workers/filtro:src/workers:src $(PYTHON) -m pytest test/common/workers/test_filter.py -v --tb=short --no-header -q || true
-	@echo "\n══════════════════════════════════════════"
-	@echo " adder"
-	@echo "══════════════════════════════════════════"
-	@PYTHONPATH=src/workers/contador:src/workers:src $(PYTHON) -m pytest test/common/workers/test_add.py -v --tb=short --no-header -q || true
-	@echo "\n══════════════════════════════════════════"
-	@echo " aggregator"
-	@echo "══════════════════════════════════════════"
-	@PYTHONPATH=src/workers/contador_distinto:src/workers:src $(PYTHON) -m pytest test/common/workers/test_aggregator.py -v --tb=short --no-header -q || true
-	@echo "\n══════════════════════════════════════════"
-	@echo " projection"
-	@echo "══════════════════════════════════════════"
-	@PYTHONPATH=src/workers/proyeccion:src/workers:src $(PYTHON) -m pytest test/common/workers/test_projection.py -v --tb=short --no-header -q || true
-	@echo "\n══════════════════════════════════════════"
-	@echo " ring_election"
-	@echo "══════════════════════════════════════════"
-	@PYTHONPATH=src $(PYTHON) -m pytest test/watchdog/test_ring_election.py -v --tb=short --no-header -q || true
-	@echo "\n══════════════════════════════════════════"
-	@echo " detector"
-	@echo "══════════════════════════════════════════"
-	@PYTHONPATH=src $(PYTHON) -m pytest test/watchdog/test_detector.py -v --tb=short --no-header -q || true
+	./scripts/run_local_tests.sh
 
 test-worker-base:
 	$(PYTEST) test/common/worker_base/test_worker_base.py -q
@@ -258,30 +231,7 @@ test-gateway:
 	bash scripts/test_gateway.sh $$ARGS
 
 test-persistencia:
-	@echo "\n══════════════════════════════════════════"
-	@echo " persistencia (PersistidorEstado + DedupFilter)"
-	@echo "══════════════════════════════════════════"
-	@PYTHONPATH=src/workers:src $(PYTHON) -m pytest test/common/persistencia/test_persistencia.py -v --tb=short --no-header -q || true
-	@echo "\n══════════════════════════════════════════"
-	@echo " persistencia counter"
-	@echo "══════════════════════════════════════════"
-	@PYTHONPATH=src/workers/contador:src/workers:src $(PYTHON) -m pytest test/workers/test_counter_persistencia.py -v --tb=short --no-header -q || true
-	@echo "\n══════════════════════════════════════════"
-	@echo " persistencia bank_shard"
-	@echo "══════════════════════════════════════════"
-	@PYTHONPATH=src/workers/bank_shard:src/workers:src $(PYTHON) -m pytest test/workers/test_bank_shard_persistencia.py -v --tb=short --no-header -q || true
-	@echo "\n══════════════════════════════════════════"
-	@echo " persistencia format_shard"
-	@echo "══════════════════════════════════════════"
-	@PYTHONPATH=src/workers/format_shard:src/workers:src $(PYTHON) -m pytest test/workers/test_format_shard_persistencia.py -v --tb=short --no-header -q || true
-	@echo "\n══════════════════════════════════════════"
-	@echo " persistencia contador_distinto"
-	@echo "══════════════════════════════════════════"
-	@PYTHONPATH=src/workers/contador_distinto:src/workers:src $(PYTHON) -m pytest test/workers/test_contador_distinto_persistencia.py -v --tb=short --no-header -q || true
-	@echo "\n══════════════════════════════════════════"
-	@echo " persistencia joiner_q4"
-	@echo "══════════════════════════════════════════"
-	@PYTHONPATH=src/workers/joiner_q4:src/workers:src $(PYTHON) -m pytest test/workers/test_joiner_q4_persistencia.py -v --tb=short --no-header -q || true
+	./scripts/run_local_tests.sh
 
 test-crash-flush:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \

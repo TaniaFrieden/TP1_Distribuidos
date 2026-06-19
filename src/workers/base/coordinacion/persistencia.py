@@ -36,6 +36,7 @@ class PersistenciaCoordinacion:
                     coordinaciones[client_id] = {
                         "workers_confirmados": list(ec.workers_confirmados),
                         "mensaje_payload": mensaje_payload,
+                        "worker_conteos": ec.worker_conteos,
                     }
 
                 if ec.eofs_locales:
@@ -70,6 +71,7 @@ class PersistenciaCoordinacion:
 
             ec = clientes.setdefault(client_id, EstadoClienteCoordinacion())
             ec.workers_confirmados = set(datos.get("workers_confirmados", []))
+            ec.worker_conteos = datos.get("worker_conteos", {})
             ec.mensaje_original = mensaje_original
             ec.barrera_activa = True
             ec.originador = id_nodo

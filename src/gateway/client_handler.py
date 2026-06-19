@@ -76,18 +76,19 @@ class ClientHandler:
                         self.state.registrar_cliente(client_id, client_socket)
                         logger.info(f"Cliente {client_id} conectado")
 
-                    internal_msg = {
-                        "client_id": client_id,
-                        "request_id": str(uuid.uuid4()),
-                        "batches": [
-                            {
-                                "header": header,
-                                "payload": records
-                            }
-                        ]
-                    }
-                    msg_bytes = json.dumps(internal_msg).encode("utf-8")
                     for q in colas_tx:
+                        req_id = self.state.generar_request_id(client_id, q.queue_name)
+                        internal_msg = {
+                            "client_id": client_id,
+                            "request_id": req_id,
+                            "batches": [
+                                {
+                                    "header": header,
+                                    "payload": records
+                                }
+                            ]
+                        }
+                        msg_bytes = json.dumps(internal_msg).encode("utf-8")
                         q.send(msg_bytes)
                     
                     _, lock, _ = self.state.obtener_cliente(client_id)
@@ -142,9 +143,10 @@ class ClientHandler:
                         records_by_shard[shard_id].append(record_values)
 
                     for shard_id, shard_records in records_by_shard.items():
+                        req_id = self.state.generar_request_id(client_id, colas_bancos[shard_id].queue_name)
                         shard_batch = {
                             "client_id": client_id,
-                            "request_id": str(uuid.uuid4()),
+                            "request_id": req_id,
                             "batches": [
                                 {
                                     "header": {

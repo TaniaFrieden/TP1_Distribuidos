@@ -5,6 +5,7 @@ class EstadoClienteCoordinacion:
         self.originador = None
         self.barrera_activa = False
         self.workers_confirmados = set()
+        self.worker_conteos = {}
         self.mensaje_original = None
         self.flusheado = False
         self.flush_en_progreso = False
@@ -17,6 +18,7 @@ class EstadoClienteCoordinacion:
         self.originador = None
         self.barrera_activa = False
         self.workers_confirmados.clear()
+        self.worker_conteos.clear()
         self.mensaje_original = None
         self.flusheado = False
         self.flush_en_progreso = False
@@ -26,4 +28,5 @@ class EstadoClienteCoordinacion:
     def desactivar_barrera(self):
         self.barrera_activa = False
         self.workers_confirmados.clear()
+        self.worker_conteos.clear()
         self.mensaje_original = None

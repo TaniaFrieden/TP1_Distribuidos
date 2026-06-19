@@ -1967,7 +1967,6 @@ services:
         condition: service_started
     volumes:
     - ./logs:/app/logs
-    - ./volume/q5_counter_01:/app/volumen
     environment:
       MOM_HOST: rabbitmq
       MOM_PORT: '5672'

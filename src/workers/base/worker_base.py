@@ -19,6 +19,7 @@ from .coordinacion.hooks import HOOK_PRE_FINISHED, crear_hook_crash_pre_finished
 from .latido import Latido
 
 from common.dedup_filter import DedupFilter
+from common.persistencia import PersistidorEstado
 
 logger = obtener_logger(__name__)
 
@@ -37,6 +38,15 @@ class WorkerBase(ABC):
             f"{self.configuracion.prefijo_nodo}_{self.configuracion.id_nodo}"
         )
 
+        self._persistidor_conteos = PersistidorEstado(
+            f"conteos_{self.configuracion.prefijo_nodo}_{self.configuracion.id_nodo}"
+        )
+        if not hasattr(self, "_mensajes_procesados"):
+            self._mensajes_procesados = {}
+        if not hasattr(self, "_mensajes_emitidos"):
+            self._mensajes_emitidos = {}
+        self._cargar_conteos()
+
         self._manejador_eof = ManejadorCoordinacionEof(
             total_colas_entrada=len(self.enrutador.colas_entrada),
             enviar_fn=self._enviar,
@@ -44,6 +54,7 @@ class WorkerBase(ABC):
             al_completar_eof_local_fn=self.al_completar_eof_local,
             al_completar_cliente_fn=self.al_completar_cliente,
             nombre_clase=self.__class__.__name__,
+            obtener_cantidad_procesados_fn=self.obtener_cantidad_procesados,
         )
 
         self.coordinador = CoordinadorDistribuido(
@@ -52,6 +63,7 @@ class WorkerBase(ABC):
             al_completar_barrera=self._manejador_eof.al_completar_barrera,
             contador_vuelos=self.contador_vuelos,
             hooks=self._crear_hooks_coordinador(),
+            obtener_conteos_fn=lambda cid: (self.obtener_cantidad_procesados(cid), self.obtener_cantidad_emitidos(cid))
         )
         self._manejador_eof.coordinador = self.coordinador
 
@@ -213,12 +225,20 @@ class WorkerBase(ABC):
             return ack()
 
         self._hilo_local.id_solicitud_actual = request_id
+        self._hilo_local.client_id_actual = client_id
+        self._hilo_local.mensajes_emitidos_temporales = 0
         self.contador_vuelos.registrar(client_id)
 
         def ack_wrapper():
             self.filtro_dedup.marcar_procesado(client_id, request_id)
+            if isinstance(self._mensajes_procesados, dict):
+                self._mensajes_procesados[client_id] = self._mensajes_procesados.get(client_id, 0) + 1
+                if isinstance(self._mensajes_emitidos, dict) and hasattr(self._hilo_local, "mensajes_emitidos_temporales"):
+                    self._mensajes_emitidos[client_id] = self._mensajes_emitidos.get(client_id, 0) + self._hilo_local.mensajes_emitidos_temporales
+                self._persistir_conteos()
             self.contador_vuelos.descontar(client_id)
             ack()
+            self._manejador_eof.verificar_eof_pospuesto(client_id)
 
         def nack_wrapper():
             self.contador_vuelos.descontar(client_id)
@@ -231,11 +251,32 @@ class WorkerBase(ABC):
             )
         finally:
             self._hilo_local.id_solicitud_actual = None
+            self._hilo_local.mensajes_emitidos_temporales = 0
 
     def _enviar(self, mensaje: bytes, payload: dict = None):
         id_solicitud_origen = getattr(
             self._hilo_local, "id_solicitud_actual", None
         )
+        client_id = getattr(
+            self._hilo_local, "client_id_actual", None
+        )
+        is_control = False
+        if payload:
+            is_control = "EOF" in payload or "CLIENT_DISCONNECT" in payload
+        else:
+            try:
+                datos = json.loads(mensaje.decode("utf-8"))
+                is_control = "EOF" in datos or "CLIENT_DISCONNECT" in datos
+            except Exception:
+                pass
+
+        if client_id and not is_control and isinstance(self._mensajes_emitidos, dict):
+            if hasattr(self._hilo_local, "mensajes_emitidos_temporales"):
+                self._hilo_local.mensajes_emitidos_temporales += 1
+            else:
+                self._mensajes_emitidos[client_id] = self._mensajes_emitidos.get(client_id, 0) + 1
+                self._persistir_conteos()
+
         self.enrutador.enviar(mensaje, payload, id_solicitud_origen=id_solicitud_origen)
 
     def al_iniciar_post_arranque(self):
@@ -260,6 +301,36 @@ class WorkerBase(ABC):
 
     def al_desconectar_cliente(self, client_id):
         pass
+
+    def _cargar_conteos(self):
+        datos = self._persistidor_conteos.cargar()
+        if isinstance(self._mensajes_procesados, dict):
+            self._mensajes_procesados.update(datos.get("procesados", {}))
+        if isinstance(self._mensajes_emitidos, dict):
+            self._mensajes_emitidos.update(datos.get("emitidos", {}))
+
+    def _persistir_conteos(self):
+        self._persistidor_conteos.guardar({
+            "procesados": self._mensajes_procesados,
+            "emitidos": self._mensajes_emitidos
+        })
+
+    def obtener_cantidad_procesados(self, client_id: str) -> int:
+        conteo = 0
+        if isinstance(self._mensajes_procesados, dict):
+            conteo = self._mensajes_procesados.get(client_id, 0)
+        if hasattr(self, "estado") and hasattr(self.estado, "_ids_procesados"):
+            return max(conteo, len(self.estado._ids_procesados.get(client_id, set())))
+        if hasattr(self, "estado_clientes"):
+            estado = self.estado_clientes.get(client_id)
+            if estado and isinstance(estado, dict) and "ids_procesados" in estado:
+                return max(conteo, len(estado["ids_procesados"]))
+        return conteo
+
+    def obtener_cantidad_emitidos(self, client_id: str) -> int:
+        if isinstance(self._mensajes_emitidos, dict):
+            return self._mensajes_emitidos.get(client_id, 0)
+        return 0
 
     def _crear_hooks_coordinador(self):
         hooks = {}

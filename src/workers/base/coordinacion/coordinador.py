@@ -21,12 +21,13 @@ logger = obtener_logger(__name__)
 
 class CoordinadorDistribuido:
     def __init__(self, config, al_completar_sincronizacion, al_completar_barrera,
-                 contador_vuelos, hooks=None):
+                 contador_vuelos, hooks=None, obtener_conteos_fn=None):
         self._config = config
         self._al_completar_sincronizacion = al_completar_sincronizacion
         self._al_completar_barrera = al_completar_barrera
         self._contador_vuelos = contador_vuelos
         self._hooks = hooks or {}
+        self._obtener_conteos_fn = obtener_conteos_fn
         self._coordinacion_lock = threading.Lock()
 
         self._persistencia = PersistenciaCoordinacion(
@@ -79,7 +80,17 @@ class CoordinadorDistribuido:
                 f"Reenviando {TIPO_WORKER_FINALIZADO} pendiente "
                 f"para {cid} al originador {originador}."
             )
-            self._transporte.enviar(msg_worker_finalizado(cid, originador, self._config.id_nodo))
+            procesados = 0
+            emitidos = 0
+            if self._obtener_conteos_fn:
+                procesados, emitidos = self._obtener_conteos_fn(cid)
+            self._transporte.enviar(
+                msg_worker_finalizado(
+                    cid, originador, self._config.id_nodo,
+                    mensajes_procesados=procesados,
+                    mensajes_emitidos=emitidos
+                )
+            )
         self._worker_finished_pendientes.clear()
 
     def registrar_eof_local(self, client_id, nombre_cola, total_esperados) -> bool:
@@ -142,6 +153,11 @@ class CoordinadorDistribuido:
         )
         self._contador_vuelos.esperar_cero(client_id)
 
+        procesados = 0
+        emitidos = 0
+        if self._obtener_conteos_fn:
+            procesados, emitidos = self._obtener_conteos_fn(client_id)
+
         with self._coordinacion_lock:
             ec = self._obtener(client_id)
             if ec.flusheado:
@@ -177,7 +193,13 @@ class CoordinadorDistribuido:
             f"Flush completo. Enviando {TIPO_WORKER_FINALIZADO} "
             f"a originator {originador}."
         )
-        self._transporte.enviar(msg_worker_finalizado(client_id, originador, self._config.id_nodo))
+        self._transporte.enviar(
+            msg_worker_finalizado(
+                client_id, originador, self._config.id_nodo,
+                mensajes_procesados=procesados,
+                mensajes_emitidos=emitidos
+            )
+        )
 
     def limpiar_cliente(self, client_id):
         with self._coordinacion_lock:
@@ -240,13 +262,7 @@ class CoordinadorDistribuido:
                 ec.originador = originador_nuevo
                 return True
 
-            if not self._config.tiene_cola_sharded:
-                if originador_nuevo != originador_actual:
-                    logger.info(
-                        f"Cola no sharded: actualizando originador "
-                        f"de {originador_actual} a {originador_nuevo}"
-                    )
-                    self._ceder_rol_originador(ec, originador_nuevo, originador_actual)
+            if originador_nuevo == originador_actual:
                 return True
 
             if originador_nuevo < originador_actual:
@@ -257,18 +273,15 @@ class CoordinadorDistribuido:
                 self._ceder_rol_originador(ec, originador_nuevo, originador_actual)
                 return True
 
-            if originador_nuevo > originador_actual:
-                logger.info(
-                    f"Colisión de barrera: {originador_nuevo} reclamó, "
-                    f"pero yo ({originador_actual}) tengo menor ID. "
-                    f"Reenviando mi reclamo."
-                )
-                self._transporte.enviar(
-                    msg_eof_recibido(client_id, originador_actual)
-                )
-                return False
-
-            return True
+            logger.info(
+                f"Colisión de barrera: {originador_nuevo} reclamó, "
+                f"pero yo ({originador_actual}) tengo menor ID. "
+                f"Reenviando mi reclamo."
+            )
+            self._transporte.enviar(
+                msg_eof_recibido(client_id, originador_actual)
+            )
+            return False
 
     def _ceder_rol_originador(self, ec, originador_nuevo, originador_actual):
         ec.originador = originador_nuevo
@@ -279,6 +292,7 @@ class CoordinadorDistribuido:
     def _manejar_worker_finalizado(self, datos):
         client_id = datos[ID_CLIENTE]
         originador = datos[ORIGINADOR]
+        worker_id = datos.get(ID_WORKER)
 
         if originador != self._config.id_nodo:
             return
@@ -293,7 +307,11 @@ class CoordinadorDistribuido:
             if ec is None or not ec.barrera_activa:
                 return
 
-            ec.workers_confirmados.add(datos.get(ID_WORKER))
+            ec.workers_confirmados.add(worker_id)
+            ec.worker_conteos[str(worker_id)] = {
+                "procesados": datos.get("mensajes_procesados_local", 0),
+                "emitidos": datos.get("mensajes_emitidos_local", 0)
+            }
             confirmados = len(ec.workers_confirmados)
             logger.info(
                 f"{TIPO_WORKER_FINALIZADO} para client_id={client_id}. "
@@ -305,6 +323,22 @@ class CoordinadorDistribuido:
                 return
 
             msg_original = ec.mensaje_original
+
+            total_procesados = sum(w.get("procesados", 0) for w in ec.worker_conteos.values())
+            total_emitidos = sum(w.get("emitidos", 0) for w in ec.worker_conteos.values())
+
+            if msg_original:
+                try:
+                    payload_dict = ParseadorMensajes.deserializar(msg_original)
+                    total_esperado = payload_dict.get("total_mensajes_enviados")
+                    if total_esperado is not None and total_procesados != total_esperado:
+                        logger.warning(
+                            f"Barrera completa para {client_id} pero total procesados consolidado "
+                            f"({total_procesados}) difiere de total esperado ({total_esperado})."
+                        )
+                except Exception as e:
+                    logger.warning(f"No se pudo verificar total_mensajes_enviados en la barrera: {e}")
+
             ec.desactivar_barrera()
             self._persistir()
 
@@ -313,7 +347,7 @@ class CoordinadorDistribuido:
             f"Difundiendo {TIPO_BARRERA_COMPLETA}."
         )
         self._transporte.enviar(msg_barrera_completa(client_id))
-        self._al_completar_sincronizacion(client_id, msg_original)
+        self._al_completar_sincronizacion(client_id, msg_original, total_emitidos=total_emitidos)
 
     def _manejar_barrera_completa(self, datos):
         client_id = datos[ID_CLIENTE]
