@@ -4,86 +4,79 @@ import threading
 
 from common.logger import Logger, obtener_logger
 from common.middleware.middleware_rabbitmq import MessageMiddlewareQueueRabbitMQ
-from config import WatchdogConfig
-from detector import HeartbeatDetector
-from ring_election import RingElection
-
-logger = obtener_logger(__name__)
+from configuracion import ConfiguracionWatchdog
+from detector import DetectorLatidos
+from eleccion_anillo import EleccionAnillo
 
 
-def _publicar_caidas_watchdogs(config: WatchdogConfig, dead_ids: list[int]):
-    if not dead_ids:
+def _publicar_caidas_watchdogs(logger, config: ConfiguracionWatchdog, ids_caidos: list[int]):
+    if not ids_caidos:
         return
     try:
-        q = MessageMiddlewareQueueRabbitMQ(config.mom_host, config.caidas_queue)
-        for wd_id in dead_ids:
-            evento = {"etapa": "watchdog", "instancia": str(wd_id)}
-            q.send(json.dumps(evento).encode())
-            logger.info(f"[Watchdog] Caída publicada para reinicio: watchdog_{wd_id}")
+        cola = MessageMiddlewareQueueRabbitMQ(config.host_mom, config.cola_caidas)
+        for id_wd in ids_caidos:
+            evento = {"etapa": "watchdog", "instancia": str(id_wd)}
+            cola.send(json.dumps(evento).encode())
+            logger.info(f"Caída publicada para reinicio: watchdog_{id_wd}")
     except Exception as e:
-        logger.error(f"[Watchdog] Error publicando caídas de watchdogs: {e}", exc_info=True)
+        logger.error(f"Error publicando caídas de watchdogs: {e}", exc_info=True)
 
 
 def main():
     Logger.configurar("watchdog")
-    config = WatchdogConfig()
+    config = ConfiguracionWatchdog()
+    logger = obtener_logger(f"Watchdog-{config.id_watchdog}")
 
-    if not config.stages:
-        logger.warning("[Watchdog] WATCHDOG_STAGES está vacío — no hay nada que monitorear.")
+    if not config.etapas:
+        logger.warning("WATCHDOG_STAGES está vacío — no hay nada que monitorear.")
 
-    current_detector: HeartbeatDetector | None = None
-    detector_running = False
-    detector_lock = threading.Lock()
+    detector_actual: DetectorLatidos | None = None
+    detector_activo = False
+    lock_detector = threading.Lock()
 
-    def on_become_leader(dead_watchdog_ids: list[int]):
-        """Activa el detector de caídas de workers y publica los watchdogs caídos detectados.
+    def al_ser_lider(ids_watchdogs_caidos: list[int]):
+        nonlocal detector_activo, detector_actual
+        with lock_detector:
+            if not detector_activo:
+                detector_activo = True
+                detector_actual = DetectorLatidos(config)
+                detector_actual.iniciar()
+                logger.info("Soy el líder. Detector de caídas activo.")
+        _publicar_caidas_watchdogs(logger, config, ids_watchdogs_caidos)
 
-        Crea una instancia nueva del detector en cada mandato para evitar que
-        _stop_event quede seteado de un mandato anterior.
-        """
-        nonlocal detector_running, current_detector
-        with detector_lock:
-            if not detector_running:
-                detector_running = True
-                current_detector = HeartbeatDetector(config)
-                current_detector.start()
-                logger.info(f"[Watchdog-{config.watchdog_id}] Soy el líder. Detector de caídas activo.")
-        _publicar_caidas_watchdogs(config, dead_watchdog_ids)
+    def al_perder_liderazgo():
+        nonlocal detector_activo, detector_actual
+        with lock_detector:
+            if detector_activo:
+                detector_activo = False
+                if detector_actual is not None:
+                    detector_actual.detener()
+                    detector_actual = None
+                logger.info("Perdí el liderazgo. Detector detenido.")
 
-    def on_lose_leader():
-        """Detiene el detector de caídas al ceder el liderazgo."""
-        nonlocal detector_running, current_detector
-        with detector_lock:
-            if detector_running:
-                detector_running = False
-                if current_detector is not None:
-                    current_detector.stop()
-                    current_detector = None
-                logger.info(f"[Watchdog-{config.watchdog_id}] Perdí el liderazgo. Detector detenido.")
+    def al_caer_standby(id_nodo: int):
+        logger.warning(f"Standby watchdog_{id_nodo} caído — publicando para reinicio.")
+        _publicar_caidas_watchdogs(logger, config, [id_nodo])
 
-    def on_standby_dead(node_id: int):
-        logger.warning(f"[Watchdog-{config.watchdog_id}] Standby watchdog_{node_id} caído — publicando para reinicio.")
-        _publicar_caidas_watchdogs(config, [node_id])
+    eleccion = EleccionAnillo(config, al_ser_lider, al_perder_liderazgo, al_caer_standby)
+    evento_parada = threading.Event()
 
-    election = RingElection(config, on_become_leader, on_lose_leader, on_standby_dead)
-    stop_event = threading.Event()
+    def manejar_senal(signum, frame):
+        logger.info("Señal recibida. Cerrando...")
+        eleccion.detener()
+        with lock_detector:
+            if detector_actual is not None:
+                detector_actual.detener()
+        evento_parada.set()
 
-    def handle_signal(signum, frame):
-        logger.info(f"[Watchdog-{config.watchdog_id}] Señal recibida. Cerrando...")
-        election.stop()
-        with detector_lock:
-            if current_detector is not None:
-                current_detector.stop()
-        stop_event.set()
+    signal.signal(signal.SIGTERM, manejar_senal)
+    signal.signal(signal.SIGINT, manejar_senal)
 
-    signal.signal(signal.SIGTERM, handle_signal)
-    signal.signal(signal.SIGINT, handle_signal)
+    logger.info(f"Iniciando. Anillo de {config.cantidad_watchdogs} nodos.")
+    eleccion.iniciar()
 
-    logger.info(f"[Watchdog-{config.watchdog_id}] Iniciando. Anillo de {config.num_watchdogs} nodos.")
-    election.start()
-
-    stop_event.wait()
-    logger.info(f"[Watchdog-{config.watchdog_id}] Apagado completo.")
+    evento_parada.wait()
+    logger.info("Apagado completo.")
 
 
 if __name__ == "__main__":

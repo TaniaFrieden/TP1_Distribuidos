@@ -1,121 +1,105 @@
 import json
-from common.logger import obtener_logger
 import threading
 import time
 
+from common.logger import obtener_logger
 from common.middleware.middleware_rabbitmq import MessageMiddlewareQueueRabbitMQ
 
-logger = obtener_logger(__name__)
 
-
-class HeartbeatDetector:
-    """
-    Monitorea los workers del sistema detectando ausencia de heartbeats.
-
-    Cada worker publica periódicamente en heartbeat.<etapa>. Este detector
-    consume esas colas y, si un worker deja de enviar durante timeout_seconds,
-    publica {"etapa": ..., "instancia": ...} en la cola de caidas para que
-    el actuador lo reinicie.
-
-    Solo el watchdog líder instancia y ejecuta este detector.
-    """
+class DetectorLatidos:
 
     def __init__(self, config):
         self._config = config
+        self._logger = obtener_logger("Detector")
         self._lock = threading.Lock()
-        self._last_seen: dict[tuple, float] = {}
-        self._stop_event = threading.Event()
-        self._consumer_queues: list[MessageMiddlewareQueueRabbitMQ] = []
-        self._caidas_queue: MessageMiddlewareQueueRabbitMQ | None = None
+        self._ultimo_visto: dict[tuple, float] = {}
+        self._evento_parada = threading.Event()
+        self._colas_consumidor: list[MessageMiddlewareQueueRabbitMQ] = []
+        self._cola_caidas: MessageMiddlewareQueueRabbitMQ | None = None
 
-    def start(self):
-        for stage in self._config.stages:
+    def iniciar(self):
+        for etapa in self._config.etapas:
             threading.Thread(
-                target=self._consume_stage,
-                args=(stage,),
+                target=self._consumir_etapa,
+                args=(etapa,),
                 daemon=True,
-                name=f"detector-{stage}",
+                name=f"detector-{etapa}",
             ).start()
         threading.Thread(
-            target=self._check_loop,
+            target=self._bucle_chequeo,
             daemon=True,
-            name="detector-checker",
+            name="detector-chequeo",
         ).start()
-        logger.info(
-            f"[Detector] Iniciado. Etapas monitoreadas: {self._config.stages}. "
-            f"Timeout: {self._config.timeout_seconds:.1f}s"
+        self._logger.info(
+            f"Iniciado. Etapas monitoreadas: {self._config.etapas}. "
+            f"Timeout: {self._config.timeout_segundos:.1f}s"
         )
 
-    def stop(self):
-        self._stop_event.set()
+    def detener(self):
+        self._evento_parada.set()
         with self._lock:
-            queues = list(self._consumer_queues)
-        for q in queues:
+            colas = list(self._colas_consumidor)
+        for cola in colas:
             try:
-                q.stop_consuming()
+                cola.stop_consuming()
             except Exception:
                 pass
 
-    def _consume_stage(self, stage: str):
-        queue_name = f"heartbeat.{stage}"
+    def _consumir_etapa(self, etapa: str):
+        nombre_cola = f"heartbeat.{etapa}"
         try:
-            q = MessageMiddlewareQueueRabbitMQ(self._config.mom_host, queue_name)
+            cola = MessageMiddlewareQueueRabbitMQ(self._config.host_mom, nombre_cola)
             with self._lock:
-                self._consumer_queues.append(q)
-            logger.info(f"[Detector] Escuchando {queue_name}")
-            q.start_consuming(self._on_heartbeat)
+                self._colas_consumidor.append(cola)
+            self._logger.info(f"Escuchando {nombre_cola}")
+            cola.start_consuming(self._al_recibir_latido)
         except Exception as e:
-            if not self._stop_event.is_set():
-                logger.error(f"[Detector] Error consumiendo {queue_name}: {e}", exc_info=True)
+            if not self._evento_parada.is_set():
+                self._logger.error(f"Error consumiendo {nombre_cola}: {e}", exc_info=True)
 
-    def _on_heartbeat(self, msg: bytes, ack, _):
+    def _al_recibir_latido(self, msg: bytes, ack, _):
         try:
             payload = json.loads(msg.decode("utf-8"))
             etapa = payload["etapa"]
             instancia = payload["instancia"]
             ts = payload.get("timestamp", time.time())
             with self._lock:
-                self._last_seen[(etapa, instancia)] = ts
+                self._ultimo_visto[(etapa, instancia)] = ts
             ack()
         except Exception as e:
-            logger.warning(f"[Detector] Heartbeat malformado: {e}")
+            self._logger.warning(f"Heartbeat malformado: {e}")
             ack()
 
-    def _check_loop(self):
-        """Revisa periódicamente si algún worker superó el timeout de heartbeat.
-
-        Trabaja sobre un snapshot de _last_seen para minimizar el tiempo con lock.
-        Una vez publicada la caída, elimina la entrada para no publicarla de nuevo.
-        """
-        while not self._stop_event.wait(self._config.check_interval_seconds):
-            now = time.time()
+    def _bucle_chequeo(self):
+        while not self._evento_parada.wait(self._config.intervalo_chequeo_segundos):
+            ahora = time.time()
             with self._lock:
-                snapshot = dict(self._last_seen)
+                snapshot = dict(self._ultimo_visto)
 
             caidas = [
                 (etapa, instancia)
-                for (etapa, instancia), last_ts in snapshot.items()
-                if now - last_ts > self._config.timeout_seconds
+                for (etapa, instancia), ultimo_ts in snapshot.items()
+                if ahora - ultimo_ts > self._config.timeout_segundos
             ]
 
             for etapa, instancia in caidas:
-                elapsed = now - snapshot[(etapa, instancia)]
-                logger.warning(
-                    f"[Detector] Caída detectada: {etapa}/{instancia} "
-                    f"(último heartbeat hace {elapsed:.1f}s)"
+                transcurrido = ahora - snapshot[(etapa, instancia)]
+                self._logger.warning(
+                    f"Caída detectada: {etapa}/{instancia} "
+                    f"(último heartbeat hace {transcurrido:.1f}s)"
                 )
                 self._publicar_caida(etapa, instancia)
 
     def _publicar_caida(self, etapa: str, instancia: str):
         try:
-            if self._caidas_queue is None:
-                self._caidas_queue = MessageMiddlewareQueueRabbitMQ(
-                    self._config.mom_host,
-                    self._config.caidas_queue,
+            if self._cola_caidas is None:
+                self._cola_caidas = MessageMiddlewareQueueRabbitMQ(
+                    self._config.host_mom,
+                    self._config.cola_caidas,
                 )
-            self._caidas_queue.send(json.dumps({"etapa": etapa, "instancia": instancia}).encode("utf-8"))
+            self._cola_caidas.send(json.dumps({"etapa": etapa, "instancia": instancia}).encode("utf-8"))
             with self._lock:
-                self._last_seen.pop((etapa, instancia), None)
-            logger.info(f"[Detector] Evento de caída publicado: {etapa}/{instancia}")
+                self._ultimo_visto.pop((etapa, instancia), None)
+            self._logger.info(f"Evento de caída publicado: {etapa}/{instancia}")
         except Exception as e:
-            logger.error(f"[Detector] Error publicando caída de {etapa}/{instancia}: {e}", exc_info=True)
+            self._logger.error(f"Error publicando caída de {etapa}/{instancia}: {e}", exc_info=True)
