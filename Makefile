@@ -19,7 +19,7 @@ MOM_HOST ?= localhost
 INPUT_QUEUE ?= input_queue
 OUTPUT_QUEUE ?= output_queue
 
-.PHONY: help venv install test test-worker-base clean free-ports client run-clients test-server gateway start down docker-logs iterar solucionar generar log generar-sample caos test-todos test-etapa test-cliente test-gateway test-persistencia test-crash-flush
+.PHONY: help venv install test test-worker-base clean free-ports client run-clients test-server gateway start down docker-logs iterar solucionar generar log generar-sample caos test-todos test-etapa test-cliente test-gateway test-gateway-resultados test-persistencia test-crash-flush
 
 help:
 	@echo "Targets disponibles:"
@@ -44,6 +44,7 @@ help:
 	@echo "  make test-etapa <prefix> [cant] [tx] [acc] [sol] [espera|random] - Mata todos los nodos de una etapa"
 	@echo "  make test-cliente [cant] [tx] [acc] [sol] [espera]  - Mata un cliente a mitad de envío"
 	@echo "  make test-gateway [cant] [tx] [acc] [sol] [espera]  - Mata el gateway"
+	@echo "  make test-gateway-resultados [tx] [acc] [sol]       - Mata el gateway cuando ya llegaron resultados al cliente"
 	@echo "  make test-crash-caso6 [cant] [tx] [acc] [sol]       - Automatiza test del Caso 6 (pre-confirmación)"
 	@echo "  make test-crash-caso7 [cant] [tx] [acc] [sol]       - Automatiza test del Caso 7 (pre-barrera)"
 	@echo "  make test-crash-leader [cant] [tx] [acc] [sol]      - Automatiza test de Caída del Líder en Elección"
@@ -128,6 +129,7 @@ client:
 	ACC_FILE=$${ACCOUNTS_FILE:-$$ACC}; \
 	OUT_DIR=$${OUTPUT_DIR:-$${OUT:-$(OUTPUT_DIR)}}; \
 	CLIENT_SUFFIX=$$(date +%s%N); \
+	mkdir -p "$$OUT_DIR" && \
 	docker build -q -t client-image -f src/client/Dockerfile src >/dev/null 2>&1 && \
 	docker run --rm \
 		--name client_$$CLIENT_SUFFIX \
@@ -256,6 +258,10 @@ test-cliente:
 test-gateway:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
 	bash scripts/test_gateway.sh $$ARGS
+
+test-gateway-resultados:
+	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
+	bash scripts/test_crash_gateway_resultados.sh $$ARGS
 
 test-persistencia:
 	@echo "\n══════════════════════════════════════════"

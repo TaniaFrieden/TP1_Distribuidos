@@ -10,17 +10,19 @@ KEY_RESULT = 'resultado'
 KEY_EOF = 'eof'
 
 OUTPUT_FILE_NAME = "q{q_id}_solucion.csv"
+QUERIES_COMPLETADAS_FILE = "queries_completadas.json"
 
-def escuchar_respuesta(sock, queries, inicio_envio, client_id):
-    archivos_salida = {}
-    cabeceras_escritas = {}
-    tiempos_inicio = {q_id: inicio_envio for q_id in queries}
-    queries_terminadas = set()
-    
-    # Crea siempre el output en la subcarpeta con el ID asignado por el gateway
+
+def escuchar_respuesta(sock, queries, inicio_envio, client_id, evento_completado=None):
     output_path = os.path.join(OUTPUT_DIR, client_id)
     os.makedirs(output_path, exist_ok=True)
-    
+
+    queries_terminadas = _cargar_queries_completadas(output_path)
+
+    archivos_salida = {}
+    cabeceras_escritas = {}
+    tiempos_inicio = {q_id: inicio_envio for q_id in queries if q_id not in queries_terminadas}
+
     try:
         while True:
             try:
@@ -30,16 +32,39 @@ def escuchar_respuesta(sock, queries, inicio_envio, client_id):
                 break
 
             if msg_type == message_protocol.external.MsgType.REPORTE:
-                _procesar_resultado(payload, archivos_salida, cabeceras_escritas, tiempos_inicio, inicio_envio, output_path, queries_terminadas)
+                _procesar_resultado(
+                    payload, archivos_salida, cabeceras_escritas,
+                    tiempos_inicio, inicio_envio, output_path, queries_terminadas
+                )
 
             elif msg_type == message_protocol.external.MsgType.END_OF_RECODS:
                 elapsed = time.perf_counter() - inicio_envio
                 logging.info(f"Todas las queries completadas en {elapsed:.2f}s")
+                if evento_completado:
+                    evento_completado.set()
                 break
 
     finally:
         for f in archivos_salida.values():
             f.close()
+
+
+def _cargar_queries_completadas(output_path):
+    path = os.path.join(output_path, QUERIES_COMPLETADAS_FILE)
+    if not os.path.exists(path):
+        return set()
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return set(json.load(f))
+    except Exception:
+        return set()
+
+
+def _guardar_queries_completadas(output_path, completadas):
+    path = os.path.join(output_path, QUERIES_COMPLETADAS_FILE)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(list(completadas), f)
+
 
 def _procesar_resultado(payload, archivos, cabeceras, tiempos_inicio, inicio_envio, output_path, queries_terminadas):
     try:
@@ -59,8 +84,13 @@ def _procesar_resultado(payload, archivos, cabeceras, tiempos_inicio, inicio_env
 
     if q_id not in archivos:
         path = os.path.join(output_path, OUTPUT_FILE_NAME.format(q_id=q_id))
-        archivos[q_id] = open(path, "w", encoding="utf-8")
-        cabeceras[q_id] = False
+        # Si el archivo ya tiene datos de una sesión anterior, agregar en lugar de truncar
+        if os.path.exists(path) and os.path.getsize(path) > 0:
+            archivos[q_id] = open(path, "a", encoding="utf-8")
+            cabeceras[q_id] = True  # la cabecera ya está escrita
+        else:
+            archivos[q_id] = open(path, "w", encoding="utf-8")
+            cabeceras[q_id] = False
 
     items = resultado if isinstance(resultado, list) else [resultado]
 
@@ -79,30 +109,23 @@ def _procesar_resultado(payload, archivos, cabeceras, tiempos_inicio, inicio_env
             if inicio_query is not None:
                 logging.info(f"[QUERY {q_id}] Finalizada en {time.perf_counter() - inicio_query:.3f} s")
             else:
-                logging.info(f"[QUERY {q_id}] EOF recibido sin inicio registrado")
+                logging.info(f"[QUERY {q_id}] EOF recibido")
             queries_terminadas.add(q_id)
-            break  # EOF cierra el archivo; no procesar más ítems del batch
+            _guardar_queries_completadas(output_path, queries_terminadas)
+            break
+
 
 def _es_eof(resultado):
     return isinstance(resultado, dict) and resultado.get(KEY_EOF) is True
 
+
 def _escribir_cabecera(q_id, resultado, archivos, cabeceras):
     if not cabeceras[q_id]:
-        claves = []
-        for k in resultado.keys():
-            if str(k).lower() == 'eof':
-                continue
-            claves.append(k)
-        
+        claves = [k for k in resultado.keys() if str(k).lower() != 'eof']
         cabeceras[q_id] = claves
-
-        claves_cabecera = []
-        for k in claves:
-            if k == "Account.1":
-                claves_cabecera.append("Account")
-            else:
-                claves_cabecera.append(str(k))
+        claves_cabecera = ["Account" if k == "Account.1" else str(k) for k in claves]
         archivos[q_id].write(",".join(claves_cabecera) + "\n")
+
 
 def _escribir_datos(q_id, resultado, archivos, cabeceras):
     claves = cabeceras[q_id]

@@ -15,6 +15,7 @@ class MsgType:
     LOTE_TRANSACCIONES = 6
     LOTE_BANCOS = 7
     CONFIG_QUERIES = 8
+    HELLO = 9  # El cliente lo envía primero con su client_id para soportar reconexión
 
   
 def _recv_sized(socket, size):
@@ -93,7 +94,8 @@ RECV_MSG_HANDLERS = {
     MsgType.REPORTE: _recv_reporte,
     MsgType.LOTE_TRANSACCIONES: _recv_lote,
     MsgType.LOTE_BANCOS: _recv_lote,
-    MsgType.CONFIG_QUERIES: _recv_reporte
+    MsgType.CONFIG_QUERIES: _recv_reporte,
+    MsgType.HELLO: _recv_reporte,
 }
 
 
@@ -134,7 +136,8 @@ SEND_MSG_HANDLERS = {
     MsgType.REPORTE: _send_reporte,
     MsgType.LOTE_TRANSACCIONES: _send_lote,
     MsgType.LOTE_BANCOS: _send_lote,
-    MsgType.CONFIG_QUERIES: _send_reporte
+    MsgType.CONFIG_QUERIES: _send_reporte,
+    MsgType.HELLO: _send_reporte,
 }
 
 

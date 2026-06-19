@@ -3,7 +3,7 @@ services:
     build:
       context: ./src
       dockerfile: gateway/Dockerfile
-    container_name: gateway
+    container_name: gateway_01
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -12,6 +12,7 @@ services:
     - 5678:5678
     volumes:
     - ./logs:/app/logs
+    - ./volume/gateway:/app/volumen
     environment:
       PYTHONUNBUFFERED: '1'
       LOG_LEVEL: INFO
@@ -1995,7 +1996,7 @@ services:
       MOM_USER: distributed
       MOM_PASSWORD: distributed
       MOM_VHOST: /
-      WATCHDOG_STAGES: '["shared_filter_usd", "q1_projection", "q1_minor_than_50", "q2_bank_projection", "q2_projection", "q2_agregador_shard", "q3_filter_fechas", "q3_format_shard", "q4_projection", "q4_filter_period", "q4_sumador", "q4_joiner", "q4_contador", "q5_projection", "q5_filter_period", "q5_filter_format", "q5_converter", "q5_counter"]'
+      WATCHDOG_STAGES: '["gateway", "shared_filter_usd", "q1_projection", "q1_minor_than_50", "q2_bank_projection", "q2_projection", "q2_agregador_shard", "q3_filter_fechas", "q3_format_shard", "q4_projection", "q4_filter_period", "q4_sumador", "q4_joiner", "q4_contador", "q5_projection", "q5_filter_period", "q5_filter_format", "q5_converter", "q5_counter"]'
       HEARTBEAT_INTERVAL_SECONDS: '5'
       MISSED_HEARTBEATS_THRESHOLD: '6'
       CHECK_INTERVAL_SECONDS: '5'
@@ -2030,7 +2031,7 @@ services:
       MOM_USER: distributed
       MOM_PASSWORD: distributed
       MOM_VHOST: /
-      WATCHDOG_STAGES: '["shared_filter_usd", "q1_projection", "q1_minor_than_50", "q2_bank_projection", "q2_projection", "q2_agregador_shard", "q3_filter_fechas", "q3_format_shard", "q4_projection", "q4_filter_period", "q4_sumador", "q4_joiner", "q4_contador", "q5_projection", "q5_filter_period", "q5_filter_format", "q5_converter", "q5_counter"]'
+      WATCHDOG_STAGES: '["gateway", "shared_filter_usd", "q1_projection", "q1_minor_than_50", "q2_bank_projection", "q2_projection", "q2_agregador_shard", "q3_filter_fechas", "q3_format_shard", "q4_projection", "q4_filter_period", "q4_sumador", "q4_joiner", "q4_contador", "q5_projection", "q5_filter_period", "q5_filter_format", "q5_converter", "q5_counter"]'
       HEARTBEAT_INTERVAL_SECONDS: '5'
       MISSED_HEARTBEATS_THRESHOLD: '6'
       CHECK_INTERVAL_SECONDS: '5'
@@ -2065,7 +2066,7 @@ services:
       MOM_USER: distributed
       MOM_PASSWORD: distributed
       MOM_VHOST: /
-      WATCHDOG_STAGES: '["shared_filter_usd", "q1_projection", "q1_minor_than_50", "q2_bank_projection", "q2_projection", "q2_agregador_shard", "q3_filter_fechas", "q3_format_shard", "q4_projection", "q4_filter_period", "q4_sumador", "q4_joiner", "q4_contador", "q5_projection", "q5_filter_period", "q5_filter_format", "q5_converter", "q5_counter"]'
+      WATCHDOG_STAGES: '["gateway", "shared_filter_usd", "q1_projection", "q1_minor_than_50", "q2_bank_projection", "q2_projection", "q2_agregador_shard", "q3_filter_fechas", "q3_format_shard", "q4_projection", "q4_filter_period", "q4_sumador", "q4_joiner", "q4_contador", "q5_projection", "q5_filter_period", "q5_filter_format", "q5_converter", "q5_counter"]'
       HEARTBEAT_INTERVAL_SECONDS: '5'
       MISSED_HEARTBEATS_THRESHOLD: '6'
       CHECK_INTERVAL_SECONDS: '5'

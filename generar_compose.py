@@ -180,7 +180,10 @@ def generar_compose():
         env['MOM_VHOST'] = '/'
         if bank_queue_config is not None:
             env['BANK_QUEUE'] = _serializar_valor_env(bank_queue_config)
-        compose_data['services']['gateway']['volumes'] = ['./logs:/app/logs']
+        compose_data['services']['gateway']['volumes'] = [
+            './logs:/app/logs',
+            './volume/gateway:/app/volumen',
+        ]
 
     if 'rabbitmq' in compose_data['services']:
         compose_data['services']['rabbitmq'].setdefault('environment', {})
@@ -190,8 +193,9 @@ def generar_compose():
         if '15672:15672' not in compose_data['services']['rabbitmq']['ports']:
             compose_data['services']['rabbitmq']['ports'].append('15672:15672')
 
-    # Recolectar dinámicamente los NODE_PREFIX de todos los servicios para monitorear
-    watchdog_stages = []
+    # Recolectar dinámicamente los NODE_PREFIX de todos los servicios para monitorear.
+    # El gateway no tiene NODE_PREFIX pero también debe monitorearse.
+    watchdog_stages = ['gateway']
     for s_name, s_data in compose_data.get('services', {}).items():
         if isinstance(s_data, dict) and 'environment' in s_data:
             prefix = s_data['environment'].get('NODE_PREFIX')
