@@ -71,11 +71,11 @@ test:
 	@echo "\n══════════════════════════════════════════"
 	@echo " aggregator"
 	@echo "══════════════════════════════════════════"
-	@PYTHONPATH=src/workers/group_distinct_counter:src/workers:src $(PYTHON) -m pytest test/common/workers/test_aggregator.py -v --tb=short --no-header -q || true
+	@PYTHONPATH=src/workers/contador_distinto:src/workers:src $(PYTHON) -m pytest test/common/workers/test_aggregator.py -v --tb=short --no-header -q || true
 	@echo "\n══════════════════════════════════════════"
 	@echo " projection"
 	@echo "══════════════════════════════════════════"
-	@PYTHONPATH=src/workers/projection:src/workers:src $(PYTHON) -m pytest test/common/workers/test_projection.py -v --tb=short --no-header -q || true
+	@PYTHONPATH=src/workers/proyeccion:src/workers:src $(PYTHON) -m pytest test/common/workers/test_projection.py -v --tb=short --no-header -q || true
 	@echo "\n══════════════════════════════════════════"
 	@echo " ring_election"
 	@echo "══════════════════════════════════════════"
@@ -275,9 +275,9 @@ test-persistencia:
 	@echo "══════════════════════════════════════════"
 	@PYTHONPATH=src/workers/format_shard:src/workers:src $(PYTHON) -m pytest test/workers/test_format_shard_persistencia.py -v --tb=short --no-header -q || true
 	@echo "\n══════════════════════════════════════════"
-	@echo " persistencia group_distinct_counter"
+	@echo " persistencia contador_distinto"
 	@echo "══════════════════════════════════════════"
-	@PYTHONPATH=src/workers/group_distinct_counter:src/workers:src $(PYTHON) -m pytest test/workers/test_group_distinct_counter_persistencia.py -v --tb=short --no-header -q || true
+	@PYTHONPATH=src/workers/contador_distinto:src/workers:src $(PYTHON) -m pytest test/workers/test_contador_distinto_persistencia.py -v --tb=short --no-header -q || true
 	@echo "\n══════════════════════════════════════════"
 	@echo " persistencia joiner_q4"
 	@echo "══════════════════════════════════════════"

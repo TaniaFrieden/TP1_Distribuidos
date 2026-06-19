@@ -108,32 +108,32 @@ class TestJoinerQ4Recovery:
 # ──────────────────────────────────────────────────────────────────
 
 class TestJoinerQ4BarrierCompletada:
-
+ 
     def test_estado_con_barrier_completada_no_se_carga_en_memoria(self, tmp_path):
         estado = {
             "scatter": {"10|acc1": [["20", "acc2"]]},
             "txns": {"10|acc1": [["30", "acc3"]]},
             "vistos": ["r1"],
-            "barrera_completada": True,
+            "barrier_completada": True,
         }
         _escribir_estado(tmp_path, "c1", estado)
         w = _crear_worker(tmp_path)
         assert "c1" not in w.acumulador._scatter
         assert "c1" not in w.acumulador._txns
         assert "c1" not in w.acumulador._vistos
-
+ 
     def test_estado_con_barrier_completada_se_borra_del_disco(self, tmp_path):
-        _escribir_estado(tmp_path, "c1", {"scatter": {}, "txns": {}, "vistos": [], "barrera_completada": True})
+        _escribir_estado(tmp_path, "c1", {"scatter": {}, "txns": {}, "vistos": [], "barrier_completada": True})
         _crear_worker(tmp_path)
         filepath = tmp_path / _nombre_nodo("c1") / "estado.json"
         assert not filepath.exists()
-
+ 
     def test_estado_sin_barrier_completada_si_se_carga(self, tmp_path):
         estado = {
             "scatter": {"10|acc1": [["20", "acc2"]]},
             "txns": {},
             "vistos": [],
-            "barrera_completada": False,
+            "barrier_completada": False,
         }
         _escribir_estado(tmp_path, "c1", estado)
         w = _crear_worker(tmp_path)
