@@ -21,6 +21,7 @@ from base.constantes import (
     CONF_RUTEO,
     CONF_INCLUIR_CLIENT_ID,
     CONF_VALOR,
+    CLAVE_TOTAL_MENSAJES_ENVIADOS,
 )
 
 
@@ -74,8 +75,8 @@ class ColaSalidaSharded:
         payload = ParseadorMensajes.deserializar(mensaje)
         for shard_id, cola in self._colas.items():
             total_shard = self._mensajes_enviados_por_shard.get(client_id, {}).get(shard_id, 0)
-            payload["total_mensajes_enviados"] = total_shard
-            payload["request_id"] = f"{client_id}:{cola.queue_name}:{total_shard + 1}"
+            payload[CLAVE_TOTAL_MENSAJES_ENVIADOS] = total_shard
+            payload[ID_SOLICITUD] = f"{client_id}:{cola.queue_name}:{total_shard + 1}"
             cola.send(ParseadorMensajes.serializar(payload))
 
     def _enviar_simple(self, mensaje, payload, client_id):
@@ -197,8 +198,8 @@ class ColaSalidaCondicional:
         for caso in self._casos:
             for shard_id, cola in caso.colas.items():
                 total_cola = self._mensajes_enviados_por_destino.get(client_id, {}).get(cola.queue_name, 0)
-                payload["total_mensajes_enviados"] = total_cola
-                payload["request_id"] = f"{client_id}:{cola.queue_name}:{total_cola + 1}"
+                payload[CLAVE_TOTAL_MENSAJES_ENVIADOS] = total_cola
+                payload[ID_SOLICITUD] = f"{client_id}:{cola.queue_name}:{total_cola + 1}"
                 cola.send(ParseadorMensajes.serializar(payload))
 
     def _enviar_simple(self, mensaje, payload, client_id):

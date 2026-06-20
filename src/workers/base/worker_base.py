@@ -11,6 +11,7 @@ from common.constantes_protocolo import (
     FIN_DE_ARCHIVO,
     DESCONEXION_CLIENTE,
 )
+from .constantes import CLAVE_IDS_PROCESADOS, CLAVE_PROCESADOS, CLAVE_EMITIDOS
 
 from .configuracion import ConfiguracionWorker
 from .enrutamiento import EnrutadorMensajes
@@ -262,11 +263,11 @@ class WorkerBase(ABC):
         )
         is_control = False
         if payload:
-            is_control = "EOF" in payload or "CLIENT_DISCONNECT" in payload
+            is_control = FIN_DE_ARCHIVO in payload or DESCONEXION_CLIENTE in payload
         else:
             try:
                 datos = json.loads(mensaje.decode("utf-8"))
-                is_control = "EOF" in datos or "CLIENT_DISCONNECT" in datos
+                is_control = FIN_DE_ARCHIVO in datos or DESCONEXION_CLIENTE in datos
             except Exception:
                 pass
 
@@ -305,14 +306,14 @@ class WorkerBase(ABC):
     def _cargar_conteos(self):
         datos = self._persistidor_conteos.cargar()
         if isinstance(self._mensajes_procesados, dict):
-            self._mensajes_procesados.update(datos.get("procesados", {}))
+            self._mensajes_procesados.update(datos.get(CLAVE_PROCESADOS, {}))
         if isinstance(self._mensajes_emitidos, dict):
-            self._mensajes_emitidos.update(datos.get("emitidos", {}))
+            self._mensajes_emitidos.update(datos.get(CLAVE_EMITIDOS, {}))
 
     def _persistir_conteos(self):
         self._persistidor_conteos.guardar({
-            "procesados": self._mensajes_procesados,
-            "emitidos": self._mensajes_emitidos
+            CLAVE_PROCESADOS: self._mensajes_procesados,
+            CLAVE_EMITIDOS: self._mensajes_emitidos
         })
 
     def obtener_cantidad_procesados(self, client_id: str) -> int:
@@ -323,8 +324,8 @@ class WorkerBase(ABC):
             return max(conteo, len(self.estado._ids_procesados.get(client_id, set())))
         if hasattr(self, "estado_clientes"):
             estado = self.estado_clientes.get(client_id)
-            if estado and isinstance(estado, dict) and "ids_procesados" in estado:
-                return max(conteo, len(estado["ids_procesados"]))
+            if estado and isinstance(estado, dict) and CLAVE_IDS_PROCESADOS in estado:
+                return max(conteo, len(estado[CLAVE_IDS_PROCESADOS]))
         return conteo
 
     def obtener_cantidad_emitidos(self, client_id: str) -> int:

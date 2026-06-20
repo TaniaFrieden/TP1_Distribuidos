@@ -42,8 +42,8 @@ def _enviar_lotes(headers, registros, tipo_mensaje, sock, lock, client_id, shutd
         lote.append(registro)
         if len(lote) >= LOTE_SIZE:
             with lock:
-                message_protocol.external.send_msg(sock, tipo_mensaje, headers, client_id, lote)
+                message_protocol.external.enviar_mensaje(sock, tipo_mensaje, headers, client_id, lote)
             lote = []
     if lote and not (shutdown_event and shutdown_event.is_set()):
         with lock:
-            message_protocol.external.send_msg(sock, tipo_mensaje, headers, client_id, lote)
+            message_protocol.external.enviar_mensaje(sock, tipo_mensaje, headers, client_id, lote)

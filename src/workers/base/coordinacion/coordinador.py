@@ -9,6 +9,11 @@ from base.constantes import (
     TIPO_BARRERA_COMPLETA,
     ORIGINADOR,
     ID_WORKER,
+    CLAVE_MENSAJES_PROCESADOS_LOCAL,
+    CLAVE_MENSAJES_EMITIDOS_LOCAL,
+    CLAVE_PROCESADOS,
+    CLAVE_EMITIDOS,
+    CLAVE_TOTAL_MENSAJES_ENVIADOS,
 )
 from .estado_cliente import EstadoClienteCoordinacion
 from .hooks import HOOK_PRE_FINISHED
@@ -309,8 +314,8 @@ class CoordinadorDistribuido:
 
             ec.workers_confirmados.add(worker_id)
             ec.worker_conteos[str(worker_id)] = {
-                "procesados": datos.get("mensajes_procesados_local", 0),
-                "emitidos": datos.get("mensajes_emitidos_local", 0)
+                CLAVE_PROCESADOS: datos.get(CLAVE_MENSAJES_PROCESADOS_LOCAL, 0),
+                CLAVE_EMITIDOS: datos.get(CLAVE_MENSAJES_EMITIDOS_LOCAL, 0)
             }
             confirmados = len(ec.workers_confirmados)
             logger.info(
@@ -324,13 +329,13 @@ class CoordinadorDistribuido:
 
             msg_original = ec.mensaje_original
 
-            total_procesados = sum(w.get("procesados", 0) for w in ec.worker_conteos.values())
-            total_emitidos = sum(w.get("emitidos", 0) for w in ec.worker_conteos.values())
+            total_procesados = sum(w.get(CLAVE_PROCESADOS, 0) for w in ec.worker_conteos.values())
+            total_emitidos = sum(w.get(CLAVE_EMITIDOS, 0) for w in ec.worker_conteos.values())
 
             if msg_original:
                 try:
                     payload_dict = ParseadorMensajes.deserializar(msg_original)
-                    total_esperado = payload_dict.get("total_mensajes_enviados")
+                    total_esperado = payload_dict.get(CLAVE_TOTAL_MENSAJES_ENVIADOS)
                     if total_esperado is not None and total_procesados != total_esperado:
                         logger.warning(
                             f"Barrera completa para {client_id} pero total procesados consolidado "

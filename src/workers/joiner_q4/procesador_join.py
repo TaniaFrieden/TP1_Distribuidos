@@ -1,5 +1,6 @@
 from acumulador_joiner import AcumuladorJoiner
 from common.constantes_protocolo import CABECERA, ESQUEMA, PAYLOAD, LOTES
+from persistencia_joiner import CLAVE_SCATTER
 
 # Campos de aristas scatter (nombres de salida del contador_distinto)
 _CAMPO_TO_BANK = "to_bank"
@@ -33,7 +34,7 @@ class ProcesadorLotes:
 
     def procesar_payload(self, payload: dict, queue_name: str, client_id: str):
         """Despacha el procesamiento según tipo de cola y formato del mensaje."""
-        es_scatter = "scatter" in queue_name
+        es_scatter = CLAVE_SCATTER in queue_name
         if LOTES in payload:
             for lote in payload[LOTES]:
                 if es_scatter:
@@ -42,12 +43,12 @@ class ProcesadorLotes:
                     self._procesar_lote_transacciones(lote, client_id)
         else:
             if es_scatter:
-                b_key = f"{_norm(payload['to_bank'])}|{_norm(payload['to_account'])}"
-                a_info = (_norm(payload["from_bank"]), _norm(payload["from_account"]))
+                b_key = f"{_norm(payload[_CAMPO_TO_BANK])}|{_norm(payload[_CAMPO_TO_ACCOUNT])}"
+                a_info = (_norm(payload[_CAMPO_FROM_BANK]), _norm(payload[_CAMPO_FROM_ACCOUNT]))
                 self._acumulador.agregar_arista(client_id, b_key, a_info)
             else:
-                b_key = f"{_norm(payload.get('From Bank', ''))}|{_norm(payload.get('Account', ''))}"
-                c_info = (_norm(payload.get("To Bank", "")), _norm(payload.get("Account.1", "")))
+                b_key = f"{_norm(payload.get(_CAMPO_FROM_BANK_TXN, ''))}|{_norm(payload.get(_CAMPO_ACCOUNT_TXN, ''))}"
+                c_info = (_norm(payload.get(_CAMPO_TO_BANK_TXN, "")), _norm(payload.get(_CAMPO_TO_ACCOUNT_TXN, "")))
                 self._acumulador.agregar_transaccion(client_id, b_key, c_info)
 
     def _procesar_lote_aristas(self, lote: dict, client_id: str):

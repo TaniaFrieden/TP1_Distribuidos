@@ -13,29 +13,23 @@ class ParseadorMensajes:
     def serializar(payload: dict) -> bytes:
         return json.dumps(payload).encode("utf-8")
 
-def serialize(payload: dict) -> bytes:
-    return ParseadorMensajes.serializar(payload)
-
-def deserialize(data: bytes) -> dict:
-    return ParseadorMensajes.deserializar(data)
-
-def is_eof(payload: dict) -> bool:
+def es_eof(payload: dict) -> bool:
     return isinstance(payload, dict) and set(payload.keys()) == {"client_id"}
 
-def is_data(payload: dict) -> bool:
-    return isinstance(payload, dict) and not is_eof(payload)
+def es_dato(payload: dict) -> bool:
+    return isinstance(payload, dict) and not es_eof(payload)
 
-def make_eof(client_id: int) -> bytes:
-    return serialize({"client_id": int(client_id)})
+def crear_eof(client_id: int) -> bytes:
+    return ParseadorMensajes.serializar({"client_id": int(client_id)})
 
-def make_data(record: dict) -> bytes:
-    return serialize(record)
+def crear_dato(record: dict) -> bytes:
+    return ParseadorMensajes.serializar(record)
 
-def get_client_id(payload: dict) -> int:
+def obtener_id_cliente(payload: dict) -> int:
     return int(payload["client_id"])
 
-def make_client_disconnect(client_id: str) -> bytes:
-    return serialize({"client_id": client_id, "CLIENT_DISCONNECT": True})
+def crear_desconexion_cliente(client_id: str) -> bytes:
+    return ParseadorMensajes.serializar({"client_id": client_id, "CLIENT_DISCONNECT": True})
 
-def is_client_disconnect(payload: dict) -> bool:
+def es_desconexion_cliente(payload: dict) -> bool:
     return isinstance(payload, dict) and payload.get("CLIENT_DISCONNECT") is True

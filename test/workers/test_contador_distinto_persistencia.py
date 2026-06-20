@@ -11,6 +11,7 @@ import os
 import pytest
 from unittest.mock import MagicMock, patch
 from common.persistencia import PersistidorEstado
+from base.constantes import CLAVE_BARRERA_COMPLETADA, CLAVE_IDS_PROCESADOS
 
 
 BASE_ENV = {
@@ -69,7 +70,7 @@ class TestGDCRecovery:
         grupos = {("bank1", "acc1"): {("bank2", "acc2"), ("bank3", "acc3")}}
         _escribir_estado(tmp_path, "c1", {
             "grupos": _grupos_serializados(grupos),
-            "vistos": ["r1"],
+            CLAVE_IDS_PROCESADOS: ["r1"],
         })
         w = _crear_worker(tmp_path)
         assert ("bank1", "acc1") in w.acumulador._grupos["c1"]
@@ -81,8 +82,8 @@ class TestGDCRecovery:
         assert "c1" not in w.acumulador._grupos
 
     def test_multiples_clientes_se_recuperan_independientemente(self, tmp_path):
-        _escribir_estado(tmp_path, "c1", {"grupos": _grupos_serializados({("b1", "a1"): {("b2", "a2")}}), "vistos": []})
-        _escribir_estado(tmp_path, "c2", {"grupos": _grupos_serializados({("b3", "a3"): {("b4", "a4")}}), "vistos": ["x"]})
+        _escribir_estado(tmp_path, "c1", {"grupos": _grupos_serializados({("b1", "a1"): {("b2", "a2")}}), CLAVE_IDS_PROCESADOS: []})
+        _escribir_estado(tmp_path, "c2", {"grupos": _grupos_serializados({("b3", "a3"): {("b4", "a4")}}), CLAVE_IDS_PROCESADOS: ["x"]})
         w = _crear_worker(tmp_path)
         assert ("b1", "a1") in w.acumulador._grupos["c1"]
         assert ("b3", "a3") in w.acumulador._grupos["c2"]
@@ -99,15 +100,15 @@ class TestGDCBarrierCompletada:
         grupos = {("bank1", "acc1"): {("bank2", "acc2")}}
         _escribir_estado(tmp_path, "c1", {
             "grupos": _grupos_serializados(grupos),
-            "vistos": ["r1"],
-            "barrier_completada": True,
+            CLAVE_IDS_PROCESADOS: ["r1"],
+            CLAVE_BARRERA_COMPLETADA: True,
         })
         w = _crear_worker(tmp_path)
         assert "c1" not in w.acumulador._grupos
         assert "c1" not in w.acumulador._vistos
  
     def test_estado_con_barrier_completada_se_borra_del_disco(self, tmp_path):
-        _escribir_estado(tmp_path, "c1", {"grupos": {}, "vistos": [], "barrier_completada": True})
+        _escribir_estado(tmp_path, "c1", {"grupos": {}, CLAVE_IDS_PROCESADOS: [], CLAVE_BARRERA_COMPLETADA: True})
         _crear_worker(tmp_path)
         filepath = tmp_path / _nombre_nodo("c1") / "estado.json"
         assert not filepath.exists()
@@ -116,8 +117,8 @@ class TestGDCBarrierCompletada:
         grupos = {("b1", "a1"): {("b2", "a2")}}
         _escribir_estado(tmp_path, "c1", {
             "grupos": _grupos_serializados(grupos),
-            "vistos": [],
-            "barrier_completada": False,
+            CLAVE_IDS_PROCESADOS: [],
+            CLAVE_BARRERA_COMPLETADA: False,
         })
         w = _crear_worker(tmp_path)
         assert "c1" in w.acumulador._grupos
@@ -133,7 +134,7 @@ class TestGDCDedupPropio:
         grupos = {("bank1", "acc1"): {("bank2", "acc2")}}
         _escribir_estado(tmp_path, "c1", {
             "grupos": _grupos_serializados(grupos),
-            "vistos": ["req-dup"],
+            CLAVE_IDS_PROCESADOS: ["req-dup"],
         })
         w = _crear_worker(tmp_path)
 
@@ -160,7 +161,7 @@ class TestGDCDedupPropio:
         grupos = {("bank1", "acc1"): {("bank2", "acc2")}}
         _escribir_estado(tmp_path, "c1", {
             "grupos": _grupos_serializados(grupos),
-            "vistos": ["req-viejo"],
+            CLAVE_IDS_PROCESADOS: ["req-viejo"],
         })
         w = _crear_worker(tmp_path)
 

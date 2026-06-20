@@ -1,40 +1,40 @@
 from common import message_protocol
 
-AMOUNT_OF_FIELDS_IN_RESULT_MESSAGE = 2
+CANTIDAD_DE_CAMPOS_EN_MENSAJE_RESULTADO = 2
 
 class MessageHandler:
-    _next_id = 0
+    _siguiente_id = 0
 
     def __init__(self):
-        self.client_id = MessageHandler._next_id
-        MessageHandler._next_id += 1
+        self.client_id = MessageHandler._siguiente_id
+        MessageHandler._siguiente_id += 1
 
-    def serialize_data_message(self, message):
+    def serializar_mensaje_datos(self, mensaje):
         # Serializar dict de transacción con client_id
-        payload = dict(message)
+        payload = dict(mensaje)
         payload["client_id"] = self.client_id
-        return message_protocol.internal.serialize(payload)
+        return message_protocol.internal.ParseadorMensajes.serializar(payload)
 
-    def serialize_eof_message(self, message):
+    def serializar_mensaje_eof(self, mensaje):
         # Los workers esperan un EOF con la forma {"client_id": ...}
-        # Usar make_eof para generar el formato correcto.
-        return message_protocol.internal.make_eof(self.client_id)
+        # Usar crear_eof para generar el formato correcto.
+        return message_protocol.internal.crear_eof(self.client_id)
 
-    def deserialize_result_message(self, message):
-        fields = message_protocol.internal.deserialize(message)
+    def deserializar_mensaje_resultado(self, mensaje):
+        campos = message_protocol.internal.ParseadorMensajes.deserializar(mensaje)
 
-        if self._is_a_result_message(fields):
-            result_client_id, result_data = fields
-            if result_client_id == self.client_id:
-                return result_data
+        if self._es_mensaje_resultado(campos):
+            client_id_resultado, datos_resultado = campos
+            if client_id_resultado == self.client_id:
+                return datos_resultado
             return None
 
-        return fields
-    
-    def _is_a_result_message(self, fields):
+        return campos
+
+    def _es_mensaje_resultado(self, campos):
         return (
-            isinstance(fields, list)
-            and len(fields) == AMOUNT_OF_FIELDS_IN_RESULT_MESSAGE
-            and isinstance(fields[0], int)
-            and isinstance(fields[1], list)
+            isinstance(campos, list)
+            and len(campos) == CANTIDAD_DE_CAMPOS_EN_MENSAJE_RESULTADO
+            and isinstance(campos[0], int)
+            and isinstance(campos[1], list)
         )

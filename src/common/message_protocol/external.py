@@ -1,6 +1,7 @@
 from asyncio import IncompleteReadError
 import json
 from common.logger import obtener_logger
+from common.constantes_protocolo import CABECERA, ESQUEMA, PAYLOAD, ID_CLIENTE, CANTIDAD
 
 from . import external_serializer
 
@@ -8,19 +9,19 @@ from . import external_serializer
 logger = obtener_logger(__name__)
 
 
-class MsgType:
+class TipoMensaje:
     ACK = 3
-    END_OF_RECODS = 4
+    FIN_DE_REGISTROS = 4
     REPORTE = 5
     LOTE_TRANSACCIONES = 6
     LOTE_BANCOS = 7
     CONFIG_QUERIES = 8
 
-  
-def _recv_sized(socket, size):
+
+def _recibir_tamanio(socket, size):
     """
-    Receives exactly 'num_bytes' bytes through the provided socket.
-    If no bytes are read from the socket IncompleteReadError is raised
+    Recibe exactamente 'size' bytes a través del socket.
+    Si no se leen bytes del socket se lanza IncompleteReadError.
     """
     buf = bytearray(size)
     pos = 0
@@ -32,113 +33,113 @@ def _recv_sized(socket, size):
     return bytes(buf)
 
 
-def _recv_empty(socket):
+def _recibir_vacio(socket):
     return None
 
 
-def _recv_reporte(socket):
-    reporte_size = external_serializer.deserialize_uint32(
-        _recv_sized(socket, external_serializer.UINT32_SIZE)
+def _recibir_reporte(socket):
+    tamanio_reporte = external_serializer.deserializar_uint32(
+        _recibir_tamanio(socket, external_serializer.TAMANIO_UINT32)
     )
-    
+
     # Capturamos los bytes brutos ANTES de decodificarlos
-    raw_bytes = _recv_sized(socket, reporte_size)
-    
+    bytes_crudos = _recibir_tamanio(socket, tamanio_reporte)
+
     try:
-        reporte = raw_bytes.decode("utf-8")
+        reporte = bytes_crudos.decode("utf-8")
     except UnicodeDecodeError:
-        logger.error("DEBUG CRÍTICO: Recibidos %s bytes que no son UTF-8: %s", reporte_size, raw_bytes.hex())
+        logger.error("DEBUG CRÍTICO: Recibidos %s bytes que no son UTF-8: %s", tamanio_reporte, bytes_crudos.hex())
         raise
-        
+
     return reporte
 
-def _send_lote(socket, headers, client_id, lote):
+def _enviar_lote(socket, headers, client_id, lote):
     """Envía un lote de registros con un encabezado (schema, client_id, count)
        y un payload que consiste en un arreglo de arreglos de valores.
     """
     batch = {
-        "header": {
-            "schema": headers,
-            "client_id": client_id,
-            "count": len(lote)
+        CABECERA: {
+            ESQUEMA: headers,
+            ID_CLIENTE: client_id,
+            CANTIDAD: len(lote)
         },
-        "payload": lote
+        PAYLOAD: lote
     }
     batch_bytes = json.dumps(batch).encode("utf-8")
-    msg = external_serializer.serialize_uint32(len(batch_bytes)) + batch_bytes
+    msg = external_serializer.serializar_uint32(len(batch_bytes)) + batch_bytes
     socket.sendall(msg)
 
 
-def _recv_lote(socket):
+def _recibir_lote(socket):
     """Recibe un lote de registros con un encabezado y payload en formato compacto."""
-    batch_size = external_serializer.deserialize_uint32(
-        _recv_sized(socket, external_serializer.UINT32_SIZE)
+    tamanio_lote = external_serializer.deserializar_uint32(
+        _recibir_tamanio(socket, external_serializer.TAMANIO_UINT32)
     )
-    batch_bytes = _recv_sized(socket, batch_size)
+    batch_bytes = _recibir_tamanio(socket, tamanio_lote)
     return json.loads(batch_bytes.decode("utf-8"))
 
 
-def _recv_end_of_records(socket):
-    size = external_serializer.deserialize_uint32(
-        _recv_sized(socket, external_serializer.UINT32_SIZE)
+def _recibir_fin_de_registros(socket):
+    size = external_serializer.deserializar_uint32(
+        _recibir_tamanio(socket, external_serializer.TAMANIO_UINT32)
     )
     if size == 0:
         return None
-    return _recv_sized(socket, size).decode("utf-8")
+    return _recibir_tamanio(socket, size).decode("utf-8")
 
 
-RECV_MSG_HANDLERS = {
-    MsgType.ACK: _recv_empty,
-    MsgType.END_OF_RECODS: _recv_end_of_records,
-    MsgType.REPORTE: _recv_reporte,
-    MsgType.LOTE_TRANSACCIONES: _recv_lote,
-    MsgType.LOTE_BANCOS: _recv_lote,
-    MsgType.CONFIG_QUERIES: _recv_reporte
+MANEJADORES_RECEPCION = {
+    TipoMensaje.ACK: _recibir_vacio,
+    TipoMensaje.FIN_DE_REGISTROS: _recibir_fin_de_registros,
+    TipoMensaje.REPORTE: _recibir_reporte,
+    TipoMensaje.LOTE_TRANSACCIONES: _recibir_lote,
+    TipoMensaje.LOTE_BANCOS: _recibir_lote,
+    TipoMensaje.CONFIG_QUERIES: _recibir_reporte
 }
 
 
-def recv_msg(socket):
-    msg_type = external_serializer.deserialize_uint32(
-        _recv_sized(socket, external_serializer.UINT32_SIZE)
+def recibir_mensaje(socket):
+    tipo_mensaje = external_serializer.deserializar_uint32(
+        _recibir_tamanio(socket, external_serializer.TAMANIO_UINT32)
     )
-    msg_handler = RECV_MSG_HANDLERS[msg_type]
-    return (msg_type, msg_handler(socket))
+    manejador = MANEJADORES_RECEPCION[tipo_mensaje]
+    return (tipo_mensaje, manejador(socket))
 
 
-def _send_ack(socket):
-    socket.sendall(external_serializer.serialize_uint32(MsgType.ACK))
+def _enviar_ack(socket):
+    socket.sendall(external_serializer.serializar_uint32(TipoMensaje.ACK))
 
 
-def _send_end_of_records(socket, client_id=None):
+def _enviar_fin_de_registros(socket, client_id=None):
     if client_id is not None:
         client_id_bytes = client_id.encode("utf-8")
-        msg = external_serializer.serialize_uint32(len(client_id_bytes)) + client_id_bytes
+        msg = external_serializer.serializar_uint32(len(client_id_bytes)) + client_id_bytes
     else:
-        msg = external_serializer.serialize_uint32(0)
+        msg = external_serializer.serializar_uint32(0)
     socket.sendall(msg)
 
 
-def _send_reporte(socket, reporte):
+def _enviar_reporte(socket, reporte):
     """Envía un reporte como string."""
     reporte_bytes = reporte.encode("utf-8")
-    msg = external_serializer.serialize_uint32(len(reporte_bytes))
+    msg = external_serializer.serializar_uint32(len(reporte_bytes))
     msg += reporte_bytes
     socket.sendall(msg)
 
-def _send_empty(socket):
+def _enviar_vacio(socket):
     pass
 
-SEND_MSG_HANDLERS = {
-    MsgType.ACK: _send_empty,
-    MsgType.END_OF_RECODS: _send_end_of_records,
-    MsgType.REPORTE: _send_reporte,
-    MsgType.LOTE_TRANSACCIONES: _send_lote,
-    MsgType.LOTE_BANCOS: _send_lote,
-    MsgType.CONFIG_QUERIES: _send_reporte
+MANEJADORES_ENVIO = {
+    TipoMensaje.ACK: _enviar_vacio,
+    TipoMensaje.FIN_DE_REGISTROS: _enviar_fin_de_registros,
+    TipoMensaje.REPORTE: _enviar_reporte,
+    TipoMensaje.LOTE_TRANSACCIONES: _enviar_lote,
+    TipoMensaje.LOTE_BANCOS: _enviar_lote,
+    TipoMensaje.CONFIG_QUERIES: _enviar_reporte
 }
 
 
-def send_msg(socket, msg_type, *args):
-    socket.sendall(external_serializer.serialize_uint32(msg_type))
-    msg_handler = SEND_MSG_HANDLERS[msg_type]
-    msg_handler(socket, *args)
+def enviar_mensaje(socket, tipo_mensaje, *args):
+    socket.sendall(external_serializer.serializar_uint32(tipo_mensaje))
+    manejador = MANEJADORES_ENVIO[tipo_mensaje]
+    manejador(socket, *args)

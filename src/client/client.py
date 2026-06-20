@@ -7,6 +7,7 @@ import uuid
 import time
 import json
 from common import message_protocol
+from common.constantes_protocolo import ID_CLIENTE
 from common.logger import Logger
 from config import SERVER_HOST, SERVER_PORT, TRANSACTIONS_FILE, ACCOUNTS_FILE
 from receiver import escuchar_respuesta
@@ -22,11 +23,11 @@ def main():
 
     client_id = None
     try:
-        msg_type, payload = message_protocol.external.recv_msg(sock)
-        if msg_type == message_protocol.external.MsgType.CONFIG_QUERIES:
+        tipo_mensaje, payload = message_protocol.external.recibir_mensaje(sock)
+        if tipo_mensaje == message_protocol.external.TipoMensaje.CONFIG_QUERIES:
             config_data = json.loads(payload)
             queries = config_data.get("queries", [])
-            client_id = config_data.get("client_id")
+            client_id = config_data.get(ID_CLIENTE)
             logging.info(f"Conectado al Gateway")
             logging.info(f"ID Cliente: {client_id}")
             logging.info(f"Queries: {queries}")
@@ -71,12 +72,12 @@ def _iniciar_hilos(sock, lock, client_id, queries, inicio_envio, shutdown_event)
 
     hilo_transacciones = threading.Thread(
         target=enviar_archivo,
-        args=(TRANSACTIONS_FILE, message_protocol.external.MsgType.LOTE_TRANSACCIONES, sock, lock, client_id, shutdown_event)
+        args=(TRANSACTIONS_FILE, message_protocol.external.TipoMensaje.LOTE_TRANSACCIONES, sock, lock, client_id, shutdown_event)
     )
 
     hilo_bancos = threading.Thread(
         target=enviar_archivo,
-        args=(ACCOUNTS_FILE, message_protocol.external.MsgType.LOTE_BANCOS, sock, lock, client_id, shutdown_event)
+        args=(ACCOUNTS_FILE, message_protocol.external.TipoMensaje.LOTE_BANCOS, sock, lock, client_id, shutdown_event)
     )
 
     hilo_receptor.start()
@@ -91,9 +92,9 @@ def _esperar_envios(hilos_envio):
 
 def _enviar_fin_registros(sock, lock, client_id):
     with lock:
-        message_protocol.external.send_msg(
+        message_protocol.external.enviar_mensaje(
             sock,
-            message_protocol.external.MsgType.END_OF_RECODS,
+            message_protocol.external.TipoMensaje.FIN_DE_REGISTROS,
             client_id
         )
 

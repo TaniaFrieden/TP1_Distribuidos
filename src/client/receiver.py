@@ -3,11 +3,8 @@ import json
 import logging
 import time
 from common import message_protocol
+from common.constantes_protocolo import CLAVE_QUERY, CLAVE_RESULTADO, CLAVE_EOF_REPORTE, CLAVE_COLUMNAS
 from config import OUTPUT_DIR
-
-KEY_QUERY = 'query'
-KEY_RESULT = 'resultado'
-KEY_EOF = 'eof'
 
 OUTPUT_FILE_NAME = "q{q_id}_solucion.csv"
 
@@ -24,15 +21,15 @@ def escuchar_respuesta(sock, queries, inicio_envio, client_id):
     try:
         while True:
             try:
-                msg_type, payload = message_protocol.external.recv_msg(sock)
+                tipo_mensaje, payload = message_protocol.external.recibir_mensaje(sock)
             except Exception as e:
                 logging.error(f"Error de red recibiendo mensaje: {e}")
                 break
 
-            if msg_type == message_protocol.external.MsgType.REPORTE:
+            if tipo_mensaje == message_protocol.external.TipoMensaje.REPORTE:
                 _procesar_resultado(payload, archivos_salida, cabeceras_escritas, tiempos_inicio, inicio_envio, output_path, queries_terminadas)
 
-            elif msg_type == message_protocol.external.MsgType.END_OF_RECODS:
+            elif tipo_mensaje == message_protocol.external.TipoMensaje.FIN_DE_REGISTROS:
                 elapsed = time.perf_counter() - inicio_envio
                 logging.info(f"Todas las queries completadas en {elapsed:.2f}s")
                 break
@@ -47,9 +44,9 @@ def _procesar_resultado(payload, archivos, cabeceras, tiempos_inicio, inicio_env
     except json.JSONDecodeError:
         return
 
-    q_id = data.get(KEY_QUERY)
-    resultado = data.get(KEY_RESULT)
-    columns_hint = data.get("columns")
+    q_id = data.get(CLAVE_QUERY)
+    resultado = data.get(CLAVE_RESULTADO)
+    columns_hint = data.get(CLAVE_COLUMNAS)
 
     if q_id is None or q_id in queries_terminadas:
         return
@@ -84,7 +81,7 @@ def _procesar_resultado(payload, archivos, cabeceras, tiempos_inicio, inicio_env
             break  # EOF cierra el archivo; no procesar más ítems del batch
 
 def _es_eof(resultado):
-    return isinstance(resultado, dict) and resultado.get(KEY_EOF) is True
+    return isinstance(resultado, dict) and resultado.get(CLAVE_EOF_REPORTE) is True
 
 def _escribir_cabecera(q_id, resultado, archivos, cabeceras):
     if not cabeceras[q_id]:
