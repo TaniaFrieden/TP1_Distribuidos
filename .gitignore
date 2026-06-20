@@ -2,6 +2,7 @@
 *.csv
 datasets
 logs
+output
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -9,7 +10,7 @@ __pycache__/
 *$py.class
 .antigravitycli 
 .agents
-docs/*.md
+docs/
 tp
 volume
 

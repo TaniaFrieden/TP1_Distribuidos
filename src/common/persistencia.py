@@ -67,7 +67,7 @@ class PersistidorEstado:
         Lanza excepción si el archivo existe pero está corrupto.
         """
         if not os.path.exists(self.filepath):
-            logger.info(f"[Persistencia] No se encontró estado anterior para {self.node_name}. Iniciando limpio.")
+            logger.debug(f"[Persistencia] No se encontró estado anterior para {self.node_name}. Iniciando limpio.")
             return {}
 
         try:

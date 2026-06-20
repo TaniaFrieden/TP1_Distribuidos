@@ -6,10 +6,10 @@ lanzar_clientes() {
     local acc=$3
     PIDS=()
     docker run --rm -v "$(pwd)/output:/cleanup_out" -v "$(pwd)/logs:/cleanup_logs" \
-        alpine sh -c "rm -rf /cleanup_out/*/ /cleanup_logs/client_stdout_*.txt" 2>/dev/null \
-        || rm -rf output/*/ 2>/dev/null || true
+        alpine sh -c "rm -rf /cleanup_out/*/ /cleanup_out/client_id_*.txt /cleanup_logs/client_stdout_*.txt" 2>/dev/null \
+        || { rm -rf output/*/ output/client_id_*.txt 2>/dev/null || true; }
     for i in $(seq 1 "$cant"); do
-        ( make client TRANSACTIONS_FILE="$tx" ACCOUNTS_FILE="$acc" OUTPUT_DIR="output" \
+        ( export CLIENT_ID_SUFFIX=$i; make client TRANSACTIONS_FILE="$tx" ACCOUNTS_FILE="$acc" OUTPUT_DIR="output" \
             > "logs/client_stdout_$i.txt" 2>&1 ) &
         PIDS+=($!)
     done

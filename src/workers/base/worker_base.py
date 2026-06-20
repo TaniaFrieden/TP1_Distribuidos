@@ -238,7 +238,6 @@ class WorkerBase(ABC):
                 self._persistir_conteos()
             self.contador_vuelos.descontar(client_id)
             ack()
-            self._manejador_eof.verificar_eof_pospuesto(client_id)
 
         def nack_wrapper():
             self.contador_vuelos.descontar(client_id)

@@ -12,7 +12,8 @@ from config import SERVER_HOST, SERVER_PORT, TRANSACTIONS_FILE, ACCOUNTS_FILE, O
 from receiver import escuchar_respuesta
 from sender import enviar_archivo
 
-CLIENT_ID_FILE = "client_id.txt"
+CLIENT_ID_SUFFIX = os.getenv('CLIENT_ID_SUFFIX', '')
+CLIENT_ID_FILE = f"client_id_{CLIENT_ID_SUFFIX}.txt" if CLIENT_ID_SUFFIX else "client_id.txt"
 ENVIO_COMPLETO_FILE = "envio_completo.txt"
 INTENTOS_RECONEXION = 20
 ESPERA_RECONEXION_SEG = 3

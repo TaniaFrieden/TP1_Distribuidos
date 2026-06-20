@@ -25,29 +25,29 @@ help:
 	@echo "Targets disponibles:"
 	@echo "  make venv                        - Crea el entorno virtual .venv"
 	@echo "  make install                     - Instala las dependencias en .venv"
-	@echo "  make test                        - Corre todos los tests"
-	@echo "  make test-worker-base            - Corre solo el test de BaseWorker"
 	@echo "  make clean                       - Limpia caches, temporales y libera puertos"
-	@echo "  make test-server                 - Inicia servidor de prueba"
 	@echo "  make start                       - Levanta docker-compose en segundo plano (detached)"
 	@echo "  make start --verbose             - Levanta docker-compose con logs en consola"
 	@echo "  make down                        - Detiene docker-compose"
-	@echo "  make docker-logs                 - Muestra logs de docker"
 	@echo "  make log <servicio>              - Muestra logs de un servicio específico"
-	@echo "  make generar <queries>           - Genera el docker-compose para las queries dadas"
-	@echo "  make iterar [iteraciones] [transacciones] [cuentas] [soluciones] - Itera queries pasándole número iteraciones, datasets y carpeta de soluciones"
-	@echo "  make solucionar <dataset> <cuentas> [dir] - Ejecuta la solución del notebook con el dataset de transacciones, el de cuentas y opcionalmente el directorio de destino"
-	@echo "  make client <trans> <cuentas> [dir] - Corre un cliente enviando transacciones y cuentas, guardando resultados en el directorio de salida indicado"
-	@echo "  make caos [min] [max]            - Corre el script de Chaos Monkey para derribar workers aleatoriamente"
-	@echo "  make generar-sample <dataset> <porcentaje> - Genera una muestra de un dataset con el porcentaje indicado (default: 30)"
-	@echo "  make test-todos [cant] [tx] [acc] [sol] [espera]    - Mata todos los workers en simultáneo"
-	@echo "  make test-etapa <prefix> [cant] [tx] [acc] [sol] [espera|random] - Mata todos los nodos de una etapa"
-	@echo "  make test-cliente [cant] [tx] [acc] [sol] [espera]  - Mata un cliente a mitad de envío"
-	@echo "  make test-gateway [cant] [tx] [acc] [sol] [espera]  - Mata el gateway"
-	@echo "  make test-gateway-resultados [tx] [acc] [sol]       - Mata el gateway cuando ya llegaron resultados al cliente"
-	@echo "  make test-crash-caso6 [cant] [tx] [acc] [sol]       - Automatiza test del Caso 6 (pre-confirmación)"
-	@echo "  make test-crash-caso7 [cant] [tx] [acc] [sol]       - Automatiza test del Caso 7 (pre-barrera)"
-	@echo "  make test-crash-leader [cant] [tx] [acc] [sol]      - Automatiza test de Caída del Líder en Elección"
+	@echo "  make client <trans> <cuentas>    - Corre un cliente enviando transacciones y cuentas"
+	@echo "  make caos [min] [max] [cant_clientes] [--todos] [--etapa <pref>] - Lanza un test con Chaos Monkey continuo parametrizable"
+	@echo ""
+	@echo "=== CATEGORÍAS DE TESTING ==="
+	@echo "  make test-unitarios              - Corre los tests unitarios y de persistencia"
+	@echo "  make test-caos-todos [cant_cli]  - Test de caída de todos los workers en simultáneo"
+	@echo "  make test-caos-aleatorio [min] [max] [cant_cli] - Test de caída continua aleatoria de workers"
+	@echo "  make test-caos-etapa <pref> [cant_cli]  - Test de caída de una etapa específica"
+	@echo "  make test-caos-cliente [cant_cli] - Test de caída de un cliente a mitad de envío"
+	@echo "  make test-caos-gateway [cant_cli] - Test de caída del gateway"
+	@echo "  make test-caos-gateway-resultados- Test de caída del gateway con resultados parciales"
+	@echo "  make test-crash-flush [etapa]    - Test del Caso 8 (crash post-flush / pre-barrera)"
+	@echo "  make test-crash-caso6 [cant_cli] - Test del Caso 6 (pre-confirmación)"
+	@echo "  make test-crash-caso7 [cant_cli] - Test del Caso 7 (pre-barrera)"
+	@echo "  make test-crash-leader [cant_cli]- Test de Caída del Líder en Elección"
+	@echo "  make test-stress-caos [iter] [cant_cli] - Stress test de caídas masivas en bucle"
+	@echo "  make test-stress-crash [iter]    - Stress test de casos de frontera en bucle"
+	@echo "  make test-todos                  - Corre toda la suite del sistema (unitarios + crash + caos)"
 
 venv:
 	python3 -m venv .venv
@@ -113,6 +113,7 @@ client:
 		-v "$(shell pwd)/logs:/app/logs" \
 		-e LOG_FILE="/app/logs/client_$$CLIENT_SUFFIX.txt" \
 		-e OUTPUT_APPEND_HOSTNAME="false" \
+		-e CLIENT_ID_SUFFIX="$$CLIENT_ID_SUFFIX" \
 		-e TRANSACTIONS_FILE="$$TX_FILE" \
 		-e ACCOUNTS_FILE="$$ACC_FILE" \
 		-e OUTPUT_DIR="$$OUT_DIR" \
@@ -147,9 +148,7 @@ down:
 caos:
 	@mkdir -p logs
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
-	LOGFILE="logs/caos.txt"; \
-	echo "Guardando logs de caos en $$LOGFILE"; \
-	$(PYTHON) scripts/chaos_monkey.py $$ARGS 2>&1 | tee "$$LOGFILE"
+	bash scripts/test_caos_continuo.sh $$ARGS
 
 generar:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
@@ -210,35 +209,41 @@ generar-sample:
 		--output datasets/$${DB}_sample_$${PCT}.csv \
 		--percentage $$PCT
 
-test-todos:
+# --- UNIT TESTS ---
+test-unitarios:
+	./scripts/run_local_tests.sh
+
+# --- CAOS / FALLAS END-TO-END ---
+test-caos-todos:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
 	bash scripts/test_todos.sh $$ARGS
 
-test-etapa:
+test-caos-aleatorio:
+	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
+	bash scripts/test_caos_continuo.sh $$ARGS
+
+test-caos-etapa:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
 	if [ -z "$$ARGS" ]; then \
 		echo "Error: Debes especificar el prefix de la etapa."; \
-		echo "Uso: make test-etapa <prefix> [cant_clientes] [tx] [acc] [soluciones] [espera|random]"; \
-		echo "Ejemplo: make test-etapa bank_shard 3"; \
+		echo "Uso: make test-caos-etapa <prefix> [cant_clientes] [tx] [acc] [soluciones] [espera|random]"; \
 		exit 1; \
 	fi; \
 	bash scripts/test_etapa.sh $$ARGS
 
-test-cliente:
+test-caos-cliente:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
 	bash scripts/test_cliente.sh $$ARGS
 
-test-gateway:
+test-caos-gateway:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
 	bash scripts/test_gateway.sh $$ARGS
 
-test-gateway-resultados:
+test-caos-gateway-resultados:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
 	bash scripts/test_crash_gateway_resultados.sh $$ARGS
 
-test-persistencia:
-	./scripts/run_local_tests.sh
-
+# --- CASOS DE FRONTERA / CRITICAL CORNER CASES ---
 test-crash-flush:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
 	bash scripts/test_crash_flush.sh $$ARGS
@@ -255,13 +260,43 @@ test-crash-leader:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
 	bash scripts/test_crash_leader.sh $$ARGS
 
+# --- STRESS TESTING (BUCLES) ---
+test-stress-caos:
+	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
+	bash scripts/test_stress_todos.sh $$ARGS
+
 test-stress-crash:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
 	bash scripts/test_stress_crash.sh $$ARGS
 
-test-stress-todos:
-	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
-	bash scripts/test_stress_todos.sh $$ARGS
+# --- TEST TODOS ---
+test-todos:
+	@echo "========================================================="
+	@echo "=== 1. Ejecutando tests unitarios y de persistencia ==="
+	@echo "========================================================="
+	@$(MAKE) test-unitarios
+	@echo "========================================================="
+	@echo "=== 2. Ejecutando test de caídas en frío (caso 6) ==="
+	@echo "========================================================="
+	@$(MAKE) test-crash-caso6 1 LI-Small_Trans LI-Small_accounts LI-Small
+	@echo "========================================================="
+	@echo "=== 3. Ejecutando test de caídas en frío (caso 7) ==="
+	@echo "========================================================="
+	@$(MAKE) test-crash-caso7 1 LI-Small_Trans LI-Small_accounts LI-Small
+	@echo "========================================================="
+	@echo "=== 4. Ejecutando test de caída de líder de elección ==="
+	@echo "========================================================="
+	@$(MAKE) test-crash-leader 1 LI-Small_Trans LI-Small_accounts LI-Small
+	@echo "========================================================="
+	@echo "=== 5. Ejecutando test caos total (todos los workers) ==="
+	@echo "========================================================="
+	@make down
+	@docker run --rm -v "$$(pwd)/volume:/cleanup" alpine sh -c "rm -rf /cleanup/*" 2>/dev/null || rm -rf volume/* 2>/dev/null || true
+	@make start && sleep 8
+	@$(MAKE) test-caos-todos 2 LI-Small_Trans LI-Small_accounts LI-Small 5
+	@echo "========================================================="
+	@echo "🎉 ¡Todos los tests del sistema pasaron exitosamente! 🎉"
+	@echo "========================================================="
 
 # Ignorar argumentos pasados a targets dinámicos
 %:

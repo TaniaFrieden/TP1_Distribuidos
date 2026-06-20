@@ -127,17 +127,53 @@ El sistema cuenta con un mecanismo de tolerancia a fallos autocurativo y herrami
 ### Simulación de Caos (Chaos Monkey)
 Para validar la tolerancia a fallos, se dispone de un script Chaos Monkey que apaga de forma aleatoria contenedores de workers durante el procesamiento.
 
-Para ejecutar la simulación de caos:
+Para ejecutar la simulación de caos continuo (Chaos Monkey) y clientes automatizados:
 ```bash
-make caos [min] [max]
+make caos [min] [max] [cant_clientes] [--todos] [--etapa <pref>]
 ```
-* **`[min]`**: Tiempo mínimo en segundos entre apagados aleatorios (opcional, default `10`).
-* **`[max]`**: Tiempo máximo en segundos entre apagados aleatorios (opcional, default `30`).
+* **`[min]`** y **`[max]`**: Intervalo de tiempo al azar en segundos antes de apagar contenedores (opcional, default `10` y `20`).
+* **`[cant_clientes]`**: Cantidad de clientes a lanzar en paralelo para someter a estrés (opcional, default `3`).
+* **`--todos`**: Detiene de forma masiva e inmediata todos los workers de procesamiento.
+* **`--etapa <prefijo>`**: Detiene inmediatamente todos los nodos activos que pertenezcan a la etapa indicada (ej. `q4_sumador`).
 
 *Ejemplo:*
 ```bash
-make caos 5 15   # Apaga un worker aleatorio cada 5 a 15 segundos
+make caos 5 15 4              # 4 clientes, con Chaos Monkey cada 5 a 15 segundos
+make caos 5 5 2 --todos       # 2 clientes, espera 5 segundos y mata todos los workers activos
+make caos 2 8 3 --etapa counter # 3 clientes, tiempo al azar de 2-8s y mata etapa counter
 ```
+
+## Suite de Tests Automatizados
+
+Para correr los tests en bloque, se disponen de comandos Make orientados por propósito:
+
+### 1. Suite Completa (Test Todos)
+```bash
+make test-todos
+```
+* **Qué hace**: Limpia el entorno, corre los tests locales en Python, y consecutivamente ejecuta los tests del Caso 6, Caso 7, Líder de Elección y Caída total de workers, validando el 100% de la sanidad de tu sistema en una sola corrida.
+
+### 2. Tests Unitarios y de Persistencia
+```bash
+make test-unitarios
+```
+
+### 3. Tests de Caos en Docker
+* **`make test-caos-todos [cant_cli]`**: Mata todos los workers simultáneamente durante el procesamiento.
+* **`make test-caos-aleatorio [min] [max] [cant_cli]`**: Aplica fallas aleatorias continuas usando Chaos Monkey mientras los clientes transmiten datos.
+* **`make test-caos-etapa <pref> [cant_cli]`**: Corta una etapa de procesamiento entera.
+* **`make test-caos-cliente [cant_cli]`**: Simula la caída de un cliente a mitad de envío.
+* **`make test-caos-gateway [cant_cli]`**: Simula la caída en caliente del Gateway.
+
+### 4. Tests de Casos de Frontera (Inyección de Falla por Estado)
+* **`make test-crash-flush [etapa]`**: Valida el Caso 8 (crash tras flush de datos a disco, pre-barrera_completada).
+* **`make test-crash-caso6 [cant_cli]`**: Valida el Caso 6 (falla pre-confirmación del fin de dataset al cliente).
+* **`make test-crash-caso7 [cant_cli]`**: Valida el Caso 7 (falla pre-disparo de la barrera).
+* **`make test-crash-leader [cant_cli]`**: Valida tolerancia a caída del watchdog líder de elección.
+
+### 5. Tests de Stress (Bucles)
+* **`make test-stress-caos [iter] [cant_cli]`**: Itera en bucle el test de caídas masivas para detectar condiciones de carrera.
+* **`make test-stress-crash [iter]`**: Itera en bucle los casos de frontera (caso6, caso7 y leader).
 
 ## Limpiar todo
 
@@ -152,6 +188,5 @@ Detiene los contenedores, libera los puertos 5678, 5672 y 15672, y elimina cache
 ```bash
 make log gateway          # logs del gateway en tiempo real
 make log filter_usd_01    # logs de un worker específico
-make test                 # corre todos los tests
-make help                 # lista todos los targets disponibles
+make help                 # lista todos los targets disponibles con descripciones
 ```
