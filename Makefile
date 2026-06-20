@@ -253,6 +253,10 @@ test-stress-crash:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
 	bash scripts/test_stress_crash.sh $$ARGS
 
+test-stress-todos:
+	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
+	bash scripts/test_stress_todos.sh $$ARGS
+
 # Ignorar argumentos pasados a targets dinámicos
 %:
 	@:
