@@ -26,3 +26,6 @@ class GatewayConfig:
         self.bank_queue_config = json.loads(bank_env)
         
         self.num_queries = len(self.input_queues)
+        self.heartbeat_interval_seconds = float(os.getenv("HEARTBEAT_INTERVAL_SECONDS", "5"))
+        eofs_str = os.getenv("EOF_COUNTS_PER_QUEUE", "{}")
+        self.eofs_esperados = json.loads(eofs_str)  # {"q2_results": 6, ...}; default 1 si no figura

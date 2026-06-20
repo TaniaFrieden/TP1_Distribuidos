@@ -15,7 +15,7 @@ echo "=== Esperando ${ESPERA_ANTES_DE_MATAR}s antes de matar gateway ==="
 sleep "$ESPERA_ANTES_DE_MATAR"
 
 echo "=== Matando gateway ==="
-docker kill gateway
+docker kill gateway_01
 
 echo "=== Gateway caído. La recuperación queda a cargo de la solución que implementen ==="
 echo "(réplica activa, restart manual, etc. - este script no hace nada más)"

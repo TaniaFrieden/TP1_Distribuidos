@@ -1,5 +1,9 @@
 import threading
 import uuid
+from common.persistencia import PersistidorEstado
+
+GATEWAY_VOLUMEN_DIR = "/app/volumen"
+
 
 class GatewayState:
     def __init__(self):
@@ -9,6 +13,8 @@ class GatewayState:
         self.request_counters = {}
         self.servidor_corriendo = True
         self.state_lock = threading.Lock()
+        self._eventos_reconexion = {}  # {client_id: threading.Event}
+        self._acks_pendientes = {}     # {client_id: {batch_id: threading.Event}}
 
     def generar_siguiente_id(self):
         return str(uuid.uuid4())
@@ -16,16 +22,39 @@ class GatewayState:
     def registrar_cliente(self, client_id, socket_cliente):
         with self.state_lock:
             self.clientes_conectados[client_id] = socket_cliente
-            self.clientes_locks[client_id] = threading.Lock()
-            self.clientes_eof_status[client_id] = set()
+            if client_id not in self.clientes_locks:
+                self.clientes_locks[client_id] = threading.Lock()
+            if client_id not in self.clientes_eof_status:
+                self.clientes_eof_status[client_id] = set()
+            # Siempre crear y activar el evento: evita la race condition donde
+            # registrar_cliente se llama antes de que esperar_cliente cree el evento.
+            if client_id not in self._eventos_reconexion:
+                self._eventos_reconexion[client_id] = threading.Event()
+            self._eventos_reconexion[client_id].set()
 
     def generar_request_id(self, client_id, query_key):
         with self.state_lock:
+            # Clave para cache en memoria
             key = (client_id, query_key)
             if key not in self.request_counters:
+                # Intentar cargar del persistidor si existe
                 self.request_counters[key] = 0
+                estado = self.cargar_estado_cliente(client_id)
+                if estado and "request_counters" in estado:
+                    # En el estado persistido lo guardamos como dict de {query_key: count}
+                    self.request_counters[key] = estado["request_counters"].get(query_key, 0)
+            
             self.request_counters[key] += 1
             seq = self.request_counters[key]
+
+            # Persistir la actualización del contador en el estado del cliente
+            estado = self.cargar_estado_cliente(client_id)
+            if estado:
+                if "request_counters" not in estado:
+                    estado["request_counters"] = {}
+                estado["request_counters"][query_key] = seq
+                self.guardar_estado_cliente(client_id, estado)
+
             return f"{client_id}:{query_key}:{seq}"
 
     def obtener_cliente(self, client_id):
@@ -44,6 +73,66 @@ class GatewayState:
             keys_to_remove = [k for k in self.request_counters if k[0] == client_id]
             for k in keys_to_remove:
                 self.request_counters.pop(k, None)
+            # Limpia el evento para el próximo ciclo pero no lo elimina,
+            # así esperar_cliente puede reutilizarlo en la siguiente reconexión.
+            if client_id in self._eventos_reconexion:
+                self._eventos_reconexion[client_id].clear()
 
     def detener_servidor(self):
         self.servidor_corriendo = False
+
+    def esperar_cliente(self, client_id, timeout=120):
+        """Bloquea hasta que el cliente se reconecte o se agote el timeout. Retorna True si conectó."""
+        with self.state_lock:
+            if client_id not in self._eventos_reconexion:
+                self._eventos_reconexion[client_id] = threading.Event()
+            evento = self._eventos_reconexion[client_id]
+        return evento.wait(timeout=timeout)
+
+    # --- ACKs de resultados ---
+
+    def registrar_ack_esperado(self, client_id, batch_id):
+        """Registra que se espera un ACK_RESULTADO del cliente para este batch_id. Retorna el Event."""
+        evento = threading.Event()
+        with self.state_lock:
+            if client_id not in self._acks_pendientes:
+                self._acks_pendientes[client_id] = {}
+            self._acks_pendientes[client_id][batch_id] = evento
+        return evento
+
+    def notificar_ack(self, client_id, batch_id):
+        """El ClientHandler llama esto cuando recibe un ACK_RESULTADO del cliente."""
+        with self.state_lock:
+            evento = self._acks_pendientes.get(client_id, {}).get(batch_id)
+        if evento:
+            evento.set()
+
+    def cancelar_acks_cliente(self, client_id):
+        """Cancela todos los ACKs pendientes de un cliente (e.g. al desconectarse)."""
+        with self.state_lock:
+            pendientes = self._acks_pendientes.pop(client_id, {})
+        for evento in pendientes.values():
+            evento.set()  # desbloquea workers que estaban esperando
+
+    def limpiar_ack(self, client_id, batch_id):
+        with self.state_lock:
+            self._acks_pendientes.get(client_id, {}).pop(batch_id, None)
+
+    # --- Persistencia por cliente ---
+
+    def _persistidor(self, client_id):
+        return PersistidorEstado(f"gateway_resultados_{client_id}", GATEWAY_VOLUMEN_DIR)
+
+    def tiene_estado_persistido(self, client_id):
+        return bool(self._persistidor(client_id).cargar())
+
+    def cargar_estado_cliente(self, client_id):
+        return self._persistidor(client_id).cargar()
+
+    def guardar_estado_cliente(self, client_id, estado):
+        self._persistidor(client_id).guardar(estado)
+
+    def limpiar_estado_cliente(self, client_id):
+        self._persistidor(client_id).borrar()
+        with self.state_lock:
+            self._eventos_reconexion.pop(client_id, None)

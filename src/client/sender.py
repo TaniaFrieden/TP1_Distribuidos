@@ -31,6 +31,10 @@ def enviar_archivo(filepath, tipo_mensaje, sock, lock, client_id, shutdown_event
                 logging.info(f"Envío de {filepath} interrumpido.")
             else:
                 logging.info(f"Envío de {filepath} completado.")
+    except (BrokenPipeError, ConnectionResetError, OSError) as e:
+        logging.error(f"Error de red al procesar {filepath}: {e}")
+        if shutdown_event:
+            shutdown_event.set()
     except Exception as e:
         logging.error(f"Error al procesar {filepath}: {e}")
 

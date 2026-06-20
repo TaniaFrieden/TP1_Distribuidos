@@ -3,7 +3,7 @@ services:
     build:
       context: ./src
       dockerfile: gateway/Dockerfile
-    container_name: gateway
+    container_name: gateway_01
     depends_on:
       rabbitmq:
         condition: service_healthy
