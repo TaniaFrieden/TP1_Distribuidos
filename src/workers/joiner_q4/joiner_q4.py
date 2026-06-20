@@ -1,7 +1,6 @@
-import os
-
 from base import WorkerBase
 from base.constantes import CLAVE_BARRERA_COMPLETADA
+from base.coordinacion.hooks import crear_hook_crash_despues_flush
 from common.logger import Logger, obtener_logger
 from common.persistencia import TAMANIO_BATCH_PERSISTENCIA
 from common.constantes_protocolo import ID_SOLICITUD
@@ -34,6 +33,7 @@ class JoinerQ4Worker(WorkerBase):
         self.persistencia = PersistenciaJoiner(prefijo, BASE_DIR)
         self.procesador = ProcesadorLotes(self.acumulador)
         self.emisor = EmisorResultados(self._enviar)
+        self._hook_post_flush = crear_hook_crash_despues_flush()
         self._recuperar_estado()
         logger.info("[JoinerQ4] Iniciado.")
 
@@ -109,12 +109,8 @@ class JoinerQ4Worker(WorkerBase):
         enviados = self.emisor.emitir(client_id, scatter, txns)
         logger.info(f"[JoinerQ4] Flush completo para client_id={client_id}. Registros emitidos: {enviados}.")
 
-        if os.environ.get("CRASH_AFTER_FLUSH") == "true":
-            bandera = os.path.join(BASE_DIR, "crash_flush_done")
-            if not os.path.exists(bandera):
-                open(bandera, "w").close()
-                logger.warning("[JoinerQ4] CRASH_AFTER_FLUSH — muriendo después del envío, antes de barrier_completada")
-                os._exit(1)
+        if self._hook_post_flush:
+            self._hook_post_flush()
 
         self.persistencia.marcar_barrera_completada(client_id)
         self.persistencia.borrar(client_id)

@@ -6,6 +6,8 @@ from base.constantes import (
     TIPO_BARRERA_COMPLETA,
     ORIGINADOR,
     ID_WORKER,
+    CLAVE_MENSAJES_PROCESADOS_LOCAL,
+    CLAVE_MENSAJES_EMITIDOS_LOCAL,
 )
 
 
@@ -26,9 +28,9 @@ def msg_worker_finalizado(client_id, originador, id_nodo, mensajes_procesados=No
         ID_WORKER: id_nodo,
     }
     if mensajes_procesados is not None:
-        payload["mensajes_procesados_local"] = mensajes_procesados
+        payload[CLAVE_MENSAJES_PROCESADOS_LOCAL] = mensajes_procesados
     if mensajes_emitidos is not None:
-        payload["mensajes_emitidos_local"] = mensajes_emitidos
+        payload[CLAVE_MENSAJES_EMITIDOS_LOCAL] = mensajes_emitidos
     return payload
 
 

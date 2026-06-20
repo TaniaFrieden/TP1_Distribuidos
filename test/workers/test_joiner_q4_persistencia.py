@@ -12,6 +12,8 @@ import os
 import pytest
 from unittest.mock import MagicMock, patch
 from common.persistencia import PersistidorEstado
+from base.constantes import CLAVE_BARRERA_COMPLETADA, CLAVE_IDS_PROCESADOS
+from workers.joiner_q4.persistencia_joiner import CLAVE_SCATTER, CLAVE_TXNS
 
 
 BASE_ENV = {
@@ -53,9 +55,9 @@ class TestJoinerQ4Recovery:
 
     def test_carga_scatter_txns_y_vistos_desde_disco(self, tmp_path):
         estado = {
-            "scatter": {"10|acc1": [["20", "acc2"], ["30", "acc3"]]},
-            "txns":    {"10|acc1": [["40", "acc4"]]},
-            "vistos":  ["r1"],
+            CLAVE_SCATTER: {"10|acc1": [["20", "acc2"], ["30", "acc3"]]},
+            CLAVE_TXNS:    {"10|acc1": [["40", "acc4"]]},
+            CLAVE_IDS_PROCESADOS:  ["r1"],
         }
         _escribir_estado(tmp_path, "c1", estado)
         w = _crear_worker(tmp_path)
@@ -74,9 +76,9 @@ class TestJoinerQ4Recovery:
     def test_txns_se_recuperan_como_set(self, tmp_path):
         """_txns debe ser un set de tuples, no una lista."""
         estado = {
-            "scatter": {},
-            "txns": {"bank|acc": [["b2", "a2"], ["b3", "a3"]]},
-            "vistos": [],
+            CLAVE_SCATTER: {},
+            CLAVE_TXNS: {"bank|acc": [["b2", "a2"], ["b3", "a3"]]},
+            CLAVE_IDS_PROCESADOS: [],
         }
         _escribir_estado(tmp_path, "c1", estado)
         w = _crear_worker(tmp_path)
@@ -85,9 +87,9 @@ class TestJoinerQ4Recovery:
     def test_scatter_se_recupera_como_lista_de_tuples(self, tmp_path):
         """_scatter debe ser una lista de tuples, no de listas."""
         estado = {
-            "scatter": {"bank|acc": [["b2", "a2"], ["b3", "a3"]]},
-            "txns": {},
-            "vistos": [],
+            CLAVE_SCATTER: {"bank|acc": [["b2", "a2"], ["b3", "a3"]]},
+            CLAVE_TXNS: {},
+            CLAVE_IDS_PROCESADOS: [],
         }
         _escribir_estado(tmp_path, "c1", estado)
         w = _crear_worker(tmp_path)
@@ -95,8 +97,8 @@ class TestJoinerQ4Recovery:
         assert all(isinstance(e, tuple) for e in elementos)
 
     def test_multiples_clientes_se_recuperan_independientemente(self, tmp_path):
-        _escribir_estado(tmp_path, "c1", {"scatter": {"k1|v1": [["a", "b"]]}, "txns": {}, "vistos": []})
-        _escribir_estado(tmp_path, "c2", {"scatter": {}, "txns": {"k2|v2": [["c", "d"]]}, "vistos": ["x"]})
+        _escribir_estado(tmp_path, "c1", {CLAVE_SCATTER: {"k1|v1": [["a", "b"]]}, CLAVE_TXNS: {}, CLAVE_IDS_PROCESADOS: []})
+        _escribir_estado(tmp_path, "c2", {CLAVE_SCATTER: {}, CLAVE_TXNS: {"k2|v2": [["c", "d"]]}, CLAVE_IDS_PROCESADOS: ["x"]})
         w = _crear_worker(tmp_path)
         assert "k1|v1" in w.acumulador._scatter["c1"]
         assert "k2|v2" in w.acumulador._txns["c2"]
@@ -111,10 +113,10 @@ class TestJoinerQ4BarrierCompletada:
  
     def test_estado_con_barrier_completada_no_se_carga_en_memoria(self, tmp_path):
         estado = {
-            "scatter": {"10|acc1": [["20", "acc2"]]},
-            "txns": {"10|acc1": [["30", "acc3"]]},
-            "vistos": ["r1"],
-            "barrier_completada": True,
+            CLAVE_SCATTER: {"10|acc1": [["20", "acc2"]]},
+            CLAVE_TXNS: {"10|acc1": [["30", "acc3"]]},
+            CLAVE_IDS_PROCESADOS: ["r1"],
+            CLAVE_BARRERA_COMPLETADA: True,
         }
         _escribir_estado(tmp_path, "c1", estado)
         w = _crear_worker(tmp_path)
@@ -123,17 +125,17 @@ class TestJoinerQ4BarrierCompletada:
         assert "c1" not in w.acumulador._vistos
  
     def test_estado_con_barrier_completada_se_borra_del_disco(self, tmp_path):
-        _escribir_estado(tmp_path, "c1", {"scatter": {}, "txns": {}, "vistos": [], "barrier_completada": True})
+        _escribir_estado(tmp_path, "c1", {CLAVE_SCATTER: {}, CLAVE_TXNS: {}, CLAVE_IDS_PROCESADOS: [], CLAVE_BARRERA_COMPLETADA: True})
         _crear_worker(tmp_path)
         filepath = tmp_path / _nombre_nodo("c1") / "estado.json"
         assert not filepath.exists()
  
     def test_estado_sin_barrier_completada_si_se_carga(self, tmp_path):
         estado = {
-            "scatter": {"10|acc1": [["20", "acc2"]]},
-            "txns": {},
-            "vistos": [],
-            "barrier_completada": False,
+            CLAVE_SCATTER: {"10|acc1": [["20", "acc2"]]},
+            CLAVE_TXNS: {},
+            CLAVE_IDS_PROCESADOS: [],
+            CLAVE_BARRERA_COMPLETADA: False,
         }
         _escribir_estado(tmp_path, "c1", estado)
         w = _crear_worker(tmp_path)
@@ -152,9 +154,9 @@ class TestJoinerQ4DedupPropio:
         reentregado agregaría la misma arista dos veces → caminos duplicados.
         """
         estado = {
-            "scatter": {"10|acc1": [["20", "acc2"]]},
-            "txns": {},
-            "vistos": ["req-dup"],
+            CLAVE_SCATTER: {"10|acc1": [["20", "acc2"]]},
+            CLAVE_TXNS: {},
+            CLAVE_IDS_PROCESADOS: ["req-dup"],
         }
         _escribir_estado(tmp_path, "c1", estado)
         w = _crear_worker(tmp_path)
@@ -182,9 +184,9 @@ class TestJoinerQ4DedupPropio:
 
     def test_request_id_nuevo_agrega_a_scatter_y_persiste(self, tmp_path):
         estado = {
-            "scatter": {"10|acc1": [["20", "acc2"]]},
-            "txns": {},
-            "vistos": ["req-viejo"],
+            CLAVE_SCATTER: {"10|acc1": [["20", "acc2"]]},
+            CLAVE_TXNS: {},
+            CLAVE_IDS_PROCESADOS: ["req-viejo"],
         }
         _escribir_estado(tmp_path, "c1", estado)
         w = _crear_worker(tmp_path)
@@ -213,9 +215,9 @@ class TestJoinerQ4DedupPropio:
         re-procesamiento para mantener la semántica at-most-once del pipeline.
         """
         estado = {
-            "scatter": {},
-            "txns": {"10|acc1": [["20", "acc2"]]},
-            "vistos": ["req-dup"],
+            CLAVE_SCATTER: {},
+            CLAVE_TXNS: {"10|acc1": [["20", "acc2"]]},
+            CLAVE_IDS_PROCESADOS: ["req-dup"],
         }
         _escribir_estado(tmp_path, "c1", estado)
         w = _crear_worker(tmp_path)

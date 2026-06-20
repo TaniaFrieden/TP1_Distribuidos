@@ -1,6 +1,5 @@
-import os
-
 from base import WorkerBase
+from base.coordinacion.hooks import crear_hook_crash_despues_flush
 from common.logger import Logger, obtener_logger
 from common.persistencia import TAMANIO_BATCH_PERSISTENCIA
 from common.constantes_protocolo import ID_SOLICITUD
@@ -42,6 +41,7 @@ class ContadorDistintoWorker(WorkerBase):
         self.persistencia = PersistenciaContador(prefijo, BASE_DIR)
         self.procesador = ProcesadorLotes(self.acumulador, self.config.campos_grupo, self.config.campos_valor)
         self.emisor = EmisorResultados(self.config, lambda *a, **kw: self._enviar(*a, **kw))
+        self._hook_post_flush = crear_hook_crash_despues_flush()
         self._recuperar_estado()
         logger.info(
             f"[ContadorDistinto] group={self.config.campos_grupo} value={self.config.campos_valor} "
@@ -122,12 +122,8 @@ class ContadorDistintoWorker(WorkerBase):
         enviados = self.emisor.emitir(client_id, grupos)
         logger.info(f"[ContadorDistinto] Flush completo para client_id={client_id}. Registros emitidos: {enviados}.")
 
-        if os.environ.get("CRASH_AFTER_FLUSH") == "true":
-            bandera = os.path.join(BASE_DIR, "crash_flush_done")
-            if not os.path.exists(bandera):
-                open(bandera, "w").close()
-                logger.warning("[ContadorDistinto] CRASH_AFTER_FLUSH — muriendo después del envío, antes de barrier_completada")
-                os._exit(1)
+        if self._hook_post_flush:
+            self._hook_post_flush()
 
         self.persistencia.marcar_barrera_completada(client_id)
         self.persistencia.borrar(client_id)

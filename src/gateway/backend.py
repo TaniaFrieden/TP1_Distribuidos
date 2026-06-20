@@ -6,6 +6,10 @@ import uuid
 from queue import Queue
 from common.logger import obtener_logger
 from common import message_protocol, middleware
+from common.constantes_protocolo import (
+    CABECERA, ESQUEMA, PAYLOAD, ID_CLIENTE, ID_SOLICITUD, LOTES,
+    CLAVE_QUERY, CLAVE_RESULTADO, CLAVE_EOF_REPORTE, CLAVE_COLUMNAS,
+)
 from config import GatewayConfig
 
 logger = obtener_logger(__name__)
@@ -181,7 +185,7 @@ class BackendListener:
 
         try:
             transaccion = json.loads(body.decode("utf-8"))
-            client_id = transaccion.pop("client_id", None)
+            client_id = transaccion.pop(ID_CLIENTE, None)
             if not client_id:
                 ack()
                 return
@@ -192,7 +196,6 @@ class BackendListener:
                 logger.info(f"Query {cola_nombre} ya entregada a {client_id}, descartando")
                 ack()
                 return
-
             sock, lock, eof_status = self._obtener_socket_o_esperar(client_id, ack, nack)
             if not sock:
                 return
@@ -200,13 +203,13 @@ class BackendListener:
             if query_id == 4:
                 self._cargar_q4_si_necesario(client_id)
 
-            es_eof = transaccion.pop("EOF", False) or transaccion.pop("eof", False)
+            es_eof = transaccion.pop("EOF", False) or transaccion.pop(CLAVE_EOF_REPORTE, False)
 
             if es_eof:
                 self._procesar_eof(client_id, query_id, cola_nombre, sock, lock, eof_status, ack, nack)
                 return
 
-            request_id = transaccion.get("request_id")
+            request_id = transaccion.get(ID_SOLICITUD)
             if request_id:
                 with self._lock:
                     if client_id not in self._processed_hashes:
@@ -217,22 +220,28 @@ class BackendListener:
                         return
                     self._processed_hashes[client_id].add(request_id)
 
-            if "batches" in transaccion:
+            if LOTES in transaccion:
                 if query_id == 4:
-                    self._acumular_cuentas_q4(client_id, transaccion["batches"])
+                    self._acumular_cuentas_q4(client_id, transaccion[LOTES])
                     self._persistir_estado(client_id)
                     ack()
                     return
 
-                for batch in transaccion["batches"]:
-                    header = batch["header"]
-                    schema = header["schema"]
-                    records = batch["payload"]
+                for batch in transaccion[LOTES]:
+                    header = batch[CABECERA]
+                    schema = header[ESQUEMA]
+                    records = batch[PAYLOAD]
+
+                    logger.info(f"Resultado recibido para {cola_nombre} a {client_id} con {len(records)} registros.")
                     resultado_lista = [
-                        {**dict(zip(schema, record_values)), "eof": False}
+                        {**dict(zip(schema, record_values)), CLAVE_EOF_REPORTE: False}
                         for record_values in records
                     ]
-                    payload_str = json.dumps({"query": query_id, "resultado": resultado_lista})
+                    payload = {
+                        CLAVE_QUERY: query_id,
+                        CLAVE_RESULTADO: resultado_lista
+                    }
+                    payload_str = json.dumps(payload)
                     if not self._enviar_reporte_con_ack(client_id, sock, lock, payload_str):
                         with self._lock:
                             self._processed_hashes.pop(client_id, None)
@@ -241,8 +250,12 @@ class BackendListener:
                         return
                 ack()
             else:
-                transaccion["eof"] = False
-                payload_str = json.dumps({"query": query_id, "resultado": transaccion})
+                transaccion[CLAVE_EOF_REPORTE] = False
+                payload = {
+                    CLAVE_QUERY: query_id,
+                    CLAVE_RESULTADO: transaccion
+                }
+                payload_str = json.dumps(payload)
                 if self._enviar_reporte_con_ack(client_id, sock, lock, payload_str):
                     ack()
                 else:
@@ -250,7 +263,6 @@ class BackendListener:
                         self._processed_hashes.pop(client_id, None)
                     self.state.remover_cliente(client_id)
                     nack()
-
         except json.JSONDecodeError:
             logger.error("JSON invalido")
             ack()
@@ -287,9 +299,12 @@ class BackendListener:
                 return
             columns_hint = ["Bank", "Account"]
 
-        payload = {"query": query_id, "resultado": {"eof": True}}
+        payload = {
+            CLAVE_QUERY: query_id,
+            CLAVE_RESULTADO: {CLAVE_EOF_REPORTE: True}
+        }
         if columns_hint:
-            payload["columns"] = columns_hint
+            payload[CLAVE_COLUMNAS] = columns_hint
         if not self._enviar_reporte_con_ack(client_id, sock, lock, json.dumps(payload)):
             logger.warning(f"No se pudo confirmar EOF de {cola_nombre} a {client_id}, reencolando")
             nack()
@@ -302,8 +317,8 @@ class BackendListener:
         if len(eof_status) == self.config.num_queries:
             logger.info(f"Todas las queries finalizadas para {client_id}")
             with lock:
-                message_protocol.external.send_msg(
-                    sock, message_protocol.external.MsgType.END_OF_RECODS
+                message_protocol.external.enviar_mensaje(
+                    sock, message_protocol.external.TipoMensaje.FIN_DE_REGISTROS
                 )
             with self._lock:
                 self._processed_hashes.pop(client_id, None)
@@ -321,8 +336,8 @@ class BackendListener:
         with self._lock:
             cuentas = self._q4_cuentas.setdefault(client_id, set())
             for batch in batches:
-                schema = batch["header"]["schema"]
-                records = batch["payload"]
+                schema = batch[CABECERA][ESQUEMA]
+                records = batch[PAYLOAD]
                 try:
                     fb_idx = schema.index("From Bank")
                     fa_idx = schema.index("From Account")
@@ -346,8 +361,8 @@ class BackendListener:
             lote = registros[i:i + self.LOTE_Q4]
             if not lote:
                 break
-            resultado_lista = [{"Bank": b, "Account": a, "eof": False} for b, a in lote]
-            payload_str = json.dumps({"query": 4, "resultado": resultado_lista})
+            resultado_lista = [{"Bank": b, "Account": a, CLAVE_EOF_REPORTE: False} for b, a in lote]
+            payload_str = json.dumps({CLAVE_QUERY: 4, CLAVE_RESULTADO: resultado_lista})
             if not self._enviar_reporte_con_ack(client_id, sock, lock, payload_str):
                 return False
         return True

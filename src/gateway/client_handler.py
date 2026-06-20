@@ -5,6 +5,11 @@ import gc
 import ctypes
 from common.logger import obtener_logger
 from common import message_protocol, middleware, sharding
+from common.constantes_protocolo import (
+    CABECERA, ESQUEMA, PAYLOAD, ID_CLIENTE, ID_SOLICITUD, LOTES, CANTIDAD,
+    FIN_DE_ARCHIVO, DESCONEXION_CLIENTE,
+    CONF_PREFIJO_SHARD, CONF_TOTAL_WORKERS, CONF_CAMPO_HASH,
+)
 from config import GatewayConfig
 
 logger = obtener_logger(__name__)
@@ -47,8 +52,8 @@ class ClientHandler:
     def _leer_hello(self, client_socket):
         """Lee el mensaje HELLO del cliente y retorna el client_id (nuevo o existente)."""
         try:
-            msg_type, payload = message_protocol.external.recv_msg(client_socket)
-            if msg_type == message_protocol.external.MsgType.HELLO:
+            tipo_mensaje, payload = message_protocol.external.recibir_mensaje(client_socket)
+            if tipo_mensaje == message_protocol.external.TipoMensaje.HELLO:
                 data = json.loads(payload)
                 cid = data.get("client_id", "").strip()
                 if cid:
@@ -121,29 +126,34 @@ class ClientHandler:
         colas_bancos = {}
 
         if self.config.bank_queue_config:
-            prefix = self.config.bank_queue_config.get("queue_shard_prefix")
-            total_workers = self.config.bank_queue_config.get("total_workers", self.config.DEFAULT_WORKERS)
+            prefix = self.config.bank_queue_config.get(CONF_PREFIJO_SHARD)
+            total_workers = self.config.bank_queue_config.get(CONF_TOTAL_WORKERS, self.config.DEFAULT_WORKERS)
             for i in range(1, total_workers + 1):
                 colas_bancos[i] = middleware.MessageMiddlewareQueueRabbitMQ(self.config.mom_host, f"{prefix}_{i}")
 
         eof_enviado = False
         try:
             while True:
-                msg_type, payload = message_protocol.external.recv_msg(client_socket)
+                tipo_mensaje, payload = message_protocol.external.recibir_mensaje(client_socket)
 
-                if msg_type == message_protocol.external.MsgType.LOTE_TRANSACCIONES:
+                if tipo_mensaje == message_protocol.external.TipoMensaje.LOTE_TRANSACCIONES:
                     self._reenviar_lote_tx(client_id, client_socket, payload, colas_tx)
 
-                elif msg_type == message_protocol.external.MsgType.LOTE_BANCOS:
+                elif tipo_mensaje == message_protocol.external.TipoMensaje.LOTE_BANCOS:
                     self._reenviar_lote_bancos(client_id, client_socket, payload, colas_bancos)
 
-                elif msg_type == message_protocol.external.MsgType.ACK_RESULTADO:
+                elif tipo_mensaje == message_protocol.external.TipoMensaje.ACK_RESULTADO:
                     # El backend ya comenzó a mandar resultados mientras el cliente aún enviaba datos
                     data = json.loads(payload)
                     self.state.notificar_ack(client_id, data.get("batch_id"))
 
-                elif msg_type == message_protocol.external.MsgType.END_OF_RECODS:
-                    eof_msg = json.dumps({"client_id": client_id, "EOF": True}).encode("utf-8")
+                elif tipo_mensaje == message_protocol.external.TipoMensaje.FIN_DE_REGISTROS:
+                    if client_id is None:
+                        client_id = payload or str(uuid.uuid4())
+                        self.state.registrar_cliente(client_id, client_socket)
+                        logger.info(f"Cliente {client_id} conectado (FIN_DE_REGISTROS)")
+
+                    eof_msg = json.dumps({ID_CLIENTE: client_id, FIN_DE_ARCHIVO: True}).encode("utf-8")
                     for q in colas_tx:
                         q.send(eof_msg)
                     for q in colas_bancos.values():
@@ -181,40 +191,40 @@ class ClientHandler:
                 pass
 
     def _reenviar_lote_tx(self, client_id, client_socket, payload, colas_tx):
-        header = payload["header"]
-        schema = self._deduplicar_schema(header["schema"])
-        header["schema"] = schema
-        records = payload["payload"]
+        header = payload[CABECERA]
+        schema = self._deduplicar_schema(header[ESQUEMA])
+        header[ESQUEMA] = schema
+        records = payload[PAYLOAD]
 
         for q in colas_tx:
             req_id = self.state.generar_request_id(client_id, q.queue_name)
             internal_msg = json.dumps({
-                "client_id": client_id,
-                "request_id": req_id,
-                "batches": [{"header": header, "payload": records}]
+                ID_CLIENTE: client_id,
+                ID_SOLICITUD: req_id,
+                LOTES: [{CABECERA: header, PAYLOAD: records}]
             }).encode("utf-8")
             q.send(internal_msg)
 
         _, lock, _ = self.state.obtener_cliente(client_id)
         if lock:
             with lock:
-                message_protocol.external.send_msg(client_socket, message_protocol.external.MsgType.ACK)
+                message_protocol.external.enviar_mensaje(client_socket, message_protocol.external.TipoMensaje.ACK)
 
     def _reenviar_lote_bancos(self, client_id, client_socket, payload, colas_bancos):
         if not self.config.bank_queue_config:
             _, lock, _ = self.state.obtener_cliente(client_id)
             if lock:
                 with lock:
-                    message_protocol.external.send_msg(client_socket, message_protocol.external.MsgType.ACK)
+                    message_protocol.external.enviar_mensaje(client_socket, message_protocol.external.TipoMensaje.ACK)
             return
 
-        header = payload["header"]
-        schema = self._deduplicar_schema(header["schema"])
-        header["schema"] = schema
-        records = payload["payload"]
+        header = payload[CABECERA]
+        schema = self._deduplicar_schema(header[ESQUEMA])
+        header[ESQUEMA] = schema
+        records = payload[PAYLOAD]
 
-        hash_field = self.config.bank_queue_config.get("hash_field", "Bank ID")
-        total_workers = self.config.bank_queue_config.get("total_workers", 1)
+        hash_field = self.config.bank_queue_config.get(CONF_CAMPO_HASH, "Bank ID")
+        total_workers = self.config.bank_queue_config.get(CONF_TOTAL_WORKERS, 1)
         hash_idx = schema.index(hash_field) if hash_field in schema else None
 
         records_by_shard = {}
@@ -226,11 +236,11 @@ class ClientHandler:
         for shard_id, shard_records in records_by_shard.items():
             req_id = self.state.generar_request_id(client_id, colas_bancos[shard_id].queue_name)
             shard_batch = json.dumps({
-                "client_id": client_id,
-                "request_id": req_id,
-                "batches": [{
-                    "header": {"schema": schema, "client_id": client_id, "count": len(shard_records)},
-                    "payload": shard_records
+                ID_CLIENTE: client_id,
+                ID_SOLICITUD: req_id,
+                LOTES: [{
+                    CABECERA: {ESQUEMA: schema, ID_CLIENTE: client_id, CANTIDAD: len(shard_records)},
+                    PAYLOAD: shard_records
                 }]
             }).encode("utf-8")
             colas_bancos[shard_id].send(shard_batch)
@@ -238,7 +248,7 @@ class ClientHandler:
         _, lock, _ = self.state.obtener_cliente(client_id)
         if lock:
             with lock:
-                message_protocol.external.send_msg(client_socket, message_protocol.external.MsgType.ACK)
+                message_protocol.external.enviar_mensaje(client_socket, message_protocol.external.TipoMensaje.ACK)
 
     @staticmethod
     def _deduplicar_schema(schema):
@@ -254,7 +264,7 @@ class ClientHandler:
         return limpio
 
     def _enviar_disconnect(self, client_id, colas_tx, colas_bancos):
-        disconnect_msg = json.dumps({"client_id": client_id, "CLIENT_DISCONNECT": True}).encode("utf-8")
+        disconnect_msg = json.dumps({ID_CLIENTE: client_id, DESCONEXION_CLIENTE: True}).encode("utf-8")
         logger.info(f"Enviando CLIENT_DISCONNECT para {client_id}")
         for q in colas_tx:
             try:

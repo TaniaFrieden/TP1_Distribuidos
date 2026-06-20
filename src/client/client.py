@@ -7,6 +7,7 @@ import time
 import json
 import os
 from common import message_protocol
+from common.constantes_protocolo import ID_CLIENTE
 from common.logger import Logger
 from config import SERVER_HOST, SERVER_PORT, TRANSACTIONS_FILE, ACCOUNTS_FILE, OUTPUT_DIR
 from receiver import escuchar_respuesta
@@ -48,10 +49,10 @@ def _ejecutar_sesion(client_id, inicio_cliente):
     try:
         # Handshake: el cliente se presenta primero
         hello_payload = json.dumps({"client_id": client_id})
-        message_protocol.external.send_msg(sock, message_protocol.external.MsgType.HELLO, hello_payload)
+        message_protocol.external.enviar_mensaje(sock, message_protocol.external.TipoMensaje.HELLO, hello_payload)
 
-        msg_type, payload = message_protocol.external.recv_msg(sock)
-        if msg_type != message_protocol.external.MsgType.CONFIG_QUERIES:
+        tipo_mensaje, payload = message_protocol.external.recibir_mensaje(sock)
+        if tipo_mensaje != message_protocol.external.TipoMensaje.CONFIG_QUERIES:
             logging.warning("Respuesta inesperada del gateway en handshake")
             return "reintentar"
 
@@ -150,13 +151,11 @@ def _conectar_socket():
 def _iniciar_hilos_envio(sock, lock, client_id, shutdown_event):
     hilo_tx = threading.Thread(
         target=enviar_archivo,
-        args=(TRANSACTIONS_FILE, message_protocol.external.MsgType.LOTE_TRANSACCIONES,
-              sock, lock, client_id, shutdown_event)
+        args=(TRANSACTIONS_FILE, message_protocol.external.TipoMensaje.LOTE_TRANSACCIONES, sock, lock, client_id, shutdown_event)
     )
     hilo_bancos = threading.Thread(
         target=enviar_archivo,
-        args=(ACCOUNTS_FILE, message_protocol.external.MsgType.LOTE_BANCOS,
-              sock, lock, client_id, shutdown_event)
+        args=(ACCOUNTS_FILE, message_protocol.external.TipoMensaje.LOTE_BANCOS, sock, lock, client_id, shutdown_event)
     )
     hilo_tx.start()
     hilo_bancos.start()
@@ -170,8 +169,10 @@ def _esperar_envios(hilos):
 
 def _enviar_fin_registros(sock, lock, client_id):
     with lock:
-        message_protocol.external.send_msg(
-            sock, message_protocol.external.MsgType.END_OF_RECODS, client_id
+        message_protocol.external.enviar_mensaje(
+            sock,
+            message_protocol.external.TipoMensaje.FIN_DE_REGISTROS,
+            client_id
         )
 
 

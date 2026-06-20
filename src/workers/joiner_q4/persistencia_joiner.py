@@ -2,10 +2,15 @@ import os
 
 from common.persistencia import PersistidorEstado, VOLUMEN_DIR
 from common.logger import obtener_logger
+from common.constantes_protocolo import ID_CLIENTE
+from base.constantes import CLAVE_BARRERA_COMPLETADA, CLAVE_IDS_PROCESADOS
 
 logger = obtener_logger(__name__)
 
 BASE_DIR = VOLUMEN_DIR
+
+CLAVE_SCATTER = "scatter"
+CLAVE_TXNS = "txns"
 
 
 class PersistenciaJoiner:
@@ -29,10 +34,10 @@ class PersistenciaJoiner:
         scatter_serial = {k: [list(a) for a in v] for k, v in scatter.items()}
         txns_serial = {k: [list(c) for c in v] for k, v in txns.items()}
         PersistidorEstado(self._nombre_carpeta(client_id), base_dir=self._base_dir).guardar({
-            "client_id": client_id,
-            "scatter": scatter_serial,
-            "txns": txns_serial,
-            "vistos": list(vistos),
+            ID_CLIENTE: client_id,
+            CLAVE_SCATTER: scatter_serial,
+            CLAVE_TXNS: txns_serial,
+            CLAVE_IDS_PROCESADOS: list(vistos),
         })
 
     def recuperar_todos(self) -> dict[str, tuple[dict, dict, set]]:
@@ -60,14 +65,14 @@ class PersistenciaJoiner:
             if not estado:
                 continue
 
-            if estado.get("barrier_completada", False):
+            if estado.get(CLAVE_BARRERA_COMPLETADA, False):
                 persistidor.borrar()
                 logger.info(f"[PersistenciaJoiner] Barrera completada detectada para client_id={client_id}. Limpiando remanente.")
                 continue
 
-            scatter = {k: [tuple(a) for a in v] for k, v in estado.get("scatter", {}).items()}
-            txns = {k: set(tuple(c) for c in v) for k, v in estado.get("txns", {}).items()}
-            vistos = set(estado.get("vistos", []))
+            scatter = {k: [tuple(a) for a in v] for k, v in estado.get(CLAVE_SCATTER, {}).items()}
+            txns = {k: set(tuple(c) for c in v) for k, v in estado.get(CLAVE_TXNS, {}).items()}
+            vistos = set(estado.get(CLAVE_IDS_PROCESADOS, []))
             resultado[client_id] = (scatter, txns, vistos)
 
             logger.info(
@@ -83,4 +88,4 @@ class PersistenciaJoiner:
 
     def marcar_barrera_completada(self, client_id: str):
         """Marca en disco que la barrera fue completada para este cliente."""
-        PersistidorEstado(self._nombre_carpeta(client_id), base_dir=self._base_dir).guardar({"barrier_completada": True})
+        PersistidorEstado(self._nombre_carpeta(client_id), base_dir=self._base_dir).guardar({CLAVE_BARRERA_COMPLETADA: True})

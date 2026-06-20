@@ -3,10 +3,14 @@ import os
 
 from common.persistencia import PersistidorEstado, VOLUMEN_DIR
 from common.logger import obtener_logger
+from common.constantes_protocolo import ID_CLIENTE
+from base.constantes import CLAVE_BARRERA_COMPLETADA, CLAVE_IDS_PROCESADOS
 
 logger = obtener_logger(__name__)
 
 BASE_DIR = VOLUMEN_DIR
+
+CLAVE_GRUPOS = "grupos"
 
 
 class PersistenciaContador:
@@ -32,9 +36,9 @@ class PersistenciaContador:
             grupos_serial[k] = [list(v) for v in conjunto_valores]
 
         PersistidorEstado(self._nombre_carpeta(client_id), base_dir=self._base_dir).guardar({
-            "client_id": client_id,
-            "grupos": grupos_serial,
-            "vistos": list(vistos),
+            ID_CLIENTE: client_id,
+            CLAVE_GRUPOS: grupos_serial,
+            CLAVE_IDS_PROCESADOS: list(vistos),
         })
 
     def recuperar_todos(self) -> dict[str, tuple[dict, set]]:
@@ -62,18 +66,18 @@ class PersistenciaContador:
             if not estado:
                 continue
 
-            if estado.get("barrier_completada", False):
+            if estado.get(CLAVE_BARRERA_COMPLETADA, False):
                 persistidor.borrar()
                 logger.info(f"[PersistenciaContador] Barrera completada detectada para client_id={client_id}. Limpiando remanente.")
                 continue
 
-            grupos_serial = estado.get("grupos", {})
+            grupos_serial = estado.get(CLAVE_GRUPOS, {})
             grupos = {}
             for k, vlist in grupos_serial.items():
                 clave_grupo = tuple(json.loads(k))
                 grupos[clave_grupo] = set(tuple(v) for v in vlist)
 
-            vistos = set(estado.get("vistos", []))
+            vistos = set(estado.get(CLAVE_IDS_PROCESADOS, []))
             resultado[client_id] = (grupos, vistos)
 
             logger.info(
@@ -89,4 +93,4 @@ class PersistenciaContador:
 
     def marcar_barrera_completada(self, client_id: str):
         """Marca en disco que la barrera fue completada para este cliente."""
-        PersistidorEstado(self._nombre_carpeta(client_id), base_dir=self._base_dir).guardar({"barrier_completada": True})
+        PersistidorEstado(self._nombre_carpeta(client_id), base_dir=self._base_dir).guardar({CLAVE_BARRERA_COMPLETADA: True})
