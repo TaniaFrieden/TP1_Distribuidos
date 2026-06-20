@@ -4,8 +4,8 @@ import sys
 import pandas as pd
 from pathlib import Path
 
-DIR1 = "output/mi_prueba302/e969dded-77f2-4067-b793-4c57e5188eec"
-DIR2 = "solutions/small30"
+DIR1 = "output/mi_prueba/efd678fe-5bd1-441f-a6d3-7b7286caa338"
+DIR2 = "solutions/small"
 
 TEMPLATE = "q{q}_solucion.csv"
 

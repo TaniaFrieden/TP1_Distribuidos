@@ -13,6 +13,7 @@ class GatewayState:
         self.servidor_corriendo = True
         self.state_lock = threading.Lock()
         self._eventos_reconexion = {}  # {client_id: threading.Event}
+        self._acks_pendientes = {}     # {client_id: {batch_id: threading.Event}}
 
     def generar_siguiente_id(self):
         return str(uuid.uuid4())
@@ -58,6 +59,35 @@ class GatewayState:
                 self._eventos_reconexion[client_id] = threading.Event()
             evento = self._eventos_reconexion[client_id]
         return evento.wait(timeout=timeout)
+
+    # --- ACKs de resultados ---
+
+    def registrar_ack_esperado(self, client_id, batch_id):
+        """Registra que se espera un ACK_RESULTADO del cliente para este batch_id. Retorna el Event."""
+        evento = threading.Event()
+        with self.state_lock:
+            if client_id not in self._acks_pendientes:
+                self._acks_pendientes[client_id] = {}
+            self._acks_pendientes[client_id][batch_id] = evento
+        return evento
+
+    def notificar_ack(self, client_id, batch_id):
+        """El ClientHandler llama esto cuando recibe un ACK_RESULTADO del cliente."""
+        with self.state_lock:
+            evento = self._acks_pendientes.get(client_id, {}).get(batch_id)
+        if evento:
+            evento.set()
+
+    def cancelar_acks_cliente(self, client_id):
+        """Cancela todos los ACKs pendientes de un cliente (e.g. al desconectarse)."""
+        with self.state_lock:
+            pendientes = self._acks_pendientes.pop(client_id, {})
+        for evento in pendientes.values():
+            evento.set()  # desbloquea workers que estaban esperando
+
+    def limpiar_ack(self, client_id, batch_id):
+        with self.state_lock:
+            self._acks_pendientes.get(client_id, {}).pop(batch_id, None)
 
     # --- Persistencia por cliente ---
 

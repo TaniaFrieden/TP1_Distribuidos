@@ -16,6 +16,7 @@ class MsgType:
     LOTE_BANCOS = 7
     CONFIG_QUERIES = 8
     HELLO = 9  # El cliente lo envía primero con su client_id para soportar reconexión
+    ACK_RESULTADO = 10  # El cliente confirma recepción de un batch de resultados (contiene batch_id)
 
   
 def _recv_sized(socket, size):
@@ -96,6 +97,7 @@ RECV_MSG_HANDLERS = {
     MsgType.LOTE_BANCOS: _recv_lote,
     MsgType.CONFIG_QUERIES: _recv_reporte,
     MsgType.HELLO: _recv_reporte,
+    MsgType.ACK_RESULTADO: _recv_reporte,
 }
 
 
@@ -138,6 +140,7 @@ SEND_MSG_HANDLERS = {
     MsgType.LOTE_BANCOS: _send_lote,
     MsgType.CONFIG_QUERIES: _send_reporte,
     MsgType.HELLO: _send_reporte,
+    MsgType.ACK_RESULTADO: _send_reporte,
 }
 
 

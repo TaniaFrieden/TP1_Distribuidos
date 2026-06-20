@@ -1,6 +1,8 @@
+import hashlib
 import json
 import re
 import threading
+import uuid
 from queue import Queue
 from common.logger import obtener_logger
 from common import message_protocol, middleware
@@ -136,6 +138,41 @@ class BackendListener:
             estado["eof_counts_recibidos"] = eof_counts_snapshot
         self.state.guardar_estado_cliente(client_id, estado)
 
+    # --- ACK de resultados ---
+
+    TIMEOUT_ACK_RESULTADO = 30  # segundos máximos esperando que el cliente confirme recepción
+
+    def _enviar_reporte_con_ack(self, client_id, sock, lock, payload_str):
+        """
+        Envía un REPORTE con batch_id y espera el ACK_RESULTADO del cliente.
+        NO llama ack()/nack() a RabbitMQ — eso es responsabilidad del caller.
+        Retorna True si el cliente confirmó, False si se perdió la conexión o hubo timeout.
+        """
+        # Usar hash del contenido como batch_id: estable entre re-entregas de RabbitMQ
+        batch_id = hashlib.md5(payload_str.encode()).hexdigest()
+        data = json.loads(payload_str)
+        data["batch_id"] = batch_id
+        payload_con_id = json.dumps(data)
+
+        evento = self.state.registrar_ack_esperado(client_id, batch_id)
+        try:
+            with lock:
+                message_protocol.external.send_msg(
+                    sock, message_protocol.external.MsgType.REPORTE, payload_con_id
+                )
+        except (BrokenPipeError, ConnectionResetError, OSError) as e:
+            logger.warning(f"Cliente {client_id} desconectado al enviar resultado: {e}")
+            self.state.limpiar_ack(client_id, batch_id)
+            return False
+
+        if not evento.wait(timeout=self.TIMEOUT_ACK_RESULTADO):
+            logger.warning(f"Timeout ACK_RESULTADO de {client_id} (batch_id={batch_id}), reencolando")
+            self.state.limpiar_ack(client_id, batch_id)
+            return False
+
+        self.state.limpiar_ack(client_id, batch_id)
+        return True
+
     # --- Procesamiento principal ---
 
     def _procesar_respuesta(self, query_id, cola_nombre, body, ack, nack):
@@ -166,7 +203,7 @@ class BackendListener:
             es_eof = transaccion.pop("EOF", False) or transaccion.pop("eof", False)
 
             if es_eof:
-                self._procesar_eof(client_id, query_id, cola_nombre, sock, lock, eof_status, ack)
+                self._procesar_eof(client_id, query_id, cola_nombre, sock, lock, eof_status, ack, nack)
                 return
 
             if "batches" in transaccion:
@@ -195,34 +232,33 @@ class BackendListener:
                         {**dict(zip(schema, record_values)), "eof": False}
                         for record_values in records
                     ]
-                    payload = {"query": query_id, "resultado": resultado_lista}
-                    with lock:
-                        message_protocol.external.send_msg(
-                            sock, message_protocol.external.MsgType.REPORTE, json.dumps(payload)
-                        )
+                    payload_str = json.dumps({"query": query_id, "resultado": resultado_lista})
+                    if not self._enviar_reporte_con_ack(client_id, sock, lock, payload_str):
+                        with self._lock:
+                            self._processed_hashes.pop(client_id, None)
+                        self.state.remover_cliente(client_id)
+                        nack()
+                        return
+                ack()
             else:
                 transaccion["eof"] = False
-                payload = {"query": query_id, "resultado": transaccion}
-                with lock:
-                    message_protocol.external.send_msg(
-                        sock, message_protocol.external.MsgType.REPORTE, json.dumps(payload)
-                    )
-            ack()
+                payload_str = json.dumps({"query": query_id, "resultado": transaccion})
+                if self._enviar_reporte_con_ack(client_id, sock, lock, payload_str):
+                    ack()
+                else:
+                    with self._lock:
+                        self._processed_hashes.pop(client_id, None)
+                    self.state.remover_cliente(client_id)
+                    nack()
 
         except json.JSONDecodeError:
             logger.error("JSON invalido")
             ack()
-        except (BrokenPipeError, ConnectionResetError, OSError) as e:
-            logger.warning(f"Cliente {client_id} desconectado al enviar resultado: {e}")
-            with self._lock:
-                self._processed_hashes.pop(client_id, None)
-            self.state.remover_cliente(client_id)
-            nack()
         except Exception as e:
             logger.error(f"Error procesando respuesta: {e}", exc_info=True)
             nack()
 
-    def _procesar_eof(self, client_id, query_id, cola_nombre, sock, lock, eof_status, ack):
+    def _procesar_eof(self, client_id, query_id, cola_nombre, sock, lock, eof_status, ack, nack):
         esperados = self.config.eofs_esperados.get(cola_nombre, 1)
 
         # Cargar counts persistidos si es la primera vez en esta sesión
@@ -231,7 +267,9 @@ class BackendListener:
                 estado = self.state.cargar_estado_cliente(client_id)
                 self._eof_counts[client_id] = dict(estado.get("eof_counts_recibidos", {}))
             counts = self._eof_counts[client_id]
-            counts[cola_nombre] = counts.get(cola_nombre, 0) + 1
+            # Solo incrementar si no llegamos aún al total esperado (idempotente ante re-entregas por nack)
+            if counts.get(cola_nombre, 0) < esperados:
+                counts[cola_nombre] = counts.get(cola_nombre, 0) + 1
             recibidos = counts[cola_nombre]
 
         self._persistir_estado(client_id)
@@ -243,17 +281,20 @@ class BackendListener:
 
         columns_hint = None
         if query_id == 4:
-            self._enviar_cuentas_q4(client_id, sock, lock)
+            if not self._enviar_cuentas_q4(client_id, sock, lock):
+                logger.warning(f"No se pudieron entregar cuentas Q4 a {client_id}, reencolando EOF")
+                nack()
+                return
             columns_hint = ["Bank", "Account"]
 
         payload = {"query": query_id, "resultado": {"eof": True}}
         if columns_hint:
             payload["columns"] = columns_hint
-        with lock:
-            message_protocol.external.send_msg(
-                sock, message_protocol.external.MsgType.REPORTE, json.dumps(payload)
-            )
-        logger.info(f"EOF completo enviado para {cola_nombre} a {client_id} ({recibidos}/{esperados})")
+        if not self._enviar_reporte_con_ack(client_id, sock, lock, json.dumps(payload)):
+            logger.warning(f"No se pudo confirmar EOF de {cola_nombre} a {client_id}, reencolando")
+            nack()
+            return
+        logger.info(f"EOF completo confirmado para {cola_nombre} a {client_id} ({recibidos}/{esperados})")
         eof_status.add(cola_nombre)
 
         self._persistir_estado(client_id)
@@ -296,6 +337,7 @@ class BackendListener:
             logger.info(f"[Q4] Cuentas únicas acumuladas para {client_id}: {len(cuentas)}")
 
     def _enviar_cuentas_q4(self, client_id: str, sock, lock):
+        """Retorna True si todos los lotes fueron ACKados, False si la conexión se perdió."""
         with self._lock:
             cuentas = self._q4_cuentas.pop(client_id, set())
         registros = sorted(cuentas)
@@ -306,5 +348,6 @@ class BackendListener:
                 break
             resultado_lista = [{"Bank": b, "Account": a, "eof": False} for b, a in lote]
             payload_str = json.dumps({"query": 4, "resultado": resultado_lista})
-            with lock:
-                message_protocol.external.send_msg(sock, message_protocol.external.MsgType.REPORTE, payload_str)
+            if not self._enviar_reporte_con_ack(client_id, sock, lock, payload_str):
+                return False
+        return True

@@ -31,13 +31,13 @@ class ClientHandler:
 
         self.state.registrar_cliente(client_id, client_socket)
 
-        # Refleja en eof_status las queries ya entregadas en sesiones anteriores
-        if queries_ya_entregadas:
-            _, _, eof_status = self.state.obtener_cliente(client_id)
-            if eof_status is not None:
+        # Adquirir el lock antes de enviar CONFIG_QUERIES: evita que el BackendListener
+        # empiece a enviar REPORTEs al socket antes de que el cliente haya recibido CONFIG_QUERIES.
+        _, lock, eof_status = self.state.obtener_cliente(client_id)
+        with lock:
+            if queries_ya_entregadas and eof_status is not None:
                 eof_status.update(queries_ya_entregadas)
-
-        self._enviar_config(client_socket, client_id, datos_ya_enviados)
+            self._enviar_config(client_socket, client_id, datos_ya_enviados)
 
         if datos_ya_enviados:
             self._modo_solo_resultados(client_id, client_socket)
@@ -84,19 +84,18 @@ class ClientHandler:
         except Exception as e:
             logger.error(f"Error enviando CONFIG_QUERIES a {client_id}: {e}")
 
-    def _modo_solo_resultados(self, client_id, client_socket):
-        """
-        El cliente ya envió todos sus datos en una sesión anterior.
-        Solo esperamos a que BackendListener termine de entregar los resultados
-        y el cliente cierre la conexión.
-        """
-        logger.info(f"Cliente {client_id} en modo solo-resultados")
+    def _leer_acks(self, client_id, client_socket):
+        """Lee ACK_RESULTADO del cliente y los despacha al BackendListener vía state."""
         try:
             while True:
-                message_protocol.external.recv_msg(client_socket)
+                msg_type, payload = message_protocol.external.recv_msg(client_socket)
+                if msg_type == message_protocol.external.MsgType.ACK_RESULTADO:
+                    data = json.loads(payload)
+                    self.state.notificar_ack(client_id, data.get("batch_id"))
         except Exception:
             pass
         finally:
+            self.state.cancelar_acks_cliente(client_id)
             try:
                 client_socket.close()
             except Exception:
@@ -106,6 +105,15 @@ class ClientHandler:
                 ctypes.cdll.LoadLibrary("libc.so.6").malloc_trim(0)
             except Exception:
                 pass
+
+    def _modo_solo_resultados(self, client_id, client_socket):
+        """
+        El cliente ya envió todos sus datos en una sesión anterior.
+        Solo esperamos a que BackendListener termine de entregar los resultados
+        y el cliente cierre la conexión.
+        """
+        logger.info(f"Cliente {client_id} en modo solo-resultados")
+        self._leer_acks(client_id, client_socket)
 
     def _modo_normal(self, client_id, client_socket):
         """Recibe lotes del cliente, los publica en RabbitMQ y espera el END_OF_RECORDS."""
@@ -128,6 +136,11 @@ class ClientHandler:
 
                 elif msg_type == message_protocol.external.MsgType.LOTE_BANCOS:
                     self._reenviar_lote_bancos(client_id, client_socket, payload, colas_bancos)
+
+                elif msg_type == message_protocol.external.MsgType.ACK_RESULTADO:
+                    # El backend ya comenzó a mandar resultados mientras el cliente aún enviaba datos
+                    data = json.loads(payload)
+                    self.state.notificar_ack(client_id, data.get("batch_id"))
 
                 elif msg_type == message_protocol.external.MsgType.END_OF_RECODS:
                     eof_msg = json.dumps({"client_id": client_id, "EOF": True}).encode("utf-8")
@@ -156,6 +169,11 @@ class ClientHandler:
                 q.close()
             for q in colas_bancos.values():
                 q.close()
+
+        if eof_enviado:
+            # Datos enviados al sistema — ahora esperamos ACKs de resultados del cliente
+            self._leer_acks(client_id, client_socket)
+        else:
             gc.collect()
             try:
                 ctypes.cdll.LoadLibrary("libc.so.6").malloc_trim(0)

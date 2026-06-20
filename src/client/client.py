@@ -70,7 +70,7 @@ def _ejecutar_sesion(client_id, inicio_cliente):
 
     hilo_receptor = threading.Thread(
         target=escuchar_respuesta,
-        args=(sock, queries, inicio_cliente, client_id, evento_completado),
+        args=(sock, queries, inicio_cliente, client_id, evento_completado, socket_lock),
         daemon=True
     )
     hilo_receptor.start()
