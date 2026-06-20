@@ -83,8 +83,8 @@ class ClientHandler:
                 "client_id": client_id,
                 "omitir_envio": omitir_envio,
             })
-            message_protocol.external.send_msg(
-                client_socket, message_protocol.external.MsgType.CONFIG_QUERIES, config_payload
+            message_protocol.external.enviar_mensaje(
+                client_socket, message_protocol.external.TipoMensaje.CONFIG_QUERIES, config_payload
             )
         except Exception as e:
             logger.error(f"Error enviando CONFIG_QUERIES a {client_id}: {e}")
@@ -93,8 +93,8 @@ class ClientHandler:
         """Lee ACK_RESULTADO del cliente y los despacha al BackendListener vía state."""
         try:
             while True:
-                msg_type, payload = message_protocol.external.recv_msg(client_socket)
-                if msg_type == message_protocol.external.MsgType.ACK_RESULTADO:
+                tipo_mensaje, payload = message_protocol.external.recibir_mensaje(client_socket)
+                if tipo_mensaje == message_protocol.external.TipoMensaje.ACK_RESULTADO:
                     data = json.loads(payload)
                     self.state.notificar_ack(client_id, data.get("batch_id"))
         except Exception:

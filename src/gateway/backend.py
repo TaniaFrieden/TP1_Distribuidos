@@ -161,8 +161,8 @@ class BackendListener:
         evento = self.state.registrar_ack_esperado(client_id, batch_id)
         try:
             with lock:
-                message_protocol.external.send_msg(
-                    sock, message_protocol.external.MsgType.REPORTE, payload_con_id
+                message_protocol.external.enviar_mensaje(
+                    sock, message_protocol.external.TipoMensaje.REPORTE, payload_con_id
                 )
         except (BrokenPipeError, ConnectionResetError, OSError) as e:
             logger.warning(f"Cliente {client_id} desconectado al enviar resultado: {e}")
