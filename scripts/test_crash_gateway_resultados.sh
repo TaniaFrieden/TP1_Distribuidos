@@ -16,7 +16,7 @@
 # Uso:
 #   bash scripts/test_crash_gateway_resultados.sh [tx] [acc] [soluciones] [timeout_resultado_s]
 #
-#   tx               : archivo de transacciones (default: LI-Small_Trans)
+#   tx               : archivo de transacciones (default: trans_sample)
 #   acc              : archivo de cuentas       (default: LI-Small_accounts)
 #   soluciones       : carpeta en solutions/    (default: small)
 #   timeout_resultado: segundos máx para esperar primer resultado (default: 360)
@@ -24,7 +24,7 @@
 set -e
 source scripts/test_helpers.sh
 
-TX=${1:-LI-Small_Trans}
+TX=${1:-trans_sample}
 ACC=${2:-LI-Small_accounts}
 SOLUCIONES=${3:-small}
 TIMEOUT_RESULTADO=${4:-360}

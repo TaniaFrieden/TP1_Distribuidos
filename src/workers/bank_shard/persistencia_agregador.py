@@ -22,6 +22,7 @@ def serializar_estado(client_id: str, datos_bancos: dict,
         CLAVE_EOF_MENSAJE_HEX: eof_msg.hex() if eof_msg else None,
         CLAVE_FLUSH_INICIADO: estado_eof.get(CLAVE_FLUSH_INICIADO, False),
         CLAVE_BARRERA_COMPLETADA: estado_eof.get(CLAVE_BARRERA_COMPLETADA, False),
+        "eofs_recibidos": estado_eof.get("eofs_recibidos", []),
         CLAVE_BANCOS: datos_bancos,
         CLAVE_IDS_PROCESADOS: list(ids_procesados),
     }

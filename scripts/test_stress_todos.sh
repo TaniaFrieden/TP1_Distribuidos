@@ -3,7 +3,7 @@ set -e
 
 ITERACIONES=${1:-20}
 CANT_CLIENTES=${2:-2}
-TX=${3:-LI-Small_Trans}
+TX=${3:-trans_sample}
 ACC=${4:-LI-Small_accounts}
 SOLUCIONES=${5:-small}
 ESPERA_ANTES_DE_MATAR=${6:-5}

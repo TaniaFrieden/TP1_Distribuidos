@@ -155,5 +155,5 @@ class TestBarreraConCaidas:
             assert eof_call_arg is not None
             # El total consolidado de mensajes emitidos downstream es 2 (w1) + 1 (w2) = 3
             assert eof_call_arg["total_mensajes_enviados"] == 3
-            # El request_id del EOF downstream debe ser incremental
-            assert eof_call_arg["request_id"] == f"{client_id}:eof:4"
+            # El request_id del EOF downstream debe ser incremental y contener el ID del nodo
+            assert eof_call_arg["request_id"] == f"{client_id}:eof:1:4"

@@ -306,7 +306,8 @@ class CoordinadorDistribuido:
             ec = self._clientes.get(client_id)
 
             if ec is not None and ec.finalizado:
-                self._transporte.enviar(msg_barrera_completa(client_id))
+                # Si ya finalicé, no hacer rebroadcast de BARRERA_COMPLETA por cada WORKER_FINALIZADO
+                # que llega tardío, para evitar inundar la red.
                 return
 
             if ec is None or not ec.barrera_activa:
@@ -357,7 +358,10 @@ class CoordinadorDistribuido:
     def _manejar_barrera_completa(self, datos):
         client_id = datos[ID_CLIENTE]
         with self._coordinacion_lock:
-            self._obtener(client_id).marcar_finalizado()
+            ec = self._obtener(client_id)
+            if ec.finalizado:
+                return
+            ec.marcar_finalizado()
             self._persistir()
         logger.info(
             f"Barrera completa liberada globalmente "

@@ -278,22 +278,22 @@ test-todos:
 	@echo "========================================================="
 	@echo "=== 2. Ejecutando test de caídas en frío (caso 6) ==="
 	@echo "========================================================="
-	@$(MAKE) test-crash-caso6 1 LI-Small_Trans LI-Small_accounts LI-Small
+	@$(MAKE) test-crash-caso6 1 trans_sample LI-Small_accounts sample
 	@echo "========================================================="
 	@echo "=== 3. Ejecutando test de caídas en frío (caso 7) ==="
 	@echo "========================================================="
-	@$(MAKE) test-crash-caso7 1 LI-Small_Trans LI-Small_accounts LI-Small
+	@$(MAKE) test-crash-caso7 1 trans_sample LI-Small_accounts sample
 	@echo "========================================================="
 	@echo "=== 4. Ejecutando test de caída de líder de elección ==="
 	@echo "========================================================="
-	@$(MAKE) test-crash-leader 1 LI-Small_Trans LI-Small_accounts LI-Small
+	@$(MAKE) test-crash-leader 1 trans_sample LI-Small_accounts sample
 	@echo "========================================================="
 	@echo "=== 5. Ejecutando test caos total (todos los workers) ==="
 	@echo "========================================================="
 	@make down
 	@docker run --rm -v "$$(pwd)/volume:/cleanup" alpine sh -c "rm -rf /cleanup/*" 2>/dev/null || rm -rf volume/* 2>/dev/null || true
 	@make start && sleep 8
-	@$(MAKE) test-caos-todos 2 LI-Small_Trans LI-Small_accounts LI-Small 5
+	@$(MAKE) test-caos-todos 2 trans_sample LI-Small_accounts sample 5
 	@echo "========================================================="
 	@echo "🎉 ¡Todos los tests del sistema pasaron exitosamente! 🎉"
 	@echo "========================================================="

@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
 
-DEFAULT_INPUT_DATASET = "datasets/LI-Small_Trans.csv"
+DEFAULT_INPUT_DATASET = "datasets/trans_sample.csv"
 DEFAULT_OUTPUT_DATASET = "datasets/transacciones_sample_q4.csv"
 DEFAULT_FANOUT = 6
 DEFAULT_TIMESTAMP = "2022/09/02 10:00"

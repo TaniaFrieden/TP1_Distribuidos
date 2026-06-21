@@ -109,7 +109,7 @@ class TestCaso5ClienteFinalizadoRecovery:
         assert "c1" in coord._clientes
         assert coord._clientes["c1"].finalizado is True
 
-    def test_worker_finished_tardio_responde_barrera_completa(self, tmp_path):
+    def test_worker_finished_tardio_se_ignora_silenciosamente(self, tmp_path):
         _escribir_estado_coordinador(tmp_path, 0, {
             "coordinaciones_eof": {},
             "eofs_locales_recibidos": {},
@@ -123,10 +123,7 @@ class TestCaso5ClienteFinalizadoRecovery:
             ID_CLIENTE: "c1", ORIGINADOR: 0, ID_WORKER: 1,
         })
 
-        transporte.enviar.assert_called_once()
-        msg = transporte.enviar.call_args[0][0]
-        assert msg[TIPO_MENSAJE] == TIPO_BARRERA_COMPLETA
-        assert msg[ID_CLIENTE] == "c1"
+        transporte.enviar.assert_not_called()
 
     def test_worker_finished_tardio_de_otro_originador_se_ignora(self, tmp_path):
         _escribir_estado_coordinador(tmp_path, 0, {

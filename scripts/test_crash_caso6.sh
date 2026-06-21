@@ -3,9 +3,9 @@ set -e
 source scripts/test_helpers.sh
 
 CANT_CLIENTES=${1:-1}
-TX=${2:-LI-Small_Trans}
+TX=${2:-trans_sample}
 ACC=${3:-LI-Small_accounts}
-SOLUCIONES=${4:-LI-Small}
+SOLUCIONES=${4:-sample}
 
 echo "=== Preparando entorno para Test Caso 6 (Crash post-flush / pre-confirmación) ==="
 make down

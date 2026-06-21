@@ -26,6 +26,7 @@ def _crear_estado_eof_vacio() -> dict:
         CLAVE_EOF_MENSAJE: None,
         CLAVE_FLUSH_INICIADO: False,
         CLAVE_BARRERA_COMPLETADA: False,
+        "eofs_recibidos": [],
     }
 
 
@@ -104,6 +105,7 @@ class AgregadorBancarioWorker(WorkerBase):
                     CLAVE_EOF_MENSAJE: bytes.fromhex(eof_hex) if eof_hex else None,
                     CLAVE_FLUSH_INICIADO: estado.get(CLAVE_FLUSH_INICIADO, False),
                     CLAVE_BARRERA_COMPLETADA: False,
+                    "eofs_recibidos": estado.get("eofs_recibidos", []),
                 }
 
                 if tx_cerrado and bancos_cerrado:
@@ -181,12 +183,20 @@ class AgregadorBancarioWorker(WorkerBase):
         iniciar_barrera = False
         mensaje_barrera = None
         lock = self._obtener_lock(client_id)
+        request_id = payload.get(ID_SOLICITUD)
 
         with lock:
             if client_id not in self._estado_eof:
                 self._estado_eof[client_id] = _crear_estado_eof_vacio()
 
             estado = self._estado_eof[client_id]
+
+            if request_id:
+                procesados = estado.setdefault("eofs_recibidos", [])
+                if request_id in procesados:
+                    logger.info(f"EOF duplicado interceptado para {client_id}: {request_id}")
+                    return True
+                procesados.append(request_id)
 
             if not estado[CLAVE_EOF_MENSAJE]:
                 estado[CLAVE_EOF_MENSAJE] = mensaje_original

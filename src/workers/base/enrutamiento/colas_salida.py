@@ -73,10 +73,18 @@ class ColaSalidaSharded:
 
     def _broadcast(self, mensaje, client_id):
         payload = ParseadorMensajes.deserializar(mensaje)
+        id_origen = payload.get(ID_SOLICITUD)
         for shard_id, cola in self._colas.items():
             total_shard = self._mensajes_enviados_por_shard.get(client_id, {}).get(shard_id, 0)
             payload[CLAVE_TOTAL_MENSAJES_ENVIADOS] = total_shard
-            payload[ID_SOLICITUD] = f"{client_id}:{cola.queue_name}:{total_shard + 1}"
+            # El request_id del EOF debe ser único por (upstream, shard) y estable ante
+            # redelivery. Si conservamos el id de origen del upstream (único por nodo),
+            # la deduplicación downstream no descarta EOFs legítimos de distintos
+            # upstreams que comparten el mismo contador local hacia este shard.
+            if id_origen:
+                payload[ID_SOLICITUD] = f"{id_origen}:{cola.queue_name}"
+            else:
+                payload[ID_SOLICITUD] = f"{client_id}:{cola.queue_name}:{total_shard + 1}"
             cola.send(ParseadorMensajes.serializar(payload))
 
     def _enviar_simple(self, mensaje, payload, client_id):
@@ -195,11 +203,17 @@ class ColaSalidaCondicional:
 
     def _broadcast(self, mensaje, client_id):
         payload = ParseadorMensajes.deserializar(mensaje)
+        id_origen = payload.get(ID_SOLICITUD)
         for caso in self._casos:
             for shard_id, cola in caso.colas.items():
                 total_cola = self._mensajes_enviados_por_destino.get(client_id, {}).get(cola.queue_name, 0)
                 payload[CLAVE_TOTAL_MENSAJES_ENVIADOS] = total_cola
-                payload[ID_SOLICITUD] = f"{client_id}:{cola.queue_name}:{total_cola + 1}"
+                # Mismo criterio que ColaSalidaSharded: request_id de EOF único por
+                # (upstream, destino) y estable ante redelivery.
+                if id_origen:
+                    payload[ID_SOLICITUD] = f"{id_origen}:{cola.queue_name}"
+                else:
+                    payload[ID_SOLICITUD] = f"{client_id}:{cola.queue_name}:{total_cola + 1}"
                 cola.send(ParseadorMensajes.serializar(payload))
 
     def _enviar_simple(self, mensaje, payload, client_id):

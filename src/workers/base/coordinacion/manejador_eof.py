@@ -73,7 +73,8 @@ class ManejadorCoordinacionEof:
                 if total_emitidos is not None:
                     payload = ParseadorMensajes.deserializar(mensaje_original)
                     payload["total_mensajes_enviados"] = total_emitidos
-                    payload["request_id"] = f"{client_id}:eof:{total_emitidos + 1}"
+                    id_nodo = getattr(self.coordinador._config, "id_nodo", "unknown") if self.coordinador else "unknown"
+                    payload["request_id"] = f"{client_id}:eof:{id_nodo}:{total_emitidos + 1}"
                     mensaje_original = ParseadorMensajes.serializar(payload)
                 self._enviar(mensaje_original)
             except Exception as e:
