@@ -43,7 +43,7 @@ rm -rf output/0
     > logs/client_stdout_crash_flush.txt 2>&1 )
 
 echo "=== Verificando que el worker crasheó y fue reiniciado ==="
-NODOS=$(docker ps --format '{{.Names}}' | grep -E "^${ETAPA}_[0-9]+" || true)
+NODOS=$(docker ps --format '{{.Names}}' | grep -E "${ETAPA}_[0-9]+" || true)
 if [ -z "$NODOS" ]; then
     echo "[ERROR] No se encontraron nodos de la etapa '$ETAPA' corriendo después del crash."
     exit 1
