@@ -274,6 +274,12 @@ test-stress-crash:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
 	bash scripts/test_stress_crash.sh $$ARGS
 
+# Helpers internos para test-todos (silencian docker)
+_clean_env = $(DOCKER_COMPOSE) down -v --remove-orphans >/dev/null 2>&1 || true; \
+	docker run --rm -v "$$(pwd)/volume:/cleanup" alpine sh -c "rm -rf /cleanup/*" 2>/dev/null || rm -rf volume/* 2>/dev/null || true; \
+	docker run --rm -v "$$(pwd)/output:/out" -v "$$(pwd)/logs:/lg" alpine sh -c "rm -rf /out/*/ /out/client_id*.txt /lg/*.txt /lg/*.log" 2>/dev/null || true
+_start_env = $(DOCKER_COMPOSE) up -d --build >/dev/null 2>&1 && sleep 8
+
 # --- TEST TODOS ---
 test-todos:
 	@echo "========================================================="
@@ -295,57 +301,49 @@ test-todos:
 	@echo "========================================================="
 	@echo "=== 5. Ejecutando test crash flush (caso 8) ==="
 	@echo "========================================================="
-	@make down
-	@docker run --rm -v "$$(pwd)/volume:/cleanup" alpine sh -c "rm -rf /cleanup/*" 2>/dev/null || rm -rf volume/* 2>/dev/null || true
+	@$(_clean_env)
 	@$(MAKE) test-crash-flush counter $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
 	@echo "========================================================="
 	@echo "=== 6. Ejecutando test caos total (todos los workers) ==="
 	@echo "========================================================="
-	@make down
-	@docker run --rm -v "$$(pwd)/volume:/cleanup" alpine sh -c "rm -rf /cleanup/*" 2>/dev/null || rm -rf volume/* 2>/dev/null || true
-	@make start && sleep 8
+	@$(_clean_env)
+	@$(_start_env)
 	@$(MAKE) test-caos-todos 2 $(TEST_TX) $(TEST_ACC) $(TEST_SOL) 5
 	@echo "========================================================="
 	@echo "=== 7. Ejecutando test caos aleatorio ==="
 	@echo "========================================================="
-	@make down
-	@docker run --rm -v "$$(pwd)/volume:/cleanup" alpine sh -c "rm -rf /cleanup/*" 2>/dev/null || rm -rf volume/* 2>/dev/null || true
-	@make start && sleep 8
+	@$(_clean_env)
+	@$(_start_env)
 	@$(MAKE) test-caos-aleatorio 5 15 2
 	@echo "========================================================="
 	@echo "=== 8. Ejecutando test caos por etapa (q2_agregador_shard) ==="
 	@echo "========================================================="
-	@make down
-	@docker run --rm -v "$$(pwd)/volume:/cleanup" alpine sh -c "rm -rf /cleanup/*" 2>/dev/null || rm -rf volume/* 2>/dev/null || true
-	@make start && sleep 8
+	@$(_clean_env)
+	@$(_start_env)
 	@$(MAKE) test-caos-etapa q2_agregador_shard 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
 	@echo "========================================================="
 	@echo "=== 9. Ejecutando test caos por etapa (q4_sumador) ==="
 	@echo "========================================================="
-	@make down
-	@docker run --rm -v "$$(pwd)/volume:/cleanup" alpine sh -c "rm -rf /cleanup/*" 2>/dev/null || rm -rf volume/* 2>/dev/null || true
-	@make start && sleep 8
+	@$(_clean_env)
+	@$(_start_env)
 	@$(MAKE) test-caos-etapa q4_sumador 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
 	@echo "========================================================="
 	@echo "=== 10. Ejecutando test caos por etapa (q3_format_shard) ==="
 	@echo "========================================================="
-	@make down
-	@docker run --rm -v "$$(pwd)/volume:/cleanup" alpine sh -c "rm -rf /cleanup/*" 2>/dev/null || rm -rf volume/* 2>/dev/null || true
-	@make start && sleep 8
+	@$(_clean_env)
+	@$(_start_env)
 	@$(MAKE) test-caos-etapa q3_format_shard 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
 	@echo "========================================================="
 	@echo "=== 11. Ejecutando test caos cliente ==="
 	@echo "========================================================="
-	@make down
-	@docker run --rm -v "$$(pwd)/volume:/cleanup" alpine sh -c "rm -rf /cleanup/*" 2>/dev/null || rm -rf volume/* 2>/dev/null || true
-	@make start && sleep 8
+	@$(_clean_env)
+	@$(_start_env)
 	@$(MAKE) test-caos-cliente 2 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
 	@echo "========================================================="
 	@echo "=== 12. Ejecutando test caos gateway ==="
 	@echo "========================================================="
-	@make down
-	@docker run --rm -v "$$(pwd)/volume:/cleanup" alpine sh -c "rm -rf /cleanup/*" 2>/dev/null || rm -rf volume/* 2>/dev/null || true
-	@make start && sleep 8
+	@$(_clean_env)
+	@$(_start_env)
 	@$(MAKE) test-caos-gateway 2 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
 	@echo "========================================================="
 	@echo "=== 13. Ejecutando test caos gateway con resultados ==="
@@ -358,12 +356,11 @@ test-todos:
 	@echo "========================================================="
 	@echo "=== 15. Ejecutando stress test caos (2 iteraciones) ==="
 	@echo "========================================================="
-	@make down
-	@docker run --rm -v "$$(pwd)/volume:/cleanup" alpine sh -c "rm -rf /cleanup/*" 2>/dev/null || rm -rf volume/* 2>/dev/null || true
-	@make start && sleep 8
+	@$(_clean_env)
+	@$(_start_env)
 	@$(MAKE) test-stress-caos 2 2 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
 	@echo "========================================================="
-	@echo "🎉 ¡Todos los tests del sistema pasaron exitosamente! 🎉"
+	@echo "  Todos los tests del sistema pasaron exitosamente"
 	@echo "========================================================="
 
 # Ignorar argumentos pasados a targets dinámicos
