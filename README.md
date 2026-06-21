@@ -162,7 +162,25 @@ make test-todos TEST_TX=LI-Small_Trans TEST_ACC=LI-Small_accounts TEST_SOL=LI-Sm
 ```bash
 make test-todos
 ```
-Limpia el entorno, corre los tests unitarios en Python, y consecutivamente ejecuta los tests del Caso 6, Caso 7, Líder de Elección y Caída total de workers, validando el 100% de la sanidad del sistema en una sola corrida.
+Ejecuta secuencialmente las 15 etapas de validación del sistema. Se detiene al primer error.
+
+| # | Test | Descripción |
+|---|------|-------------|
+| 1 | `test-unitarios` | Tests unitarios y de persistencia en Python |
+| 2 | `test-crash-caso6` | Crash post-flush / pre-confirmación |
+| 3 | `test-crash-caso7` | Crash pre-disparo de barrera |
+| 4 | `test-crash-leader` | Caída del watchdog líder mid-election |
+| 5 | `test-crash-flush` | Crash post-flush / pre-barrera_completada (caso 8) |
+| 6 | `test-caos-todos` | Mata todos los workers simultáneamente |
+| 7 | `test-caos-aleatorio` | Chaos monkey aleatorio (5-15s) |
+| 8 | `test-caos-etapa` | Caída de etapa `q2_agregador_shard` |
+| 9 | `test-caos-etapa` | Caída de etapa `q4_sumador` |
+| 10 | `test-caos-etapa` | Caída de etapa `q3_format_shard` |
+| 11 | `test-caos-cliente` | Cliente cae a mitad de envío |
+| 12 | `test-caos-gateway` | Gateway cae en caliente |
+| 13 | `test-caos-gateway-resultados` | Gateway cae mientras el cliente recibe resultados |
+| 14 | `test-stress-crash` | Stress de casos de frontera (2 iteraciones) |
+| 15 | `test-stress-caos` | Stress de caídas masivas (2 iteraciones) |
 
 ### 2. Tests Unitarios y de Persistencia
 ```bash
