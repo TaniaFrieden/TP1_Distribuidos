@@ -25,7 +25,7 @@ MOM_HOST ?= localhost
 INPUT_QUEUE ?= input_queue
 OUTPUT_QUEUE ?= output_queue
 
-.PHONY: help venv install test test-worker-base clean free-ports client run-clients test-server gateway start down docker-logs iterar solucionar generar log generar-sample caos test-todos test-etapa test-cliente test-gateway test-gateway-resultados test-persistencia test-crash-flush
+.PHONY: help venv install test test-worker-base clean free-ports client run-clients test-server gateway start down docker-logs iterar solucionar generar log generar-sample caos test-todos test-etapa test-cliente test-gateway test-gateway-resultados test-persistencia test-crash-flush test-caos-secuencial
 
 help:
 	@echo "Targets disponibles:"
@@ -43,6 +43,7 @@ help:
 	@echo "  make test-unitarios              - Corre los tests unitarios y de persistencia"
 	@echo "  make test-caos-todos [cant_cli]  - Test de caída de todos los workers en simultáneo"
 	@echo "  make test-caos-aleatorio [min] [max] [cant_cli] - Test de caída continua aleatoria de workers"
+	@echo "  make test-caos-secuencial [min] [max] [cant_cli] - Igual que aleatorio pero clientes secuenciales"
 	@echo "  make test-caos-etapa <pref> [cant_cli]  - Test de caída de una etapa específica"
 	@echo "  make test-caos-cliente [cant_cli] - Test de caída de un cliente a mitad de envío"
 	@echo "  make test-caos-gateway [cant_cli] - Test de caída del gateway"
@@ -226,6 +227,10 @@ test-caos-todos:
 test-caos-aleatorio:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
 	bash scripts/test_caos_continuo.sh $$ARGS
+
+test-caos-secuencial:
+	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
+	SEQUENTIAL=1 SEQUENTIAL_SOL="$${TEST_SOL:-sample}" bash scripts/test_caos_continuo.sh $$ARGS
 
 test-caos-etapa:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
