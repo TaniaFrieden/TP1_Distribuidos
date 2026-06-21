@@ -5,9 +5,9 @@ source scripts/test_helpers.sh
 MIN_CAOS=10
 MAX_CAOS=20
 CANT_CLIENTES=3
-TX="${TEST_TX:-trans_sample}"
+TX="${TEST_TX:-LI-Small_Trans}"
 ACC="${TEST_ACC:-LI-Small_accounts}"
-SOL="${TEST_SOL:-sample}"
+SOL="${TEST_SOL:-small}"
 
 EXTRA_ARGS=""
 

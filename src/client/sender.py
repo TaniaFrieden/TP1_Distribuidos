@@ -3,34 +3,25 @@ from common import message_protocol
 from config import LOTE_SIZE
 
 
-def _leer_registros_dinamico(filepath):
-    f = open(filepath, "r", encoding="utf-8")
+def _leer_headers_y_registros(f):
     linea_headers = f.readline().strip()
     if not linea_headers:
-        f.close()
         return None, iter([])
     headers = linea_headers.split(",")
-
-    def _gen():
-        try:
-            for linea in f:
-                if linea.strip():
-                    yield linea.strip().split(",")
-        finally:
-            f.close()
-
-    return headers, _gen()
+    registros = (linea.strip().split(",") for linea in f if linea.strip())
+    return headers, registros
 
 def enviar_archivo(filepath, tipo_mensaje, sock, lock, client_id, shutdown_event=None):
     logging.info(f"Enviando {filepath}...")
     try:
-        headers, registros = _leer_registros_dinamico(filepath)
-        if headers is not None:
-            _enviar_lotes(headers, registros, tipo_mensaje, sock, lock, client_id, shutdown_event)
-            if shutdown_event and shutdown_event.is_set():
-                logging.info(f"Envío de {filepath} interrumpido.")
-            else:
-                logging.info(f"Envío de {filepath} completado.")
+        with open(filepath, "r", encoding="utf-8") as f:
+            headers, registros = _leer_headers_y_registros(f)
+            if headers is not None:
+                _enviar_lotes(headers, registros, tipo_mensaje, sock, lock, client_id, shutdown_event)
+        if shutdown_event and shutdown_event.is_set():
+            logging.info(f"Envío de {filepath} interrumpido.")
+        else:
+            logging.info(f"Envío de {filepath} completado.")
     except (BrokenPipeError, ConnectionResetError, OSError) as e:
         logging.error(f"Error de red al procesar {filepath}: {e}")
         if shutdown_event:

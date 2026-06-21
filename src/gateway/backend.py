@@ -181,6 +181,54 @@ class BackendListener:
 
     # --- Procesamiento principal ---
 
+    def _es_duplicado(self, client_id, request_id):
+        if not request_id:
+            return False
+        with self._lock:
+            if client_id not in self._processed_hashes:
+                self._processed_hashes[client_id] = set()
+            if request_id in self._processed_hashes[client_id]:
+                return True
+            self._processed_hashes[client_id].add(request_id)
+        return False
+
+    def _procesar_lotes(self, client_id, query_id, cola_nombre, sock, lock, request_id, lotes, ack, nack):
+        if query_id == 4:
+            self._acumular_cuentas_q4(client_id, lotes)
+            self._persistir_estado(client_id)
+            ack()
+            return
+
+        for batch in lotes:
+            schema = batch[CABECERA][ESQUEMA]
+            records = batch[PAYLOAD]
+            logger.info(f"Resultado recibido para {cola_nombre} a {client_id} con {len(records)} registros.")
+            resultado_lista = [
+                {**dict(zip(schema, vals)), CLAVE_EOF_REPORTE: False}
+                for vals in records
+            ]
+            payload_str = json.dumps({CLAVE_QUERY: query_id, CLAVE_RESULTADO: resultado_lista})
+            if not self._enviar_reporte_con_ack(client_id, sock, lock, payload_str):
+                with self._lock:
+                    self._processed_hashes.pop(client_id, None)
+                self.state.remover_cliente(client_id)
+                nack()
+                return
+        self._verificar_crash_downstream(client_id, request_id, "before_ack", "CRASH_GATEWAY_DOWNSTREAM_BEFORE_ACK")
+        ack()
+
+    def _procesar_registro_simple(self, client_id, query_id, sock, lock, request_id, transaccion, ack, nack):
+        transaccion[CLAVE_EOF_REPORTE] = False
+        payload_str = json.dumps({CLAVE_QUERY: query_id, CLAVE_RESULTADO: transaccion})
+        if self._enviar_reporte_con_ack(client_id, sock, lock, payload_str):
+            self._verificar_crash_downstream(client_id, request_id, "before_ack", "CRASH_GATEWAY_DOWNSTREAM_BEFORE_ACK")
+            ack()
+        else:
+            with self._lock:
+                self._processed_hashes.pop(client_id, None)
+            self.state.remover_cliente(client_id)
+            nack()
+
     def _procesar_respuesta(self, query_id, cola_nombre, body, ack, nack):
         if not self.state.servidor_corriendo:
             return nack()
@@ -189,15 +237,13 @@ class BackendListener:
             transaccion = json.loads(body.decode("utf-8"))
             client_id = transaccion.pop(ID_CLIENTE, None)
             if not client_id:
-                ack()
-                return
+                return ack()
 
-            # Saltar queries que ya fueron entregadas en una sesión anterior
             estado_persistido = self.state.cargar_estado_cliente(client_id)
             if cola_nombre in set(estado_persistido.get("queries_entregadas", [])):
                 logger.info(f"Query {cola_nombre} ya entregada a {client_id}, descartando")
-                ack()
-                return
+                return ack()
+
             sock, lock, eof_status = self._obtener_socket_o_esperar(client_id, ack, nack)
             if not sock:
                 return
@@ -205,68 +251,20 @@ class BackendListener:
             if query_id == 4:
                 self._cargar_q4_si_necesario(client_id)
 
-            es_eof = transaccion.pop("EOF", False) or transaccion.pop(CLAVE_EOF_REPORTE, False)
-
-            if es_eof:
+            if transaccion.pop("EOF", False) or transaccion.pop(CLAVE_EOF_REPORTE, False):
                 self._procesar_eof(client_id, query_id, cola_nombre, sock, lock, eof_status, ack, nack)
                 return
 
             request_id = transaccion.get(ID_SOLICITUD)
-            if request_id:
-                with self._lock:
-                    if client_id not in self._processed_hashes:
-                        self._processed_hashes[client_id] = set()
-                    if request_id in self._processed_hashes[client_id]:
-                        logger.info(f"Ignorando mensaje duplicado request_id={request_id} en {cola_nombre} para {client_id}")
-                        ack()
-                        return
-                    self._processed_hashes[client_id].add(request_id)
+            if self._es_duplicado(client_id, request_id):
+                logger.info(f"Ignorando mensaje duplicado request_id={request_id} en {cola_nombre} para {client_id}")
+                return ack()
 
             if LOTES in transaccion:
-                if query_id == 4:
-                    self._acumular_cuentas_q4(client_id, transaccion[LOTES])
-                    self._persistir_estado(client_id)
-                    ack()
-                    return
-
-                for batch in transaccion[LOTES]:
-                    header = batch[CABECERA]
-                    schema = header[ESQUEMA]
-                    records = batch[PAYLOAD]
-
-                    logger.info(f"Resultado recibido para {cola_nombre} a {client_id} con {len(records)} registros.")
-                    resultado_lista = [
-                        {**dict(zip(schema, record_values)), CLAVE_EOF_REPORTE: False}
-                        for record_values in records
-                    ]
-                    payload = {
-                        CLAVE_QUERY: query_id,
-                        CLAVE_RESULTADO: resultado_lista
-                    }
-                    payload_str = json.dumps(payload)
-                    if not self._enviar_reporte_con_ack(client_id, sock, lock, payload_str):
-                        with self._lock:
-                            self._processed_hashes.pop(client_id, None)
-                        self.state.remover_cliente(client_id)
-                        nack()
-                        return
-                self._verificar_crash_downstream(client_id, request_id, "before_ack", "CRASH_GATEWAY_DOWNSTREAM_BEFORE_ACK")
-                ack()
+                self._procesar_lotes(client_id, query_id, cola_nombre, sock, lock, request_id, transaccion[LOTES], ack, nack)
             else:
-                transaccion[CLAVE_EOF_REPORTE] = False
-                payload = {
-                    CLAVE_QUERY: query_id,
-                    CLAVE_RESULTADO: transaccion
-                }
-                payload_str = json.dumps(payload)
-                if self._enviar_reporte_con_ack(client_id, sock, lock, payload_str):
-                    self._verificar_crash_downstream(client_id, request_id, "before_ack", "CRASH_GATEWAY_DOWNSTREAM_BEFORE_ACK")
-                    ack()
-                else:
-                    with self._lock:
-                        self._processed_hashes.pop(client_id, None)
-                    self.state.remover_cliente(client_id)
-                    nack()
+                self._procesar_registro_simple(client_id, query_id, sock, lock, request_id, transaccion, ack, nack)
+
         except json.JSONDecodeError:
             logger.error("JSON invalido")
             ack()
@@ -274,63 +272,61 @@ class BackendListener:
             logger.error(f"Error procesando respuesta: {e}", exc_info=True)
             nack()
 
-    def _procesar_eof(self, client_id, query_id, cola_nombre, sock, lock, eof_status, ack, nack):
-        esperados = self.config.eofs_esperados.get(cola_nombre, 1)
-
-        # Cargar counts persistidos si es la primera vez en esta sesión
+    def _actualizar_eof_count(self, client_id, cola_nombre, esperados):
+        """Carga (si es primera vez) e incrementa el contador de EOFs. Idempotente si ya se alcanzó el total."""
         with self._lock:
             if client_id not in self._eof_counts:
                 estado = self.state.cargar_estado_cliente(client_id)
                 self._eof_counts[client_id] = dict(estado.get("eof_counts_recibidos", {}))
             counts = self._eof_counts[client_id]
-            # Solo incrementar si no llegamos aún al total esperado (idempotente ante re-entregas por nack)
             if counts.get(cola_nombre, 0) < esperados:
                 counts[cola_nombre] = counts.get(cola_nombre, 0) + 1
-            recibidos = counts[cola_nombre]
+            return counts[cola_nombre]
 
+    def _finalizar_cliente(self, client_id, sock, lock):
+        """Envía FIN_DE_REGISTROS y libera todo el estado en memoria y disco del cliente."""
+        with lock:
+            message_protocol.external.enviar_mensaje(
+                sock, message_protocol.external.TipoMensaje.FIN_DE_REGISTROS
+            )
+        with self._lock:
+            self._processed_hashes.pop(client_id, None)
+            self._q4_cuentas.pop(client_id, None)
+            self._eof_counts.pop(client_id, None)
+        self.state.limpiar_estado_cliente(client_id)
+        self.state.remover_cliente(client_id)
+        self._detener_worker(client_id)
+
+    def _procesar_eof(self, client_id, query_id, cola_nombre, sock, lock, eof_status, ack, nack):
+        esperados = self.config.eofs_esperados.get(cola_nombre, 1)
+        recibidos = self._actualizar_eof_count(client_id, cola_nombre, esperados)
         self._persistir_estado(client_id)
 
         if recibidos < esperados:
             logger.info(f"EOF parcial {recibidos}/{esperados} para {cola_nombre} ({client_id})")
-            ack()
-            return
+            return ack()
 
         columns_hint = None
         if query_id == 4:
             if not self._enviar_cuentas_q4(client_id, sock, lock):
                 logger.warning(f"No se pudieron entregar cuentas Q4 a {client_id}, reencolando EOF")
-                nack()
-                return
+                return nack()
             columns_hint = ["Bank", "Account"]
 
-        payload = {
-            CLAVE_QUERY: query_id,
-            CLAVE_RESULTADO: {CLAVE_EOF_REPORTE: True}
-        }
+        payload = {CLAVE_QUERY: query_id, CLAVE_RESULTADO: {CLAVE_EOF_REPORTE: True}}
         if columns_hint:
             payload[CLAVE_COLUMNAS] = columns_hint
         if not self._enviar_reporte_con_ack(client_id, sock, lock, json.dumps(payload)):
             logger.warning(f"No se pudo confirmar EOF de {cola_nombre} a {client_id}, reencolando")
-            nack()
-            return
+            return nack()
+
         logger.info(f"EOF completo confirmado para {cola_nombre} a {client_id} ({recibidos}/{esperados})")
         eof_status.add(cola_nombre)
-
         self._persistir_estado(client_id)
 
         if len(eof_status) == self.config.num_queries:
             logger.info(f"Todas las queries finalizadas para {client_id}")
-            with lock:
-                message_protocol.external.enviar_mensaje(
-                    sock, message_protocol.external.TipoMensaje.FIN_DE_REGISTROS
-                )
-            with self._lock:
-                self._processed_hashes.pop(client_id, None)
-                self._q4_cuentas.pop(client_id, None)
-                self._eof_counts.pop(client_id, None)
-            self.state.limpiar_estado_cliente(client_id)
-            self.state.remover_cliente(client_id)
-            self._detener_worker(client_id)
+            self._finalizar_cliente(client_id, sock, lock)
 
         self._verificar_crash_downstream(client_id, f"eof_{query_id}", "before_ack", "CRASH_GATEWAY_DOWNSTREAM_BEFORE_ACK")
         ack()
