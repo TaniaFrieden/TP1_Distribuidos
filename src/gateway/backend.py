@@ -1,3 +1,4 @@
+import os
 import hashlib
 import json
 import re
@@ -160,6 +161,7 @@ class BackendListener:
 
         evento = self.state.registrar_ack_esperado(client_id, batch_id)
         try:
+            self._verificar_crash_downstream(client_id, batch_id, "before_send", "CRASH_GATEWAY_DOWNSTREAM_BEFORE_SEND")
             with lock:
                 message_protocol.external.enviar_mensaje(
                     sock, message_protocol.external.TipoMensaje.REPORTE, payload_con_id
@@ -248,6 +250,7 @@ class BackendListener:
                         self.state.remover_cliente(client_id)
                         nack()
                         return
+                self._verificar_crash_downstream(client_id, request_id, "before_ack", "CRASH_GATEWAY_DOWNSTREAM_BEFORE_ACK")
                 ack()
             else:
                 transaccion[CLAVE_EOF_REPORTE] = False
@@ -257,6 +260,7 @@ class BackendListener:
                 }
                 payload_str = json.dumps(payload)
                 if self._enviar_reporte_con_ack(client_id, sock, lock, payload_str):
+                    self._verificar_crash_downstream(client_id, request_id, "before_ack", "CRASH_GATEWAY_DOWNSTREAM_BEFORE_ACK")
                     ack()
                 else:
                     with self._lock:
@@ -328,6 +332,7 @@ class BackendListener:
             self.state.remover_cliente(client_id)
             self._detener_worker(client_id)
 
+        self._verificar_crash_downstream(client_id, f"eof_{query_id}", "before_ack", "CRASH_GATEWAY_DOWNSTREAM_BEFORE_ACK")
         ack()
 
     # --- Q4 ---
@@ -366,3 +371,14 @@ class BackendListener:
             if not self._enviar_reporte_con_ack(client_id, sock, lock, payload_str):
                 return False
         return True
+
+    def _verificar_crash_downstream(self, client_id, identificador, tipo_caida, env_var):
+        if os.environ.get(env_var) == "true":
+            from common.persistencia import VOLUMEN_DIR
+            bandera = os.path.join(VOLUMEN_DIR, f"gateway_crash_downstream_{client_id}_{identificador}_{tipo_caida}_done")
+            if not os.path.exists(bandera):
+                os.makedirs(os.path.dirname(bandera), exist_ok=True)
+                with open(bandera, "w") as f:
+                    f.write("1")
+                logger.warning(f"CRASH GATEWAY DOWNSTREAM: {env_var} ({tipo_caida}) para {client_id}")
+                os._exit(1)

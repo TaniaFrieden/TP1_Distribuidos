@@ -108,6 +108,11 @@ def _ejecutar_sesion(client_id, inicio_cliente):
 # --- Persistencia del client_id y estado de envío ---
 
 def _cargar_o_generar_client_id():
+    env_id = os.environ.get("CLIENT_ID")
+    if env_id:
+        logging.info(f"Usando client_id de variable de entorno: {env_id}")
+        return env_id
+
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     id_path = os.path.join(OUTPUT_DIR, CLIENT_ID_FILE)
     if os.path.exists(id_path):

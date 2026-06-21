@@ -1,3 +1,4 @@
+import os
 import socket
 import uuid
 import json
@@ -205,6 +206,7 @@ class ClientHandler:
             }).encode("utf-8")
             q.send(internal_msg)
 
+        self._verificar_crash_antes_ack(client_id, "tx")
         _, lock, _ = self.state.obtener_cliente(client_id)
         if lock:
             with lock:
@@ -245,10 +247,23 @@ class ClientHandler:
             }).encode("utf-8")
             colas_bancos[shard_id].send(shard_batch)
 
+        self._verificar_crash_antes_ack(client_id, "bancos")
         _, lock, _ = self.state.obtener_cliente(client_id)
         if lock:
             with lock:
                 message_protocol.external.enviar_mensaje(client_socket, message_protocol.external.TipoMensaje.ACK)
+
+    def _verificar_crash_antes_ack(self, client_id, tipo_lote):
+        env_var = "CRASH_GATEWAY_UPSTREAM_BEFORE_ACK"
+        if os.environ.get(env_var) == "true":
+            from common.persistencia import VOLUMEN_DIR
+            bandera = os.path.join(VOLUMEN_DIR, f"gateway_crash_upstream_{client_id}_{tipo_lote}_done")
+            if not os.path.exists(bandera):
+                os.makedirs(os.path.dirname(bandera), exist_ok=True)
+                with open(bandera, "w") as f:
+                    f.write("1")
+                logger.warning(f"CRASH GATEWAY UPSTREAM ANTES DE ACK ({tipo_lote}) para {client_id}")
+                os._exit(1)
 
     @staticmethod
     def _deduplicar_schema(schema):
