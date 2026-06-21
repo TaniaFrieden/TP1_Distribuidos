@@ -28,5 +28,15 @@ for pid in "${PIDS[@]}"; do
     wait "$pid" || true
 done
 
+# Borrar output de clientes que no completaron (el matado) para no comparar basura
+for dir in output/*/; do
+    [ -d "$dir" ] || continue
+    total_csvs=$(find "$dir" -maxdepth 1 -name 'q*_solucion.csv' 2>/dev/null | wc -l)
+    if [ "$total_csvs" -lt 5 ]; then
+        echo "=== Descartando cliente incompleto $(basename "$dir") ($total_csvs/5 queries) ==="
+        rm -rf "$dir"
+    fi
+done
+
 echo "=== Verificando que el sistema sigue sano para los clientes restantes ==="
 comparar_resultados "$SOLUCIONES"
