@@ -14,6 +14,12 @@ SERVER_PORT ?= 5678
 BATCH_SIZE ?= 10000
 SCALE ?= 2
 
+# Datasets por defecto para tests end-to-end
+TEST_TX ?= trans_sample
+TEST_ACC ?= LI-Small_accounts
+TEST_SOL ?= sample
+export TEST_TX TEST_ACC TEST_SOL
+
 # Variables del gateway
 MOM_HOST ?= localhost
 INPUT_QUEUE ?= input_queue
@@ -278,22 +284,22 @@ test-todos:
 	@echo "========================================================="
 	@echo "=== 2. Ejecutando test de caídas en frío (caso 6) ==="
 	@echo "========================================================="
-	@$(MAKE) test-crash-caso6 1 trans_sample LI-Small_accounts sample
+	@$(MAKE) test-crash-caso6 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
 	@echo "========================================================="
 	@echo "=== 3. Ejecutando test de caídas en frío (caso 7) ==="
 	@echo "========================================================="
-	@$(MAKE) test-crash-caso7 1 trans_sample LI-Small_accounts sample
+	@$(MAKE) test-crash-caso7 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
 	@echo "========================================================="
 	@echo "=== 4. Ejecutando test de caída de líder de elección ==="
 	@echo "========================================================="
-	@$(MAKE) test-crash-leader 1 trans_sample LI-Small_accounts sample
+	@$(MAKE) test-crash-leader 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
 	@echo "========================================================="
 	@echo "=== 5. Ejecutando test caos total (todos los workers) ==="
 	@echo "========================================================="
 	@make down
 	@docker run --rm -v "$$(pwd)/volume:/cleanup" alpine sh -c "rm -rf /cleanup/*" 2>/dev/null || rm -rf volume/* 2>/dev/null || true
 	@make start && sleep 8
-	@$(MAKE) test-caos-todos 2 trans_sample LI-Small_accounts sample 5
+	@$(MAKE) test-caos-todos 2 $(TEST_TX) $(TEST_ACC) $(TEST_SOL) 5
 	@echo "========================================================="
 	@echo "🎉 ¡Todos los tests del sistema pasaron exitosamente! 🎉"
 	@echo "========================================================="

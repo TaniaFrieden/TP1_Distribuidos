@@ -6,17 +6,17 @@ if [[ "$1" =~ ^[0-9]+$ ]]; then
     CASOS="caso6 caso7 leader"
     ITERACIONES=${1:-10}
     CANT_CLIENTES=${2:-1}
-    TX=${3:-trans_sample}
-    ACC=${4:-LI-Small_accounts}
-    SOLUCIONES=${5:-sample}
+    TX=${3:-${TEST_TX:-trans_sample}}
+    ACC=${4:-${TEST_ACC:-LI-Small_accounts}}
+    SOLUCIONES=${5:-${TEST_SOL:-sample}}
 else
     # El usuario pasó casos específicos ("caso6", "leader", etc.)
     CASOS=${1:-caso6 caso7 leader}
     ITERACIONES=${2:-10}
     CANT_CLIENTES=${3:-1}
-    TX=${4:-trans_sample}
-    ACC=${5:-LI-Small_accounts}
-    SOLUCIONES=${6:-sample}
+    TX=${4:-${TEST_TX:-trans_sample}}
+    ACC=${5:-${TEST_ACC:-LI-Small_accounts}}
+    SOLUCIONES=${6:-${TEST_SOL:-sample}}
 fi
 
 # Reemplaza comas por espacios por si se pasa "caso6, caso7"

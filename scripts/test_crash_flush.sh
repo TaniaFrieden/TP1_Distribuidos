@@ -13,17 +13,17 @@
 #   bash scripts/test_crash_flush.sh [etapa] [tx] [acc] [soluciones]
 #
 #   etapa     : counter | q4_sumador | q4_joiner | q4_contador  (default: counter)
-#   tx        : dataset de transacciones   (default: HI-Large_Trans_sample_30)
-#   acc       : dataset de cuentas         (default: HI-Large_accounts)
-#   soluciones: carpeta en solutions/      (default: Hi-Large-30)
+#   tx        : dataset de transacciones   (default: $TEST_TX o trans_sample)
+#   acc       : dataset de cuentas         (default: $TEST_ACC o LI-Small_accounts)
+#   soluciones: carpeta en solutions/      (default: $TEST_SOL o sample)
 #
 set -e
 source scripts/test_helpers.sh
 
 ETAPA=${1:-counter}
-TX=${2:-HI-Large_Trans_sample_30}
-ACC=${3:-HI-Large_accounts}
-SOLUCIONES=${4:-Hi-Large-30}
+TX=${2:-${TEST_TX:-trans_sample}}
+ACC=${3:-${TEST_ACC:-LI-Small_accounts}}
+SOLUCIONES=${4:-${TEST_SOL:-sample}}
 
 echo "=== Test Caso 8: CRASH_AFTER_FLUSH en etapa '$ETAPA' ==="
 

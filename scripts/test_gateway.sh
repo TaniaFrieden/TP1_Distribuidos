@@ -4,9 +4,9 @@ set -e
 source scripts/test_helpers.sh
 
 CANT_CLIENTES=${1:-3}
-TX=${2:-HI-Large_Trans_sample_30}
-ACC=${3:-HI-Large_accounts}
-SOLUCIONES=${4:-Hi-Large-30}
+TX=${2:-${TEST_TX:-trans_sample}}
+ACC=${3:-${TEST_ACC:-LI-Small_accounts}}
+SOLUCIONES=${4:-${TEST_SOL:-sample}}
 ESPERA_ANTES_DE_MATAR=${5:-3}
 
 lanzar_clientes "$CANT_CLIENTES" "$TX" "$ACC"

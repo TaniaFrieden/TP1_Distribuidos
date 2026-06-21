@@ -17,16 +17,16 @@
 #   bash scripts/test_crash_gateway_resultados.sh [tx] [acc] [soluciones] [timeout_resultado_s]
 #
 #   tx               : archivo de transacciones (default: trans_sample)
-#   acc              : archivo de cuentas       (default: LI-Small_accounts)
+#   acc              : archivo de cuentas       (default: $TEST_ACC o LI-Small_accounts)
 #   soluciones       : carpeta en solutions/    (default: small)
 #   timeout_resultado: segundos máx para esperar primer resultado (default: 360)
 #
 set -e
 source scripts/test_helpers.sh
 
-TX=${1:-trans_sample}
-ACC=${2:-LI-Small_accounts}
-SOLUCIONES=${3:-small}
+TX=${1:-${TEST_TX:-trans_sample}}
+ACC=${2:-${TEST_ACC:-LI-Small_accounts}}
+SOLUCIONES=${3:-${TEST_SOL:-sample}}
 TIMEOUT_RESULTADO=${4:-360}
 
 echo "=== Test: gateway cae mientras el cliente recibe resultados ==="

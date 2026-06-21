@@ -3,9 +3,9 @@ set -e
 
 ITERACIONES=${1:-20}
 CANT_CLIENTES=${2:-2}
-TX=${3:-trans_sample}
-ACC=${4:-LI-Small_accounts}
-SOLUCIONES=${5:-small}
+TX=${3:-${TEST_TX:-trans_sample}}
+ACC=${4:-${TEST_ACC:-LI-Small_accounts}}
+SOLUCIONES=${5:-${TEST_SOL:-sample}}
 ESPERA_ANTES_DE_MATAR=${6:-5}
 
 echo "========================================================="

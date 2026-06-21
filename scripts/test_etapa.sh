@@ -4,9 +4,9 @@ source scripts/test_helpers.sh
 
 PREFIX=$1
 CANT_CLIENTES=${2:-3}
-TX=${3:-HI-Large_Trans_sample_30}
-ACC=${4:-HI-Large_accounts}
-SOLUCIONES=${5:-Hi-Large-30}
+TX=${3:-${TEST_TX:-trans_sample}}
+ACC=${4:-${TEST_ACC:-LI-Small_accounts}}
+SOLUCIONES=${5:-${TEST_SOL:-sample}}
 ESPERA_PARAM=${6:-"random"}
 
 if [ -z "$PREFIX" ]; then
