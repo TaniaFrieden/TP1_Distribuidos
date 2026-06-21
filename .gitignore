@@ -10,6 +10,7 @@ __pycache__/
 *$py.class
 .antigravitycli 
 .agents
+.claude
 docs/
 tp
 volume
