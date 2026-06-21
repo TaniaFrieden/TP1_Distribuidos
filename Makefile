@@ -78,8 +78,7 @@ clean:
 	find . -type d -name '__pycache__' -prune -exec rm -rf {} +
 	rm -f /tmp/client_output.txt
 	rm -f logs/*.txt
-	rm -f output/*.csv
-	rm -rf output/*/
+	find output/ -mindepth 1 ! -name '.gitkeep' -delete 2>/dev/null || true
 	rm -rf volume/
 
 free-ports:
