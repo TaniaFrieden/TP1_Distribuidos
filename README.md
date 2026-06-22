@@ -127,7 +127,25 @@ El sistema cuenta con un mecanismo de tolerancia a fallos autocurativo y herrami
 ### Simulación de Caos (Chaos Monkey)
 Para validar la tolerancia a fallos, se dispone de un script Chaos Monkey que apaga de forma aleatoria contenedores de workers durante el procesamiento.
 
-Para ejecutar la simulación de caos continuo (Chaos Monkey) y clientes automatizados:
+#### Pruebas en dos terminales independientes (Recomendado)
+Para probar tolerancia a fallos de forma independiente en dos terminales mientras los clientes corren de manera secuencial:
+
+**Terminal 1 (Clientes Secuenciales):**
+```bash
+make test-secuencial [cant_clientes] # Por defecto 5
+```
+
+**Terminal 2 (Chaos Monkey):**
+```bash
+make tirar-nodos                   # Caos continuo aleatorio cada 10s
+make tirar-nodos [segundos]        # Caos continuo aleatorio con intervalo personalizado
+make tirar-nodos [seg] todos       # Loop continuo: mata todos los workers activos cada [seg] segundos
+make tirar-nodos [seg] etapa       # Loop continuo: mata una etapa al azar cada [seg] segundos
+make tirar-nodos [seg] etapa <p>   # Loop continuo: mata la etapa <p> específica cada [seg] segundos
+```
+
+#### Pruebas integradas
+Para ejecutar la simulación de caos continuo (Chaos Monkey) y clientes automatizados de manera conjunta:
 ```bash
 make caos [min] [max] [cant_clientes] [--todos] [--etapa <pref>]
 ```

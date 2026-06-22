@@ -15,10 +15,7 @@ if [ -z "$PREFIX" ]; then
 fi
 
 if [ "$ESPERA_PARAM" = "random" ]; then
-    MIN_ESPERA=2
-    MAX_ESPERA=15
-    # Pasamos el rango al Chaos Monkey
-    ESPERA_ARG="$MIN_ESPERA $MAX_ESPERA"
+    ESPERA_ARG=10
 else
     ESPERA_ARG="$ESPERA_PARAM"
 fi

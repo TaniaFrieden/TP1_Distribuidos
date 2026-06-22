@@ -37,13 +37,17 @@ help:
 	@echo "  make down                        - Detiene docker-compose"
 	@echo "  make log <servicio>              - Muestra logs de un servicio específico"
 	@echo "  make client <trans> <cuentas>    - Corre un cliente enviando transacciones y cuentas"
-	@echo "  make caos [min] [max] [cant_clientes] [--todos] [--etapa <pref>] - Lanza un test con Chaos Monkey continuo parametrizable"
+	@echo "  make test-secuencial [cant_cli]  - Corre N clientes de forma secuencial y compara resultados"
+	@echo "  make tirar-nodos [segundos]      - Lanza Chaos Monkey aleatorio independiente"
+	@echo "  make tirar-nodos [seg] todos     - Matar todos los workers en loop continuo cada [seg]"
+	@echo "  make tirar-nodos [seg] etapa     - Matar una etapa al azar en loop continuo cada [seg]"
+	@echo "  make tirar-nodos [seg] etapa <p> - Matar etapa específica <p> en loop continuo cada [seg]"
 	@echo ""
 	@echo "=== CATEGORÍAS DE TESTING ==="
 	@echo "  make test-unitarios              - Corre los tests unitarios y de persistencia"
-	@echo "  make test-caos-todos [cant_cli]  - Test de caída de todos los workers en simultáneo"
-	@echo "  make test-caos-aleatorio [min] [max] [cant_cli] - Test de caída continua aleatoria de workers"
-	@echo "  make test-caos-secuencial [min] [max] [cant_cli] - Igual que aleatorio pero clientes secuenciales"
+	@echo "  make test-caos-todos [cant_cli]  - Test de caída de todos los workers en simultáneo con clientes"
+	@echo "  make test-caos-aleatorio [seg] [cant_cli] - Test de caída continua aleatoria de workers"
+	@echo "  make test-caos-secuencial [seg] [cant_cli] - Igual que aleatorio pero clientes secuenciales"
 	@echo "  make test-caos-etapa <pref> [cant_cli]  - Test de caída de una etapa específica"
 	@echo "  make test-caos-cliente [cant_cli] - Test de caída de un cliente a mitad de envío"
 	@echo "  make test-caos-gateway [cant_cli] - Test de caída del gateway"
@@ -240,11 +244,28 @@ test-secuencial:
 
 tirar-nodos:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
-	MIN=$$(echo $$ARGS | cut -d' ' -f1); \
-	MAX=$$(echo $$ARGS | cut -d' ' -f2); \
-	MIN=$${MIN:-5}; \
-	MAX=$${MAX:-15}; \
-	python3 scripts/chaos_monkey.py $$MIN $$MAX
+	if [ -z "$$ARGS" ]; then \
+		python3 scripts/chaos_monkey.py 10; \
+	else \
+		CMD_ARGS=""; \
+		FOR_PY=""; \
+		for arg in $$ARGS; do \
+			if [ "$$arg" = "todos" ]; then \
+				FOR_PY="$$FOR_PY --todos"; \
+			elif [ "$$arg" = "etapa" ]; then \
+				FOR_PY="$$FOR_PY --etapa"; \
+			else \
+				FOR_PY="$$FOR_PY $$arg"; \
+			fi; \
+		done; \
+		python3 scripts/chaos_monkey.py $$FOR_PY; \
+	fi
+
+
+
+
+
+
 
 
 
@@ -341,7 +362,7 @@ test-todos:
 	@$(MAKE) test-caos-todos 2 $(TEST_TX) $(TEST_ACC) $(TEST_SOL) 5
 	@$(_light_clean)
 	@echo "--- 7. Caos aleatorio ---"
-	@$(MAKE) test-caos-aleatorio 5 15 2
+	@$(MAKE) test-caos-aleatorio 10 2
 	@$(_light_clean)
 	@echo "--- 8. Caos etapa: q2_agregador_shard ---"
 	@$(MAKE) test-caos-etapa q2_agregador_shard 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)

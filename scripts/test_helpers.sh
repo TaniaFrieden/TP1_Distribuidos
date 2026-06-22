@@ -13,13 +13,13 @@ lanzar_clientes() {
             echo "=== Cliente $i/$cant iniciando ==="
             ( export CLIENT_ID_SUFFIX=$i; make client TRANSACTIONS_FILE="$tx" ACCOUNTS_FILE="$acc" OUTPUT_DIR="output" \
                 > "logs/client_stdout_$i.txt" 2>&1 )
-            echo "=== Cliente $i/$cant finalizado ==="
             if [ -n "${SEQUENTIAL_SOL:-}" ]; then
                 if ! comparar_ultimo_cliente "$SEQUENTIAL_SOL"; then
                     echo "=== FALLO en cliente $i/$cant. Abortando. ==="
                     return 1
                 fi
             fi
+            echo "=== Cliente $i/$cant finalizado exitosamente ==="
         else
             ( export CLIENT_ID_SUFFIX=$i; make client TRANSACTIONS_FILE="$tx" ACCOUNTS_FILE="$acc" OUTPUT_DIR="output" \
                 > "logs/client_stdout_$i.txt" 2>&1 ) &
