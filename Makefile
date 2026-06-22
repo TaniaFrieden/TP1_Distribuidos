@@ -232,6 +232,22 @@ test-caos-secuencial:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
 	SEQUENTIAL=1 SEQUENTIAL_SOL="$${TEST_SOL:-sample}" bash scripts/test_caos_continuo.sh $$ARGS
 
+test-secuencial:
+	@CANT="$(filter-out $@,$(MAKECMDGOALS))"; \
+	CANT=$${CANT:-5}; \
+	SEQUENTIAL=1 SEQUENTIAL_SOL="$(TEST_SOL)" CANT="$$CANT" bash -c 'source scripts/test_helpers.sh && lanzar_clientes "$$CANT" $(TEST_TX) $(TEST_ACC)'
+
+
+tirar-nodos:
+	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
+	MIN=$$(echo $$ARGS | cut -d' ' -f1); \
+	MAX=$$(echo $$ARGS | cut -d' ' -f2); \
+	MIN=$${MIN:-5}; \
+	MAX=$${MAX:-15}; \
+	python3 scripts/chaos_monkey.py $$MIN $$MAX
+
+
+
 test-caos-etapa:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
 	if [ -z "$$ARGS" ]; then \
