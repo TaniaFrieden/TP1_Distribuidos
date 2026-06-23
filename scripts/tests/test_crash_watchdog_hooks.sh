@@ -15,7 +15,7 @@ run_hook_test() {
     echo ""
     echo "--- Watchdog Hook: $NOMBRE ($DESC) ---"
     make down 2>/dev/null || true
-    docker run --rm -v "$(pwd)/volume:/cleanup" alpine sh -c "rm -rf /cleanup/*" 2>/dev/null \
+    timeout 10s docker run --rm -v "$(pwd)/volume:/cleanup" alpine sh -c "rm -rf /cleanup/*" 2>/dev/null \
         || rm -rf volume/* 2>/dev/null || true
 
     echo "=== Levantando sistema con $ENV_VAR=true ==="

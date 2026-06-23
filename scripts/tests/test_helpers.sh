@@ -3,8 +3,12 @@
 DOCKER_COMPOSE="${DOCKER_COMPOSE:-docker compose}"
 
 preparar_entorno() {
-    docker rm -f $(docker ps -a -q --filter "name=client_") 2>/dev/null || true
-    docker run --rm -v "$(pwd)/output:/out" -v "$(pwd)/logs:/lg" \
+    local clients
+    clients=$(docker ps -a -q --filter "name=client_")
+    if [ -n "$clients" ]; then
+        timeout 10s docker rm -f $clients 2>/dev/null || true
+    fi
+    timeout 10s docker run --rm -v "$(pwd)/output:/out" -v "$(pwd)/logs:/lg" \
         alpine sh -c "rm -rf /out/*/ /out/client_id*.txt /lg/client_*.txt /lg/client_stdout_*.txt" 2>/dev/null || true
     trap 'jobs -p | xargs -r kill 2>/dev/null; true' EXIT
     local esperados corriendo
@@ -13,7 +17,8 @@ preparar_entorno() {
     if [ "$corriendo" -lt "$esperados" ]; then
         echo "=== Sistema incompleto ($corriendo/$esperados). Limpiando y arrancando... ==="
         make down 2>/dev/null || true
-        docker run --rm -v "$(pwd)/volume:/vol" \
+        sleep 2
+        timeout 10s docker run --rm -v "$(pwd)/volume:/vol" \
             alpine sh -c "rm -rf /vol/*" 2>/dev/null || true
         make start
         esperar_sistema_listo
@@ -49,7 +54,7 @@ lanzar_clientes() {
     local tx=$2
     local acc=$3
     PIDS=()
-    docker run --rm -v "$(pwd)/output:/cleanup_out" -v "$(pwd)/logs:/cleanup_logs" \
+    timeout 10s docker run --rm -v "$(pwd)/output:/cleanup_out" -v "$(pwd)/logs:/cleanup_logs" \
         alpine sh -c "rm -rf /cleanup_out/*/ /cleanup_out/client_id_*.txt /cleanup_logs/client_stdout_*.txt" 2>/dev/null \
         || { rm -rf output/*/ output/client_id_*.txt 2>/dev/null || true; }
     for i in $(seq 1 "$cant"); do
@@ -159,4 +164,24 @@ sys.exit(0 if ok else 1)
         done
     done
     return $fallo
+}
+
+limpiar_test_global() {
+    echo "=== Realizando limpieza de emergencia del test... ==="
+    if [ -n "${CHAOS_PID:-}" ]; then
+        echo "Apagando Chaos Monkey (PID: $CHAOS_PID)..."
+        kill "$CHAOS_PID" 2>/dev/null || true
+    fi
+    if [ -n "${PIDS:-}" ]; then
+        echo "Apagando procesos de clientes..."
+        for pid in "${PIDS[@]}"; do
+            kill "$pid" 2>/dev/null || true
+        done
+    fi
+    echo "Removiendo contenedores cliente docker residuales..."
+    local clients
+    clients=$(docker ps -a -q --filter "name=client_")
+    if [ -n "$clients" ]; then
+        timeout 10s docker rm -f $clients 2>/dev/null || true
+    fi
 }

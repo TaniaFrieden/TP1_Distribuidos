@@ -9,7 +9,7 @@ SOLUCIONES=${4:-${TEST_SOL:-sample}}
 
 echo "=== Preparando entorno para Test Caso 7 (Crash tras EOFs, pre-disparo de barrera) ==="
 make down
-docker run --rm -v "$(pwd)/volume:/cleanup" alpine sh -c "rm -rf /cleanup/*" 2>/dev/null \
+timeout 10s docker run --rm -v "$(pwd)/volume:/cleanup" alpine sh -c "rm -rf /cleanup/*" 2>/dev/null \
     || rm -rf volume/* 2>/dev/null || true
 
 echo "=== Levantando sistema con inyección de falla ==="

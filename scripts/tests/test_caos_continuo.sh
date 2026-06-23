@@ -51,12 +51,10 @@ echo "=== Lanzando Chaos Monkey en segundo plano ==="
 echo "Segundos: ${SEGUNDOS_CAOS}s | Extra Args: $EXTRA_ARGS"
 python3 scripts/chaos/chaos_monkey.py "$SEGUNDOS_CAOS" $EXTRA_ARGS >> logs/chaos_monkey_run.log 2>&1 &
 CHAOS_PID=$!
-
-trap 'echo "=== Apagando Chaos Monkey... ==="; kill $CHAOS_PID 2>/dev/null || true' EXIT
+trap limpiar_test_global EXIT
 
 esperar_clientes
 
 echo "=== Clientes finalizaron. Deteniendo Chaos Monkey. ==="
-kill $CHAOS_PID 2>/dev/null || true
 
 comparar_resultados "$SOL"

@@ -33,6 +33,11 @@ for i in "${!CASOS[@]}"; do
     IFS='|' read -r ENV_VAR DESCRIPCION <<< "${CASOS[$i]}"
     NUM=$((i + 1))
 
+    # Permitir filtrar un caso específico con la variable ONLY_CASE
+    if [ -n "$ONLY_CASE" ] && [ "$ONLY_CASE" != "$NUM" ] && [ "$ONLY_CASE" != "$ENV_VAR" ]; then
+        continue
+    fi
+
     echo ""
     echo "========================================================="
     echo "=== Caso $NUM/$TOTAL: $DESCRIPCION ==="
@@ -40,7 +45,7 @@ for i in "${!CASOS[@]}"; do
     echo "========================================================="
 
     make down 2>/dev/null || true
-    docker run --rm -v "$(pwd)/volume:/vol" -v "$(pwd)/output:/out" -v "$(pwd)/logs:/lg" \
+    timeout 10s docker run --rm -v "$(pwd)/volume:/vol" -v "$(pwd)/output:/out" -v "$(pwd)/logs:/lg" \
         alpine sh -c "rm -rf /vol/* /out/*/ /out/client_id*.txt /lg/client_*.txt" 2>/dev/null || true
 
     echo "=== Levantando sistema con inyección de falla ==="
