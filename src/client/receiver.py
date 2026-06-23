@@ -12,7 +12,7 @@ QUERIES_COMPLETADAS_FILE = "queries_completadas.json"
 BATCH_IDS_FILE = "batch_ids_q{q_id}.json"
 
 
-def escuchar_respuesta(sock, queries, inicio_envio, client_id, evento_completado=None, write_lock=None):
+def escuchar_respuesta(sock, queries, inicio_envio, client_id, evento_completado=None, write_lock=None, ack_pendiente=None):
     output_path = os.path.join(OUTPUT_DIR, client_id)
     os.makedirs(output_path, exist_ok=True)
 
@@ -38,7 +38,7 @@ def escuchar_respuesta(sock, queries, inicio_envio, client_id, evento_completado
                     batch_ids_vistos
                 )
                 if batch_id:
-                    _enviar_ack(sock, batch_id, write_lock)
+                    _enviar_ack(sock, batch_id, write_lock, ack_pendiente)
             elif tipo_mensaje == message_protocol.external.TipoMensaje.FIN_DE_REGISTROS:
                 elapsed = time.perf_counter() - inicio_envio
                 logging.info(f"Todas las queries completadas en {elapsed:.2f}s")
@@ -51,9 +51,11 @@ def escuchar_respuesta(sock, queries, inicio_envio, client_id, evento_completado
             f.close()
 
 
-def _enviar_ack(sock, batch_id, write_lock=None):
+def _enviar_ack(sock, batch_id, write_lock=None, ack_pendiente=None):
     try:
         ack_payload = json.dumps({"batch_id": batch_id})
+        if ack_pendiente:
+            ack_pendiente.clear()
         if write_lock:
             with write_lock:
                 message_protocol.external.enviar_mensaje(
@@ -65,6 +67,9 @@ def _enviar_ack(sock, batch_id, write_lock=None):
             )
     except Exception as e:
         logging.warning(f"No se pudo enviar ACK_RESULTADO al gateway: {e}")
+    finally:
+        if ack_pendiente:
+            ack_pendiente.set()
 
 
 def _cargar_queries_completadas(output_path):

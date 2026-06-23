@@ -68,10 +68,12 @@ def _ejecutar_sesion(client_id, inicio_cliente):
     socket_lock = threading.Lock()
     shutdown_event = threading.Event()
     evento_completado = threading.Event()
+    ack_pendiente = threading.Event()
+    ack_pendiente.set()
 
     hilo_receptor = threading.Thread(
         target=escuchar_respuesta,
-        args=(sock, queries, inicio_cliente, client_id, evento_completado, socket_lock),
+        args=(sock, queries, inicio_cliente, client_id, evento_completado, socket_lock, ack_pendiente),
         daemon=True
     )
     hilo_receptor.start()
@@ -79,7 +81,7 @@ def _ejecutar_sesion(client_id, inicio_cliente):
     ya_enviado = omitir_envio
 
     if not ya_enviado:
-        hilos_envio = _iniciar_hilos_envio(sock, socket_lock, client_id, shutdown_event)
+        hilos_envio = _iniciar_hilos_envio(sock, socket_lock, client_id, shutdown_event, ack_pendiente)
         _esperar_envios(hilos_envio)
 
         if shutdown_event.is_set():
@@ -152,14 +154,14 @@ def _conectar_socket():
         return None
 
 
-def _iniciar_hilos_envio(sock, lock, client_id, shutdown_event):
+def _iniciar_hilos_envio(sock, lock, client_id, shutdown_event, ack_pendiente=None):
     hilo_tx = threading.Thread(
         target=enviar_archivo,
-        args=(TRANSACTIONS_FILE, message_protocol.external.TipoMensaje.LOTE_TRANSACCIONES, sock, lock, client_id, shutdown_event)
+        args=(TRANSACTIONS_FILE, message_protocol.external.TipoMensaje.LOTE_TRANSACCIONES, sock, lock, client_id, shutdown_event, ack_pendiente)
     )
     hilo_bancos = threading.Thread(
         target=enviar_archivo,
-        args=(ACCOUNTS_FILE, message_protocol.external.TipoMensaje.LOTE_BANCOS, sock, lock, client_id, shutdown_event)
+        args=(ACCOUNTS_FILE, message_protocol.external.TipoMensaje.LOTE_BANCOS, sock, lock, client_id, shutdown_event, ack_pendiente)
     )
     hilo_tx.start()
     hilo_bancos.start()

@@ -11,13 +11,13 @@ def _leer_headers_y_registros(f):
     registros = (linea.strip().split(",") for linea in f if linea.strip())
     return headers, registros
 
-def enviar_archivo(filepath, tipo_mensaje, sock, lock, client_id, shutdown_event=None):
+def enviar_archivo(filepath, tipo_mensaje, sock, lock, client_id, shutdown_event=None, ack_pendiente=None):
     logging.info(f"Enviando {filepath}...")
     try:
         with open(filepath, "r", encoding="utf-8") as f:
             headers, registros = _leer_headers_y_registros(f)
             if headers is not None:
-                _enviar_lotes(headers, registros, tipo_mensaje, sock, lock, client_id, shutdown_event)
+                _enviar_lotes(headers, registros, tipo_mensaje, sock, lock, client_id, shutdown_event, ack_pendiente)
         if shutdown_event and shutdown_event.is_set():
             logging.info(f"Envío de {filepath} interrumpido.")
         else:
@@ -29,16 +29,20 @@ def enviar_archivo(filepath, tipo_mensaje, sock, lock, client_id, shutdown_event
     except Exception as e:
         logging.error(f"Error al procesar {filepath}: {e}")
 
-def _enviar_lotes(headers, registros, tipo_mensaje, sock, lock, client_id, shutdown_event=None):
+def _enviar_lotes(headers, registros, tipo_mensaje, sock, lock, client_id, shutdown_event=None, ack_pendiente=None):
     lote = []
     for registro in registros:
         if shutdown_event and shutdown_event.is_set():
             return
         lote.append(registro)
         if len(lote) >= LOTE_SIZE:
+            if ack_pendiente:
+                ack_pendiente.wait()
             with lock:
                 message_protocol.external.enviar_mensaje(sock, tipo_mensaje, headers, client_id, lote)
             lote = []
     if lote and not (shutdown_event and shutdown_event.is_set()):
+        if ack_pendiente:
+            ack_pendiente.wait()
         with lock:
             message_protocol.external.enviar_mensaje(sock, tipo_mensaje, headers, client_id, lote)
