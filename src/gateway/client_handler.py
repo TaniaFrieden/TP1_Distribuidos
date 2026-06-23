@@ -148,9 +148,19 @@ class ClientHandler:
             for i in range(1, total_workers + 1):
                 colas_bancos[i] = middleware.MessageMiddlewareQueueRabbitMQ(self.config.mom_host, f"{prefix}_{i}")
 
+        estado_previo = self.state.cargar_estado_cliente(client_id)
+        if estado_previo.get("conectado"):
+            logger.info(f"Cliente {client_id} reconectando — enviando DISCONNECT por colas de datos")
+            self._enviar_disconnect(client_id, colas_tx, colas_bancos)
+
+        self._verificar_crash("CRASH_GATEWAY_BEFORE_PERSIST_CONNECTED", client_id, "pre-conectado")
+
         session_id = str(uuid.uuid4())[:8]
         self.state.registrar_sesion(client_id, session_id)
+        self.state.actualizar_estado_cliente(client_id, {"conectado": True})
         logger.info(f"Cliente {client_id} sesión {session_id} iniciada")
+
+        self._verificar_crash("CRASH_GATEWAY_AFTER_PERSIST_CONNECTED", client_id, "post-conectado")
 
         eof_enviado = False
         try:
@@ -182,7 +192,9 @@ class ClientHandler:
                     eof_enviado = True
                     logger.info(f"EOF enviado para {client_id}")
 
+                    self._verificar_crash("CRASH_GATEWAY_BEFORE_PERSIST_DATOS_ENVIADOS", client_id, "pre-datos_enviados")
                     self.state.actualizar_estado_cliente(client_id, {"datos_enviados": True, "session_id": session_id})
+                    self._verificar_crash("CRASH_GATEWAY_AFTER_PERSIST_DATOS_ENVIADOS", client_id, "post-datos_enviados")
                     break
 
         except socket.error:
@@ -270,8 +282,7 @@ class ClientHandler:
             with lock:
                 message_protocol.external.enviar_mensaje(client_socket, message_protocol.external.TipoMensaje.ACK)
 
-    def _verificar_crash_antes_ack(self, client_id, tipo_lote):
-        env_var = "CRASH_GATEWAY_UPSTREAM_BEFORE_ACK"
+    def _verificar_crash(self, env_var, client_id, descripcion=""):
         if os.environ.get(env_var) == "true":
             from common.persistencia import VOLUMEN_DIR
             bandera = os.path.join(VOLUMEN_DIR, f"gateway_crash_{env_var}_done")
@@ -279,8 +290,11 @@ class ClientHandler:
                 os.makedirs(os.path.dirname(bandera), exist_ok=True)
                 with open(bandera, "w") as f:
                     f.write("1")
-                logger.warning(f"CRASH GATEWAY UPSTREAM ANTES DE ACK ({tipo_lote}) para {client_id}")
+                logger.warning(f"CRASH GATEWAY: {env_var} ({descripcion}) para {client_id}")
                 os._exit(1)
+
+    def _verificar_crash_antes_ack(self, client_id, tipo_lote):
+        self._verificar_crash("CRASH_GATEWAY_UPSTREAM_BEFORE_ACK", client_id, tipo_lote)
 
     @staticmethod
     def _deduplicar_schema(schema):

@@ -9,6 +9,8 @@ ACC=${3:-${TEST_ACC:-LI-Small_accounts}}
 SOLUCIONES=${4:-${TEST_SOL:-sample}}
 ESPERA_ANTES_DE_MATAR=${5:-3}
 
+preparar_entorno
+
 lanzar_clientes "$CANT_CLIENTES" "$TX" "$ACC"
 
 echo "=== Esperando ${ESPERA_ANTES_DE_MATAR}s antes de matar gateway ==="

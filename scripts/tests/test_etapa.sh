@@ -20,6 +20,8 @@ else
     ESPERA_ARG="$ESPERA_PARAM"
 fi
 
+preparar_entorno
+
 lanzar_clientes "$CANT_CLIENTES" "$TX" "$ACC"
 
 # Limpiar el log al iniciar este test

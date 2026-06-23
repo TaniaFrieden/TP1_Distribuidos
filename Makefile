@@ -77,8 +77,6 @@ clean:
 	-@$(MAKE) free-ports
 	-@$(MAKE) down
 	-$(DOCKER_COMPOSE) down -v --remove-orphans 2>/dev/null || true
-	-docker network prune -f 2>/dev/null || true
-	-docker system prune -f --volumes 2>/dev/null || true
 	rm -rf .pytest_cache
 	find . -type d -name '__pycache__' -prune -exec rm -rf {} +
 	-docker rm -f $$(docker ps -a -q --filter "name=client_") 2>/dev/null || true
@@ -95,13 +93,10 @@ free-ports:
 	@if command -v fuser >/dev/null 2>&1; then \
 		fuser -k $(SERVER_PORT)/tcp >/dev/null 2>&1 || true; \
 	fi
-	@echo "=== Deteniendo posibles servicios locales de RabbitMQ ==="
-	-@sudo systemctl stop rabbitmq-server 2>/dev/null || true
-	-@sudo service rabbitmq-server stop 2>/dev/null || true
-	@echo "=== Forzando cierre de puertos 5672 y 15672 ==="
+	@echo "=== Liberando puertos de RabbitMQ ==="
 	@if command -v fuser >/dev/null 2>&1; then \
-		sudo fuser -k 5672/tcp >/dev/null 2>&1 || true; \
-		sudo fuser -k 15672/tcp >/dev/null 2>&1 || true; \
+		fuser -k 5672/tcp >/dev/null 2>&1 || true; \
+		fuser -k 15672/tcp >/dev/null 2>&1 || true; \
 	fi
 
 test-server:
@@ -321,7 +316,8 @@ test-stress-crash:
 
 
 # Helpers internos para test-todos (silencian docker y guardan logs en logs/run_*.log)
-_full_clean = { $(DOCKER_COMPOSE) down -v --remove-orphans; \
+_kill_zombies = docker rm -f $$(docker ps -a -q --filter "name=client_") 2>/dev/null; true
+_full_clean = { $(_kill_zombies); $(DOCKER_COMPOSE) down -v --remove-orphans; \
 	docker run --rm -v "$$(pwd)/volume:/vol" -v "$$(pwd)/output:/out" -v "$$(pwd)/logs:/lg" \
 		alpine sh -c "rm -rf /vol/* /out/*/ /out/client_id*.txt /lg/*.txt /lg/*.log && chmod -R 777 /vol /out /lg"; } > logs/run_clean_full.log 2>&1
 _light_clean = { $(DOCKER_COMPOSE) down -v --remove-orphans; \

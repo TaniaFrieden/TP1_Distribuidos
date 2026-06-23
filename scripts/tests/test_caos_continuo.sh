@@ -39,6 +39,7 @@ if [ ${#NUMS[@]} -ge 2 ]; then
     CANT_CLIENTES=${NUMS[1]}
 fi
 
+preparar_entorno
 docker build -q -t client-image -f src/client/Dockerfile src >/dev/null 2>&1
 
 # Limpiar el log al iniciar este test

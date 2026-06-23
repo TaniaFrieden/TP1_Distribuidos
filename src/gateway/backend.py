@@ -237,6 +237,9 @@ class BackendListener:
             if not client_id:
                 return ack()
 
+            if transaccion.get("CLIENT_DISCONNECT"):
+                return ack()
+
             estado_persistido = self.state.cargar_estado_cliente(client_id)
             if cola_nombre in set(estado_persistido.get("queries_entregadas", [])):
                 logger.info(f"Query {cola_nombre} ya entregada a {client_id}, descartando")
@@ -254,11 +257,6 @@ class BackendListener:
                 return
 
             request_id = transaccion.get(ID_SOLICITUD)
-
-            current_session = self.state.obtener_sesion(client_id)
-            if current_session and request_id and current_session not in request_id:
-                return ack()
-
             if self._es_duplicado(client_id, request_id):
                 logger.info(f"Ignorando mensaje duplicado request_id={request_id} en {cola_nombre} para {client_id}")
                 return ack()
@@ -327,8 +325,10 @@ class BackendListener:
             return nack()
 
         logger.info(f"EOF completo confirmado para {cola_nombre} a {client_id} ({recibidos}/{esperados})")
+        self._verificar_crash_downstream(client_id, f"query_{query_id}", "before_persist_query", "CRASH_GATEWAY_BEFORE_PERSIST_QUERY")
         eof_status.add(cola_nombre)
         self._persistir_estado(client_id)
+        self._verificar_crash_downstream(client_id, f"query_{query_id}", "after_persist_query", "CRASH_GATEWAY_AFTER_PERSIST_QUERY")
 
         if len(eof_status) == self.config.num_queries:
             logger.info(f"Todas las queries finalizadas para {client_id}")

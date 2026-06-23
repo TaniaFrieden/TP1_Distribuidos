@@ -14,10 +14,16 @@ ACC=${3:-${TEST_ACC:-LI-Small_accounts}}
 SOLUCIONES=${4:-${TEST_SOL:-sample}}
 
 CASOS=(
-    "CRASH_GATEWAY_UPSTREAM_BEFORE_ACK|Upstream: crash después de publicar a RabbitMQ, antes de ACK al cliente"
-    "CRASH_GATEWAY_DOWNSTREAM_BEFORE_SEND|Downstream: crash antes de enviar resultado al cliente"
-    "CRASH_GATEWAY_DOWNSTREAM_BEFORE_ACK|Downstream: crash después de enviar resultado, antes de ACK a RabbitMQ"
-    "CRASH_GATEWAY_BEFORE_FINALIZE|Downstream: crash con todas las queries entregadas, antes de FIN_DE_REGISTROS"
+    "CRASH_GATEWAY_UPSTREAM_BEFORE_ACK|Pipeline: crash después de publicar a RabbitMQ, antes de ACK al cliente"
+    "CRASH_GATEWAY_DOWNSTREAM_BEFORE_SEND|Pipeline: crash antes de enviar EOF de query al cliente"
+    "CRASH_GATEWAY_DOWNSTREAM_BEFORE_ACK|Pipeline: crash después de enviar EOF de query, antes de ACK a RabbitMQ"
+    "CRASH_GATEWAY_BEFORE_FINALIZE|Pipeline: crash con todas las queries entregadas, antes de FIN_DE_REGISTROS"
+    "CRASH_GATEWAY_BEFORE_PERSIST_CONNECTED|Estado: crash antes de persistir flag conectado"
+    "CRASH_GATEWAY_AFTER_PERSIST_CONNECTED|Estado: crash después de persistir flag conectado, antes de enviar datos"
+    "CRASH_GATEWAY_BEFORE_PERSIST_DATOS_ENVIADOS|Estado: crash después de EOF a workers, antes de persistir datos_enviados"
+    "CRASH_GATEWAY_AFTER_PERSIST_DATOS_ENVIADOS|Estado: crash después de persistir datos_enviados"
+    "CRASH_GATEWAY_BEFORE_PERSIST_QUERY|Estado: crash después de confirmar query al cliente, antes de persistir"
+    "CRASH_GATEWAY_AFTER_PERSIST_QUERY|Estado: crash después de persistir query entregada"
 )
 
 TOTAL=${#CASOS[@]}

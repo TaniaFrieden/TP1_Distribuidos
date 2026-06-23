@@ -2,6 +2,26 @@
 
 DOCKER_COMPOSE="${DOCKER_COMPOSE:-docker compose}"
 
+preparar_entorno() {
+    docker rm -f $(docker ps -a -q --filter "name=client_") 2>/dev/null || true
+    docker run --rm -v "$(pwd)/output:/out" -v "$(pwd)/logs:/lg" \
+        alpine sh -c "rm -rf /out/*/ /out/client_id*.txt /lg/client_*.txt /lg/client_stdout_*.txt" 2>/dev/null || true
+    trap 'jobs -p | xargs -r kill 2>/dev/null; true' EXIT
+    local esperados corriendo
+    esperados=$($DOCKER_COMPOSE config --services 2>/dev/null | wc -l)
+    corriendo=$($DOCKER_COMPOSE ps --status running --format '{{.Name}}' 2>/dev/null | wc -l)
+    if [ "$corriendo" -lt "$esperados" ]; then
+        echo "=== Sistema incompleto ($corriendo/$esperados). Limpiando y arrancando... ==="
+        make down 2>/dev/null || true
+        docker run --rm -v "$(pwd)/volume:/vol" \
+            alpine sh -c "rm -rf /vol/*" 2>/dev/null || true
+        make start
+        esperar_sistema_listo
+    else
+        echo "=== Sistema listo ($corriendo/$esperados servicios running) ==="
+    fi
+}
+
 esperar_sistema_listo() {
     local timeout=${1:-120}
     local esperados
