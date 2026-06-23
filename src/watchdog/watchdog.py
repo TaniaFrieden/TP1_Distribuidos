@@ -39,7 +39,7 @@ def main():
         with lock_detector:
             if not detector_activo:
                 detector_activo = True
-                detector_actual = DetectorLatidos(config)
+                detector_actual = DetectorLatidos(config, topologia=eleccion.obtener_topologia_serializable())
                 detector_actual.iniciar()
                 logger.info("Soy el líder. Detector de caídas activo.")
         _publicar_caidas_watchdogs(logger, config, ids_watchdogs_caidos)

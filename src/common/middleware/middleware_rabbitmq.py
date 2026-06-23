@@ -25,7 +25,7 @@ class MessageMiddlewareQueueRabbitMQ(RabbitMQBase):
 
     @handle_pika_errors("declarar exchange")
     def _declare_exchange(self, exchange_name, exchange_type):
-        self.channel.exchange_declare(exchange=exchange_name, exchange_type=exchange_type)
+        self.channel.exchange_declare(exchange=exchange_name, exchange_type=exchange_type, durable=True)
 
     @handle_pika_errors("bindear la cola")
     def _bind_queue(self, exchange_name):
@@ -103,7 +103,8 @@ class MessageMiddlewareExchangeRabbitMQ(RabbitMQBase):
     def _declare_exchange(self):
         self.channel.exchange_declare(
             exchange=self.exchange_name,
-            exchange_type=self.exchange_type
+            exchange_type=self.exchange_type,
+            durable=True
         )
 
     @handle_pika_send_errors("enviar mensaje")

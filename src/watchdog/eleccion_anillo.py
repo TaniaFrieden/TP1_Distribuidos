@@ -43,6 +43,9 @@ class EleccionAnillo:
         self._lock_envio = threading.Lock()
         self._evento_parada = threading.Event()
 
+        self._topologia = {}
+        self._lock_topologia = threading.Lock()
+
         self._consumidor_anillo: MessageMiddlewareQueueRabbitMQ | None = None
         self._emisores_anillo: dict[int, MessageMiddlewareQueueRabbitMQ] = {}
         self._consumidor_latidos: FanoutQueueRabbitMQ | None = None
@@ -53,10 +56,51 @@ class EleccionAnillo:
         threading.Thread(target=self._consumir_latido_lider, daemon=True, name=f"anillo-hb-{self._id}").start()
         threading.Thread(target=self._bucle_periodico, daemon=True, name=f"anillo-periodico-{self._id}").start()
         threading.Thread(target=self._chequeo_inicial, daemon=True, name=f"anillo-init-{self._id}").start()
+        threading.Thread(target=self._consumir_registro_topologia, daemon=True, name=f"anillo-reg-{self._id}").start()
         self._logger.info(
             f"Iniciado. Siguiente en anillo: watchdog_{self._id_siguiente}. "
             f"Total nodos: {self._n}"
         )
+
+    def obtener_topologia_serializable(self):
+        with self._lock_topologia:
+            return {etapa: list(instancias) for etapa, instancias in self._topologia.items()}
+
+    def _fusionar_topologia(self, otra_topologia):
+        if not otra_topologia:
+            return
+        with self._lock_topologia:
+            for etapa, instancias in otra_topologia.items():
+                if etapa not in self._topologia:
+                    self._topologia[etapa] = set()
+                self._topologia[etapa].update(str(inst) for inst in instancias)
+
+    def _consumir_registro_topologia(self):
+        nombre_cola = f"watchdog.registro.{self._id}"
+        try:
+            cola = FanoutQueueRabbitMQ(self._config.host_mom, nombre_cola, "watchdog.exchange.registro")
+            self._logger.info(f"Escuchando registros de topología en {nombre_cola}")
+            
+            def al_recibir_registro(msg: bytes, ack, _):
+                try:
+                    payload = json.loads(msg.decode("utf-8"))
+                    etapa = payload.get("etapa")
+                    instancia = payload.get("instancia")
+                    if etapa and instancia:
+                        with self._lock_topologia:
+                            if etapa not in self._topologia:
+                                self._topologia[etapa] = set()
+                            self._topologia[etapa].add(str(instancia))
+                        self._logger.info(f"Registro dinámico recibido: {etapa}/{instancia}")
+                    ack()
+                except Exception as e:
+                    self._logger.warning(f"Error procesando registro de topología: {e}")
+                    ack()
+
+            cola.start_consuming(al_recibir_registro)
+        except Exception as e:
+            if not self._evento_parada.is_set():
+                self._logger.error(f"Error en consumo de registros de topología: {e}", exc_info=True)
 
     def detener(self):
         self._evento_parada.set()
@@ -84,7 +128,7 @@ class EleccionAnillo:
             self._iniciar_eleccion()
 
     def _anunciar_vivo(self):
-        msg = {"tipo": "vivo", "id": self._id}
+        msg = {"tipo": "vivo", "id": self._id, "topologia": self.obtener_topologia_serializable()}
         for nid in range(1, self._n + 1):
             if nid != self._id:
                 self._enviar_a(nid, msg)
@@ -109,7 +153,7 @@ class EleccionAnillo:
                 if transcurrido < self._config.timeout_eleccion:
                     return
                 if (self._ultimo_destino_eleccion is not None
-                        and self._ultimo_destino_eleccion != self._id):
+                         and self._ultimo_destino_eleccion != self._id):
                     self._ids_sospechados_caidos.setdefault(self._ultimo_destino_eleccion, time.time())
                     self._logger.warning(
                         f"Timeout de elección: "
@@ -127,7 +171,7 @@ class EleccionAnillo:
         with self._lock:
             self._ultimo_destino_eleccion = destino
         self._logger.info(f"Elección iniciada — enviando id={self._id} a watchdog_{destino} (saltar={saltar}).")
-        self._enviar_a(destino, {"tipo": "eleccion", "id": self._id, "skip": saltar})
+        self._enviar_a(destino, {"tipo": "eleccion", "id": self._id, "skip": saltar, "topologia": self.obtener_topologia_serializable()})
 
     def _manejar_eleccion(self, id_recibido: int, saltar: list[int]):
         with self._lock:
@@ -171,7 +215,7 @@ class EleccionAnillo:
                 f"Reenviando elección id={id_maximo} "
                 f"(recibido={id_recibido}) → watchdog_{destino} (saltar={saltar_actual})."
             )
-            self._enviar_a(destino, {"tipo": "eleccion", "id": id_maximo, "skip": saltar_actual})
+            self._enviar_a(destino, {"tipo": "eleccion", "id": id_maximo, "skip": saltar_actual, "topologia": self.obtener_topologia_serializable()})
 
     def _declarar_lider(self):
         with self._lock:
@@ -205,7 +249,7 @@ class EleccionAnillo:
                 self._logger.warning(f"CRASH_LEADER_MID_ELECTION activado: Muriendo antes de propagar coordinador!")
                 os._exit(1)
 
-        self._enviar_a(destino_coordinador, {"tipo": "coordinador", "id": self._id})
+        self._enviar_a(destino_coordinador, {"tipo": "coordinador", "id": self._id, "topologia": self.obtener_topologia_serializable()})
         threading.Thread(
             target=self._bucle_latido_lider, daemon=True, name=f"anillo-hb-envio-{self._id}"
         ).start()
@@ -242,7 +286,7 @@ class EleccionAnillo:
 
         if not ya_reenviado:
             destino = self._obtener_proximo_destino()
-            self._enviar_a(destino, {"tipo": "coordinador", "id": id_lider})
+            self._enviar_a(destino, {"tipo": "coordinador", "id": id_lider, "topologia": self.obtener_topologia_serializable()})
 
     def _consumir_anillo(self):
         nombre_cola = f"ring.{self._id}"
@@ -258,6 +302,7 @@ class EleccionAnillo:
     def _al_recibir_mensaje_anillo(self, msg: bytes, ack, nack):
         try:
             payload = json.loads(msg.decode("utf-8"))
+            self._fusionar_topologia(payload.get("topologia"))
             tipo = payload.get("tipo")
             id_recibido = payload.get("id")
             saltar = payload.get("skip", [])
@@ -284,7 +329,7 @@ class EleccionAnillo:
                 with self._lock:
                     if not self._es_lider:
                         break
-                hb = json.dumps({"tipo": "lider_hb", "id": self._id, "timestamp": time.time()}).encode()
+                hb = json.dumps({"tipo": "lider_hb", "id": self._id, "timestamp": time.time(), "topologia": self.obtener_topologia_serializable()}).encode()
                 try:
                     pub.send(hb)
                     self._logger.debug(f"Heartbeat de líder enviado.")
@@ -309,6 +354,7 @@ class EleccionAnillo:
     def _al_recibir_latido_lider(self, msg: bytes, ack, _):
         try:
             payload = json.loads(msg.decode("utf-8"))
+            self._fusionar_topologia(payload.get("topologia"))
             id_lider = payload.get("id")
             with self._lock:
                 self._ultimo_latido_lider = time.time()

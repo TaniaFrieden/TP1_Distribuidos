@@ -35,7 +35,8 @@ class WorkerDePrueba(WorkerBase):
 @pytest.fixture(autouse=True)
 def mock_middleware():
     with patch.dict("os.environ", TEST_ENV, clear=False), \
-         patch("common.middleware.MessageMiddlewareQueueRabbitMQ") as mock_queue_cls, \
+         patch("common.middleware.MessageMiddlewareQueueRabbitMQ") as mock_queue_cls_common, \
+         patch("workers.base.worker_base.MessageMiddlewareQueueRabbitMQ") as mock_queue_cls_worker, \
          patch("common.middleware.FanoutQueueRabbitMQ") as mock_fanout_queue_cls, \
          patch("common.middleware.FanoutExchangeRabbitMQ") as mock_exchange_cls:
 
@@ -43,7 +44,13 @@ def mock_middleware():
         mock_control_queue = MagicMock()
         mock_exchange      = MagicMock()
 
-        mock_queue_cls.return_value      = mock_input_queue
+        def queue_side_effect(host, queue_name, *args, **kwargs):
+            if queue_name == "watchdog.registro.temp":
+                return MagicMock()
+            return mock_input_queue
+
+        mock_queue_cls_common.side_effect = queue_side_effect
+        mock_queue_cls_worker.side_effect = queue_side_effect
         mock_fanout_queue_cls.return_value = mock_control_queue
         mock_exchange_cls.return_value   = mock_exchange
 
@@ -51,7 +58,7 @@ def mock_middleware():
             "input_queue":        mock_input_queue,
             "control_queue":      mock_control_queue,
             "exchange":           mock_exchange,
-            "queue_cls":          mock_queue_cls,
+            "queue_cls":          mock_queue_cls_common,
             "fanout_queue_cls":   mock_fanout_queue_cls,
             "exchange_cls":       mock_exchange_cls,
         }

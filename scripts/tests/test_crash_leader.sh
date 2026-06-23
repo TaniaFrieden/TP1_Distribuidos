@@ -15,6 +15,7 @@ rm -f /tmp/watchdog_*_election_crash_done
 
 echo "=== Levantando sistema con inyección de falla ==="
 CRASH_LEADER_MID_ELECTION=true make start
+esperar_sistema_listo
 
 echo "=== Lanzando $CANT_CLIENTES cliente(s) ==="
 lanzar_clientes "$CANT_CLIENTES" "$TX" "$ACC"

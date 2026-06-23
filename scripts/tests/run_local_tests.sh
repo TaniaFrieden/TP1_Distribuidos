@@ -31,8 +31,11 @@ PYTHONPATH=src/workers/joiner_q4:src/workers:src .venv/bin/pytest test/workers/t
 echo "9/10 - Persistencia Base tests..."
 PYTHONPATH=src/workers:src .venv/bin/pytest test/common/persistencia/test_persistencia.py -q
 
-echo "10/10 - Watchdog & Ring Election tests..."
+echo "10/11 - Watchdog & Ring Election tests..."
 PYTHONPATH=src .venv/bin/pytest test/watchdog/ -q
+
+echo "11/11 - Convertidor & Cotizaciones tests..."
+PYTHONPATH=src/workers/convertidor:src/workers:src .venv/bin/pytest test/workers/test_cliente_cotizaciones.py -q
 
 echo ""
 echo "========================================================="

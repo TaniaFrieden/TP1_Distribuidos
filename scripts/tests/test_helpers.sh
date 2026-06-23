@@ -1,5 +1,29 @@
 #!/usr/bin/env bash
 
+DOCKER_COMPOSE="${DOCKER_COMPOSE:-docker compose}"
+
+esperar_sistema_listo() {
+    local timeout=${1:-120}
+    local esperados
+    esperados=$($DOCKER_COMPOSE config --services 2>/dev/null | wc -l)
+    echo "=== Esperando que $esperados servicios estén running (timeout ${timeout}s) ==="
+    local inicio=$SECONDS
+    while true; do
+        local corriendo
+        corriendo=$($DOCKER_COMPOSE ps --status running --format '{{.Name}}' 2>/dev/null | wc -l)
+        if [ "$corriendo" -ge "$esperados" ]; then
+            echo "=== $corriendo/$esperados servicios running ($(( SECONDS - inicio ))s) ==="
+            return 0
+        fi
+        if [ $(( SECONDS - inicio )) -ge "$timeout" ]; then
+            echo "[ERROR] Timeout: solo $corriendo/$esperados servicios running tras ${timeout}s"
+            $DOCKER_COMPOSE ps 2>/dev/null
+            return 1
+        fi
+        sleep 2
+    done
+}
+
 lanzar_clientes() {
     local cant=$1
     local tx=$2

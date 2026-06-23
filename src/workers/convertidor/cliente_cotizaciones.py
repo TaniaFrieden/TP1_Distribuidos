@@ -1,3 +1,4 @@
+import time
 from common.logger import obtener_logger
 import requests
 from datetime import date, timedelta
@@ -12,13 +13,23 @@ class ClienteCotizaciones:
 
     def obtener_cotizaciones(self) -> dict:
         url = f"{URL_API_FRANKFURTER}{self.fecha_inicio}..{self.fecha_fin}?base=USD"
-        try:
-            resp = requests.get(url, timeout=10)
-            resp.raise_for_status()
-            raw = resp.json().get("rates", {})
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Error conectando con Frankfurter: {e}")
-            raise
+        intento = 1
+        delay = 2
+        max_delay = 60
+        while True:
+            try:
+                resp = requests.get(url, timeout=5)
+                resp.raise_for_status()
+                raw = resp.json().get("rates", {})
+                break
+            except requests.exceptions.RequestException as e:
+                logger.warning(
+                    f"Error conectando con Frankfurter (intento {intento}): {e}. "
+                    f"Reintentando en {delay}s..."
+                )
+                time.sleep(delay)
+                intento += 1
+                delay = min(delay * 2, max_delay)
 
         cotizaciones = {}
         last_rates = None

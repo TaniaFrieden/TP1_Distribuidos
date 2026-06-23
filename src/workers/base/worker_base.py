@@ -21,6 +21,7 @@ from .latido import Latido
 
 from common.dedup_filter import DedupFilter
 from common.persistencia import PersistidorEstado
+from common.middleware import MessageMiddlewareQueueRabbitMQ
 
 logger = obtener_logger(__name__)
 
@@ -103,8 +104,39 @@ class WorkerBase(ABC):
         self.enrutador.detener_consumo()
         self.coordinador.detener_consumo()
 
+    def _registrar_en_watchdog(self):
+        try:
+            cola = MessageMiddlewareQueueRabbitMQ(
+                self.configuracion.host_mom,
+                "watchdog.registro.temp"
+            )
+            cola.channel.exchange_declare(
+                exchange="watchdog.exchange.registro",
+                exchange_type="fanout",
+                durable=True
+            )
+            payload = {
+                "etapa": self.configuracion.prefijo_nodo,
+                "instancia": str(self.configuracion.id_nodo)
+            }
+            cola.channel.basic_publish(
+                exchange="watchdog.exchange.registro",
+                routing_key="",
+                body=json.dumps(payload).encode("utf-8")
+            )
+            logger.info(
+                f"[{self.__class__.__name__}] Registro enviado a exchange fanout: "
+                f"{self.configuracion.prefijo_nodo}_{self.configuracion.id_nodo}"
+            )
+            cola.close()
+        except Exception as e:
+            logger.warning(
+                f"[{self.__class__.__name__}] No se pudo enviar registro a exchange: {e}"
+            )
+
     def iniciar(self):
         logger.info(f"[{self.__class__.__name__}] Arrancando worker…")
+        self._registrar_en_watchdog()
         try:
             hilos_entrada = []
             self._latido.iniciar()

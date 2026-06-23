@@ -27,7 +27,8 @@ SOLUCIONES=${4:-${TEST_SOL:-sample}}
 
 echo "=== Test Caso 8: CRASH_AFTER_FLUSH en etapa '$ETAPA' ==="
 
-# Limpiar banderas de crashes anteriores
+make down
+
 echo "=== Limpiando banderas de crash previas ==="
 find volume/ -name "crash_flush_done" -delete 2>/dev/null || true
 
@@ -35,7 +36,7 @@ echo "=== Levantando sistema con CRASH_AFTER_FLUSH=true ==="
 CRASH_AFTER_FLUSH=true make start
 
 echo "=== Esperando que el sistema esté listo ==="
-sleep 5
+esperar_sistema_listo
 
 echo "=== Enviando cliente ==="
 rm -rf output/0

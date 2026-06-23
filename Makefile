@@ -81,12 +81,13 @@ clean:
 	-docker system prune -f --volumes 2>/dev/null || true
 	rm -rf .pytest_cache
 	find . -type d -name '__pycache__' -prune -exec rm -rf {} +
+	-docker rm -f $$(docker ps -a -q --filter "name=client_") 2>/dev/null || true
 	rm -f /tmp/client_output.txt
 	rm -f logs/*.txt
 	rm -f logs/*.log
 	find output/ -mindepth 1 ! -name '.gitkeep' -delete 2>/dev/null || true
 	@if [ -d volume ]; then \
-		docker run --rm -v "$$(pwd)/volume:/vol" alpine sh -c "rm -rf /vol/*" 2>/dev/null || true; \
+		docker run --rm -v "$$(pwd)/volume:/vol" alpine sh -c "rm -rf /vol/* && chmod -R 777 /vol" 2>/dev/null || true; \
 	fi
 
 free-ports:
@@ -158,6 +159,7 @@ start:
 
 down:
 	@mkdir -p logs
+	-@docker rm -f $$(docker ps -a -q --filter "name=client_") 2>/dev/null || true
 	@$(DOCKER_COMPOSE) down > logs/run_clean_full.log 2>&1 || true
 
 caos:
@@ -317,13 +319,17 @@ test-stress-crash:
 # Helpers internos para test-todos (silencian docker y guardan logs en logs/run_*.log)
 _full_clean = { $(DOCKER_COMPOSE) down -v --remove-orphans; \
 	docker run --rm -v "$$(pwd)/volume:/vol" -v "$$(pwd)/output:/out" -v "$$(pwd)/logs:/lg" \
-		alpine sh -c "rm -rf /vol/* /out/*/ /out/client_id*.txt /lg/*.txt /lg/*.log"; } > logs/run_clean_full.log 2>&1
-_light_clean = { docker exec $$(docker ps -qf name=rabbitmq) rabbitmqctl stop_app; \
-	docker exec $$(docker ps -qf name=rabbitmq) rabbitmqctl reset; \
-	docker exec $$(docker ps -qf name=rabbitmq) rabbitmqctl start_app; \
+		alpine sh -c "rm -rf /vol/* /out/*/ /out/client_id*.txt /lg/*.txt /lg/*.log && chmod -R 777 /vol /out /lg"; } > logs/run_clean_full.log 2>&1
+_light_clean = { $(DOCKER_COMPOSE) down -v --remove-orphans; \
 	docker run --rm -v "$$(pwd)/volume:/vol" -v "$$(pwd)/output:/out" -v "$$(pwd)/logs:/lg" \
-		alpine sh -c "rm -rf /vol/* /out/*/ /out/client_id*.txt /lg/*.txt /lg/*.log"; sleep 10; } > logs/run_clean_light.log 2>&1
-_start_env = { $(DOCKER_COMPOSE) up -d --build && sleep 8; } > logs/run_start_env.log 2>&1
+		alpine sh -c "rm -rf /vol/* /out/*/ /out/client_id*.txt /lg/client_*.txt /lg/chaos_monkey_run.log && chmod -R 777 /vol /out /lg"; } > logs/run_clean_light.log 2>&1
+_start_env = { $(DOCKER_COMPOSE) up -d --build && \
+	ESPERADOS=$$($(DOCKER_COMPOSE) config --services | wc -l); \
+	for i in $$(seq 1 60); do \
+		CORRIENDO=$$($(DOCKER_COMPOSE) ps --status running --format '{{.Name}}' | wc -l); \
+		[ "$$CORRIENDO" -ge "$$ESPERADOS" ] && break; \
+		sleep 2; \
+	done; } > logs/run_start_env.log 2>&1
 
 # --- TEST TODOS ---
 test-todos:
@@ -354,26 +360,32 @@ test-todos:
 	@echo "========================================================="
 	@$(_full_clean)
 	@$(_start_env)
-	@echo "--- 6. Caos aleatorio ---"
-	@$(MAKE) test-caos-aleatorio 70 2
-	@$(_light_clean)
-	@echo "--- 7. Caos total (todos los workers) ---"
-	@$(MAKE) test-caos-todos 2 $(TEST_TX) $(TEST_ACC) $(TEST_SOL) 75
-	@$(_light_clean)
-	@echo "--- 8. Caos etapa: q2_agregador_shard ---"
+	@echo "--- 6. Caos etapa: q2_agregador_shard ---"
 	@$(MAKE) test-caos-etapa q2_agregador_shard 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL) 70
 	@$(_light_clean)
-	@echo "--- 9. Caos etapa: q4_sumador ---"
+	@$(_start_env)
+	@echo "--- 7. Caos etapa: q4_sumador ---"
 	@$(MAKE) test-caos-etapa q4_sumador 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL) 70
 	@$(_light_clean)
-	@echo "--- 10. Caos etapa: q3_format_shard ---"
+	@$(_start_env)
+	@echo "--- 8. Caos etapa: q3_format_shard ---"
 	@$(MAKE) test-caos-etapa q3_format_shard 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL) 70
 	@$(_light_clean)
-	@echo "--- 11. Caos cliente ---"
+	@$(_start_env)
+	@echo "--- 9. Caos cliente ---"
 	@$(MAKE) test-caos-cliente 2 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
 	@$(_light_clean)
-	@echo "--- 12. Caos gateway ---"
+	@$(_start_env)
+	@echo "--- 10. Caos gateway ---"
 	@$(MAKE) test-caos-gateway 2 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
+	@$(_light_clean)
+	@$(_start_env)
+	@echo "--- 11. Caos aleatorio ---"
+	@$(MAKE) test-caos-aleatorio 70 2
+	@$(_full_clean)
+	@$(_start_env)
+	@echo "--- 12. Caos total (todos los workers) ---"
+	@$(MAKE) test-caos-todos 2 $(TEST_TX) $(TEST_ACC) $(TEST_SOL) 75
 	@echo "========================================================="
 	@echo "=== 13. Ejecutando test caos gateway con resultados ==="
 	@echo "========================================================="

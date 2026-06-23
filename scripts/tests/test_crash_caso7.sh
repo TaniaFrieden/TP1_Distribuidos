@@ -8,11 +8,13 @@ ACC=${3:-${TEST_ACC:-LI-Small_accounts}}
 SOLUCIONES=${4:-${TEST_SOL:-sample}}
 
 echo "=== Preparando entorno para Test Caso 7 (Crash tras EOFs, pre-disparo de barrera) ==="
+make down
 docker run --rm -v "$(pwd)/volume:/cleanup" alpine sh -c "rm -rf /cleanup/*" 2>/dev/null \
     || rm -rf volume/* 2>/dev/null || true
 
 echo "=== Levantando sistema con inyección de falla ==="
 CRASH_PRE_BARRERA=true make start
+esperar_sistema_listo
 
 echo "=== Lanzando $CANT_CLIENTES cliente(s) ==="
 lanzar_clientes "$CANT_CLIENTES" "$TX" "$ACC"

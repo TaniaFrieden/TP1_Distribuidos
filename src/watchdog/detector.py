@@ -8,11 +8,17 @@ from common.middleware.middleware_rabbitmq import MessageMiddlewareQueueRabbitMQ
 
 class DetectorLatidos:
 
-    def __init__(self, config):
+    def __init__(self, config, topologia=None):
         self._config = config
         self._logger = obtener_logger("Detector")
         self._lock = threading.Lock()
         self._ultimo_visto: dict[tuple, float] = {}
+        if topologia:
+            ahora = time.time()
+            for etapa, instancias in topologia.items():
+                for instancia in instancias:
+                    self._ultimo_visto[(etapa, str(instancia))] = ahora
+            self._logger.info(f"Detector inicializado con topología conocida: {topologia}")
         self._evento_parada = threading.Event()
         self._colas_consumidor: list[MessageMiddlewareQueueRabbitMQ] = []
         self._cola_caidas: MessageMiddlewareQueueRabbitMQ | None = None
