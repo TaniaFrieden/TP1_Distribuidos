@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # scripts/test_kill_cliente.sh
 set -e
-source scripts/test_helpers.sh
+source scripts/tests/test_helpers.sh
 
 CANT_CLIENTES=${1:-3}
 TX=${2:-${TEST_TX:-trans_sample}}

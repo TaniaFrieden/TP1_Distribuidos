@@ -18,6 +18,9 @@ _CONNECT_MAX_INTENTOS = int(os.getenv("RABBITMQ_CONNECT_MAX_INTENTOS", "10"))
 _CONNECT_DELAY_BASE    = float(os.getenv("RABBITMQ_CONNECT_DELAY_BASE", "1.0"))
 _CONNECT_DELAY_CAP     = float(os.getenv("RABBITMQ_CONNECT_DELAY_CAP", "30.0"))
 
+HEARTBEAT_SEGUNDOS = 10
+CONEXION_BLOQUEO_SEGUNDOS = 40
+
 # Errores transientes: el servidor todavía no está listo o DNS no resolvió aún.
 # Para estos tiene sentido reintentar.
 # AMQPConnectionWorkflowFailed existe en pika >= 1.3; getattr lo agrega solo si está disponible.
@@ -102,8 +105,8 @@ class RabbitMQBase:
                         port=self._port,
                         virtual_host=self._vhost,
                         credentials=pika.PlainCredentials(self._user, self._password),
-                        heartbeat=300,
-                        blocked_connection_timeout=600,
+                        heartbeat=HEARTBEAT_SEGUNDOS,
+                        blocked_connection_timeout=CONEXION_BLOQUEO_SEGUNDOS,
                     )
                 )
                 self.channel = self.connection.channel()

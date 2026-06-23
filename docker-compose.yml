@@ -73,7 +73,6 @@ services:
       context: ./src
       dockerfile: workers/filtro/Dockerfile
     container_name: shared_filter_usd_01
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -108,7 +107,6 @@ services:
       context: ./src
       dockerfile: workers/filtro/Dockerfile
     container_name: shared_filter_usd_02
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -143,7 +141,6 @@ services:
       context: ./src
       dockerfile: workers/filtro/Dockerfile
     container_name: shared_filter_usd_03
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -178,7 +175,6 @@ services:
       context: ./src
       dockerfile: workers/proyeccion/Dockerfile
     container_name: q1_projection_01
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -212,7 +208,6 @@ services:
       context: ./src
       dockerfile: workers/proyeccion/Dockerfile
     container_name: q1_projection_02
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -246,7 +241,6 @@ services:
       context: ./src
       dockerfile: workers/filtro/Dockerfile
     container_name: q1_minor_than_50_01
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -281,7 +275,6 @@ services:
       context: ./src
       dockerfile: workers/filtro/Dockerfile
     container_name: q1_minor_than_50_02
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -316,7 +309,6 @@ services:
       context: ./src
       dockerfile: workers/filtro/Dockerfile
     container_name: q1_minor_than_50_03
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -351,7 +343,6 @@ services:
       context: ./src
       dockerfile: workers/proyeccion/Dockerfile
     container_name: q2_bank_projection_01
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -385,7 +376,6 @@ services:
       context: ./src
       dockerfile: workers/proyeccion/Dockerfile
     container_name: q2_bank_projection_02
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -419,7 +409,6 @@ services:
       context: ./src
       dockerfile: workers/proyeccion/Dockerfile
     container_name: q2_bank_projection_03
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -453,7 +442,6 @@ services:
       context: ./src
       dockerfile: workers/proyeccion/Dockerfile
     container_name: q2_projection_01
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -487,7 +475,6 @@ services:
       context: ./src
       dockerfile: workers/proyeccion/Dockerfile
     container_name: q2_projection_02
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -521,7 +508,6 @@ services:
       context: ./src
       dockerfile: workers/proyeccion/Dockerfile
     container_name: q2_projection_03
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -555,7 +541,6 @@ services:
       context: ./src
       dockerfile: workers/proyeccion/Dockerfile
     container_name: q2_projection_04
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -589,7 +574,6 @@ services:
       context: ./src
       dockerfile: workers/proyeccion/Dockerfile
     container_name: q2_projection_05
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -623,7 +607,6 @@ services:
       context: ./src
       dockerfile: workers/proyeccion/Dockerfile
     container_name: q2_projection_06
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -657,7 +640,6 @@ services:
       context: ./src
       dockerfile: workers/bank_shard/Dockerfile
     container_name: q2_agregador_shard_01
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -692,7 +674,6 @@ services:
       context: ./src
       dockerfile: workers/bank_shard/Dockerfile
     container_name: q2_agregador_shard_02
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -727,7 +708,6 @@ services:
       context: ./src
       dockerfile: workers/bank_shard/Dockerfile
     container_name: q2_agregador_shard_03
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -762,7 +742,6 @@ services:
       context: ./src
       dockerfile: workers/bank_shard/Dockerfile
     container_name: q2_agregador_shard_04
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -797,7 +776,6 @@ services:
       context: ./src
       dockerfile: workers/bank_shard/Dockerfile
     container_name: q2_agregador_shard_05
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -832,7 +810,6 @@ services:
       context: ./src
       dockerfile: workers/bank_shard/Dockerfile
     container_name: q2_agregador_shard_06
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -867,7 +844,6 @@ services:
       context: ./src
       dockerfile: workers/filtro/Dockerfile
     container_name: q3_filter_fechas_01
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -883,7 +859,7 @@ services:
       MOM_VHOST: /
       PYTHONMALLOC: malloc
       INPUT_QUEUES: q3_usd_filtered
-      OUTPUT_QUEUES: '[{"type": "conditional", "condition_field": "Timestamp", "cases": [{"operator": "entre", "value": "2022/09/01,2022/09/05", "routing": {"queue_shard_prefix": "q3_temprano", "total_workers": 2, "hash_field": "Payment Format", "include_client_id": true}}, {"operator": "entre", "value": "2022/09/06,2022/09/14 23:59:59", "routing": {"queue_shard_prefix": "q3_tardio", "total_workers": 2, "hash_field": "Payment Format", "include_client_id": true}}]}]'
+      OUTPUT_QUEUES: '[{"type": "conditional", "condition_field": "Timestamp", "cases": [{"operator": "entre", "value": "2022/09/01,2022/09/05", "routing": {"queue_shard_prefix": "q3_temprano", "total_workers": 3, "hash_field": "Payment Format", "include_client_id": true}}, {"operator": "entre", "value": "2022/09/06,2022/09/14 23:59:59", "routing": {"queue_shard_prefix": "q3_tardio", "total_workers": 3, "hash_field": "Payment Format", "include_client_id": true}}]}]'
       NODE_PREFIX: q3_filter_fechas
       ID: '1'
       TOTAL_WORKERS: '4'
@@ -902,7 +878,6 @@ services:
       context: ./src
       dockerfile: workers/filtro/Dockerfile
     container_name: q3_filter_fechas_02
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -918,7 +893,7 @@ services:
       MOM_VHOST: /
       PYTHONMALLOC: malloc
       INPUT_QUEUES: q3_usd_filtered
-      OUTPUT_QUEUES: '[{"type": "conditional", "condition_field": "Timestamp", "cases": [{"operator": "entre", "value": "2022/09/01,2022/09/05", "routing": {"queue_shard_prefix": "q3_temprano", "total_workers": 2, "hash_field": "Payment Format", "include_client_id": true}}, {"operator": "entre", "value": "2022/09/06,2022/09/14 23:59:59", "routing": {"queue_shard_prefix": "q3_tardio", "total_workers": 2, "hash_field": "Payment Format", "include_client_id": true}}]}]'
+      OUTPUT_QUEUES: '[{"type": "conditional", "condition_field": "Timestamp", "cases": [{"operator": "entre", "value": "2022/09/01,2022/09/05", "routing": {"queue_shard_prefix": "q3_temprano", "total_workers": 3, "hash_field": "Payment Format", "include_client_id": true}}, {"operator": "entre", "value": "2022/09/06,2022/09/14 23:59:59", "routing": {"queue_shard_prefix": "q3_tardio", "total_workers": 3, "hash_field": "Payment Format", "include_client_id": true}}]}]'
       NODE_PREFIX: q3_filter_fechas
       ID: '2'
       TOTAL_WORKERS: '4'
@@ -937,7 +912,6 @@ services:
       context: ./src
       dockerfile: workers/filtro/Dockerfile
     container_name: q3_filter_fechas_03
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -953,7 +927,7 @@ services:
       MOM_VHOST: /
       PYTHONMALLOC: malloc
       INPUT_QUEUES: q3_usd_filtered
-      OUTPUT_QUEUES: '[{"type": "conditional", "condition_field": "Timestamp", "cases": [{"operator": "entre", "value": "2022/09/01,2022/09/05", "routing": {"queue_shard_prefix": "q3_temprano", "total_workers": 2, "hash_field": "Payment Format", "include_client_id": true}}, {"operator": "entre", "value": "2022/09/06,2022/09/14 23:59:59", "routing": {"queue_shard_prefix": "q3_tardio", "total_workers": 2, "hash_field": "Payment Format", "include_client_id": true}}]}]'
+      OUTPUT_QUEUES: '[{"type": "conditional", "condition_field": "Timestamp", "cases": [{"operator": "entre", "value": "2022/09/01,2022/09/05", "routing": {"queue_shard_prefix": "q3_temprano", "total_workers": 3, "hash_field": "Payment Format", "include_client_id": true}}, {"operator": "entre", "value": "2022/09/06,2022/09/14 23:59:59", "routing": {"queue_shard_prefix": "q3_tardio", "total_workers": 3, "hash_field": "Payment Format", "include_client_id": true}}]}]'
       NODE_PREFIX: q3_filter_fechas
       ID: '3'
       TOTAL_WORKERS: '4'
@@ -972,7 +946,6 @@ services:
       context: ./src
       dockerfile: workers/filtro/Dockerfile
     container_name: q3_filter_fechas_04
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -988,7 +961,7 @@ services:
       MOM_VHOST: /
       PYTHONMALLOC: malloc
       INPUT_QUEUES: q3_usd_filtered
-      OUTPUT_QUEUES: '[{"type": "conditional", "condition_field": "Timestamp", "cases": [{"operator": "entre", "value": "2022/09/01,2022/09/05", "routing": {"queue_shard_prefix": "q3_temprano", "total_workers": 2, "hash_field": "Payment Format", "include_client_id": true}}, {"operator": "entre", "value": "2022/09/06,2022/09/14 23:59:59", "routing": {"queue_shard_prefix": "q3_tardio", "total_workers": 2, "hash_field": "Payment Format", "include_client_id": true}}]}]'
+      OUTPUT_QUEUES: '[{"type": "conditional", "condition_field": "Timestamp", "cases": [{"operator": "entre", "value": "2022/09/01,2022/09/05", "routing": {"queue_shard_prefix": "q3_temprano", "total_workers": 3, "hash_field": "Payment Format", "include_client_id": true}}, {"operator": "entre", "value": "2022/09/06,2022/09/14 23:59:59", "routing": {"queue_shard_prefix": "q3_tardio", "total_workers": 3, "hash_field": "Payment Format", "include_client_id": true}}]}]'
       NODE_PREFIX: q3_filter_fechas
       ID: '4'
       TOTAL_WORKERS: '4'
@@ -1007,7 +980,6 @@ services:
       context: ./src
       dockerfile: workers/format_shard/Dockerfile
     container_name: q3_format_shard_01
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -1027,7 +999,7 @@ services:
       OUTPUT_QUEUES: q3_results
       NODE_PREFIX: q3_format_shard
       ID: '1'
-      TOTAL_WORKERS: '2'
+      TOTAL_WORKERS: '3'
       HEARTBEAT_INTERVAL_SECONDS: '5'
       LOG_LEVEL: INFO
       LOG_FILE: /app/logs/q3_format_shard_01.txt
@@ -1040,7 +1012,6 @@ services:
       context: ./src
       dockerfile: workers/format_shard/Dockerfile
     container_name: q3_format_shard_02
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -1060,10 +1031,42 @@ services:
       OUTPUT_QUEUES: q3_results
       NODE_PREFIX: q3_format_shard
       ID: '2'
-      TOTAL_WORKERS: '2'
+      TOTAL_WORKERS: '3'
       HEARTBEAT_INTERVAL_SECONDS: '5'
       LOG_LEVEL: INFO
       LOG_FILE: /app/logs/q3_format_shard_02.txt
+      PREFETCH_COUNT: '1000'
+      CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
+      CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
+      CRASH_AFTER_FLUSH: ${CRASH_AFTER_FLUSH:-false}
+  q3_format_shard_03:
+    build:
+      context: ./src
+      dockerfile: workers/format_shard/Dockerfile
+    container_name: q3_format_shard_03
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    volumes:
+    - ./logs:/app/logs
+    - ./volume/q3_format_shard_03:/app/volumen
+    environment:
+      MOM_HOST: rabbitmq
+      MOM_PORT: '5672'
+      MOM_USER: distributed
+      MOM_PASSWORD: distributed
+      MOM_VHOST: /
+      PYTHONMALLOC: malloc
+      INPUT_QUEUES: '["q3_temprano_3", "q3_tardio_3"]'
+      OUTPUT_QUEUES: q3_results
+      NODE_PREFIX: q3_format_shard
+      ID: '3'
+      TOTAL_WORKERS: '3'
+      HEARTBEAT_INTERVAL_SECONDS: '5'
+      LOG_LEVEL: INFO
+      LOG_FILE: /app/logs/q3_format_shard_03.txt
       PREFETCH_COUNT: '1000'
       CRASH_BEFORE_FINISHED_CONFIRMATION: ${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}
       CRASH_PRE_BARRERA: ${CRASH_PRE_BARRERA:-false}
@@ -1073,7 +1076,6 @@ services:
       context: ./src
       dockerfile: workers/proyeccion/Dockerfile
     container_name: q4_projection_01
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -1107,7 +1109,6 @@ services:
       context: ./src
       dockerfile: workers/proyeccion/Dockerfile
     container_name: q4_projection_02
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -1141,7 +1142,6 @@ services:
       context: ./src
       dockerfile: workers/filtro/Dockerfile
     container_name: q4_filter_period_01
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -1176,7 +1176,6 @@ services:
       context: ./src
       dockerfile: workers/filtro/Dockerfile
     container_name: q4_filter_period_02
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -1211,7 +1210,6 @@ services:
       context: ./src
       dockerfile: workers/contador_distinto/Dockerfile
     container_name: q4_sumador_01
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -1251,7 +1249,6 @@ services:
       context: ./src
       dockerfile: workers/contador_distinto/Dockerfile
     container_name: q4_sumador_02
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -1291,7 +1288,6 @@ services:
       context: ./src
       dockerfile: workers/contador_distinto/Dockerfile
     container_name: q4_sumador_03
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -1331,7 +1327,6 @@ services:
       context: ./src
       dockerfile: workers/joiner_q4/Dockerfile
     container_name: q4_joiner_01
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -1364,7 +1359,6 @@ services:
       context: ./src
       dockerfile: workers/joiner_q4/Dockerfile
     container_name: q4_joiner_02
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -1397,7 +1391,6 @@ services:
       context: ./src
       dockerfile: workers/joiner_q4/Dockerfile
     container_name: q4_joiner_03
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -1430,7 +1423,6 @@ services:
       context: ./src
       dockerfile: workers/contador_distinto/Dockerfile
     container_name: q4_contador_01
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -1470,7 +1462,6 @@ services:
       context: ./src
       dockerfile: workers/contador_distinto/Dockerfile
     container_name: q4_contador_02
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -1510,7 +1501,6 @@ services:
       context: ./src
       dockerfile: workers/contador_distinto/Dockerfile
     container_name: q4_contador_03
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -1550,7 +1540,6 @@ services:
       context: ./src
       dockerfile: workers/proyeccion/Dockerfile
     container_name: q5_projection_01
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -1583,7 +1572,6 @@ services:
       context: ./src
       dockerfile: workers/proyeccion/Dockerfile
     container_name: q5_projection_02
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -1616,7 +1604,6 @@ services:
       context: ./src
       dockerfile: workers/proyeccion/Dockerfile
     container_name: q5_projection_03
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -1649,7 +1636,6 @@ services:
       context: ./src
       dockerfile: workers/proyeccion/Dockerfile
     container_name: q5_projection_04
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -1682,7 +1668,6 @@ services:
       context: ./src
       dockerfile: workers/filtro/Dockerfile
     container_name: q5_filter_period_01
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -1717,7 +1702,6 @@ services:
       context: ./src
       dockerfile: workers/filtro/Dockerfile
     container_name: q5_filter_period_02
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -1752,7 +1736,6 @@ services:
       context: ./src
       dockerfile: workers/filtro/Dockerfile
     container_name: q5_filter_period_03
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -1787,7 +1770,6 @@ services:
       context: ./src
       dockerfile: workers/filtro/Dockerfile
     container_name: q5_filter_period_04
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -1822,7 +1804,6 @@ services:
       context: ./src
       dockerfile: workers/filtro/Dockerfile
     container_name: q5_filter_format_01
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -1857,7 +1838,6 @@ services:
       context: ./src
       dockerfile: workers/filtro/Dockerfile
     container_name: q5_filter_format_02
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -1892,7 +1872,6 @@ services:
       context: ./src
       dockerfile: workers/convertidor/Dockerfile
     container_name: q5_converter_01
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -1926,7 +1905,6 @@ services:
       context: ./src
       dockerfile: workers/convertidor/Dockerfile
     container_name: q5_converter_02
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -1960,7 +1938,6 @@ services:
       context: ./src
       dockerfile: workers/contador/Dockerfile
     container_name: q5_counter_01
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -1993,7 +1970,6 @@ services:
       context: ./src
       dockerfile: watchdog/Dockerfile
     container_name: watchdog_1
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -2028,7 +2004,6 @@ services:
       context: ./src
       dockerfile: watchdog/Dockerfile
     container_name: watchdog_2
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -2063,7 +2038,6 @@ services:
       context: ./src
       dockerfile: watchdog/Dockerfile
     container_name: watchdog_3
-    restart: always
     depends_on:
       rabbitmq:
         condition: service_healthy

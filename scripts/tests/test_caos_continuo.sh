@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -e
-source scripts/test_helpers.sh
+source scripts/tests/test_helpers.sh
 
 SEGUNDOS_CAOS=10
 CANT_CLIENTES=3
@@ -41,11 +41,14 @@ fi
 
 docker build -q -t client-image -f src/client/Dockerfile src >/dev/null 2>&1
 
+# Limpiar el log al iniciar este test
+> logs/chaos_monkey_run.log
+
 lanzar_clientes "$CANT_CLIENTES" "$TX" "$ACC"
 
 echo "=== Lanzando Chaos Monkey en segundo plano ==="
 echo "Segundos: ${SEGUNDOS_CAOS}s | Extra Args: $EXTRA_ARGS"
-python3 scripts/chaos_monkey.py "$SEGUNDOS_CAOS" $EXTRA_ARGS > logs/chaos_monkey_run.log 2>&1 &
+python3 scripts/chaos/chaos_monkey.py "$SEGUNDOS_CAOS" $EXTRA_ARGS >> logs/chaos_monkey_run.log 2>&1 &
 CHAOS_PID=$!
 
 trap 'echo "=== Apagando Chaos Monkey... ==="; kill $CHAOS_PID 2>/dev/null || true' EXIT

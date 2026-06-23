@@ -22,7 +22,7 @@
 #   timeout_resultado: segundos máx para esperar primer resultado (default: 360)
 #
 set -e
-source scripts/test_helpers.sh
+source scripts/tests/test_helpers.sh
 
 TX=${1:-${TEST_TX:-trans_sample}}
 ACC=${2:-${TEST_ACC:-LI-Small_accounts}}

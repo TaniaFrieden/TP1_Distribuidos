@@ -149,6 +149,7 @@ if __name__ == "__main__":
         if "--todos" in args:
             log(f"Iniciando loop destructor cada {segundos_fijos}s...")
             while True:
+                log("") # Salto de línea para diferenciar ciclos
                 # Ejecutamos matar todos
                 try:
                     cl = docker.from_env()
@@ -178,6 +179,7 @@ if __name__ == "__main__":
 
             log(f"Iniciando loop de caída de etapa cada {segundos_fijos}s...")
             while True:
+                log("") # Salto de línea para diferenciar ciclos
                 etapa = etapa_fija
                 try:
                     cl = docker.from_env()

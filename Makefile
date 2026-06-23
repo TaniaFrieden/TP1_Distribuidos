@@ -83,8 +83,11 @@ clean:
 	find . -type d -name '__pycache__' -prune -exec rm -rf {} +
 	rm -f /tmp/client_output.txt
 	rm -f logs/*.txt
+	rm -f logs/*.log
 	find output/ -mindepth 1 ! -name '.gitkeep' -delete 2>/dev/null || true
-	rm -rf volume/
+	@if [ -d volume ]; then \
+		docker run --rm -v "$$(pwd)/volume:/vol" alpine sh -c "rm -rf /vol/*" 2>/dev/null || true; \
+	fi
 
 free-ports:
 	@echo "=== Liberando puerto $(SERVER_PORT) (Gateway) ==="
@@ -146,19 +149,21 @@ gateway:
 	PYTHONPATH=src $(PYTHON) src/gateway/gateway.py
 
 start:
+	@mkdir -p logs
 	@if [ "$(START_VERBOSE)" = "1" ]; then \
 		$(DOCKER_COMPOSE) up --build; \
 	else \
-		$(DOCKER_COMPOSE) up -d --build; \
+		$(DOCKER_COMPOSE) up -d --build > logs/run_start_env.log 2>&1; \
 	fi
 
 down:
-	$(DOCKER_COMPOSE) down
+	@mkdir -p logs
+	@$(DOCKER_COMPOSE) down > logs/run_clean_full.log 2>&1 || true
 
 caos:
 	@mkdir -p logs
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
-	bash scripts/test_caos_continuo.sh $$ARGS
+	bash scripts/tests/test_caos_continuo.sh $$ARGS
 
 generar:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
@@ -187,7 +192,7 @@ iterar:
 		echo "Ejemplo: make iterar 5 HI-Large_Trans_sample_30 HI-Large_accounts Hi-Large-30"; \
 		exit 1; \
 	else \
-		PYTHONPATH=src $(PYTHON) scripts/iterar_queries.py $$ARGS; \
+		PYTHONPATH=src $(PYTHON) scripts/utils/iterar_queries.py $$ARGS; \
 	fi
 
 solucionar:
@@ -198,7 +203,7 @@ solucionar:
 		echo "Ejemplo: make solucionar HI-Large_Trans_sample_30 HI-Large_accounts Hi-Large-30"; \
 		exit 1; \
 	else \
-		$(PYTHON) scripts/ejecutar_solucion_notebook.py $$ARGS; \
+		$(PYTHON) scripts/utils/ejecutar_solucion_notebook.py $$ARGS; \
 	fi
 
 
@@ -214,38 +219,38 @@ generar-sample:
 		echo "Ejemplo: make generar-sample HI-Large_Trans 30"; \
 		exit 1; \
 	fi; \
-	$(PYTHON) scripts/sample_dataset.py \
+	$(PYTHON) scripts/utils/sample_dataset.py \
 		--input datasets/$$DB.csv \
 		--output datasets/$${DB}_sample_$${PCT}.csv \
 		--percentage $$PCT
 
 # --- UNIT TESTS ---
 test-unitarios:
-	./scripts/run_local_tests.sh
+	./scripts/tests/run_local_tests.sh
 
 # --- CAOS / FALLAS END-TO-END ---
 test-caos-todos:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
-	bash scripts/test_todos.sh $$ARGS
+	bash scripts/tests/test_todos.sh $$ARGS
 
 test-caos-aleatorio:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
-	bash scripts/test_caos_continuo.sh $$ARGS
+	bash scripts/tests/test_caos_continuo.sh $$ARGS
 
 test-caos-secuencial:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
-	SEQUENTIAL=1 SEQUENTIAL_SOL="$${TEST_SOL:-sample}" bash scripts/test_caos_continuo.sh $$ARGS
+	SEQUENTIAL=1 SEQUENTIAL_SOL="$${TEST_SOL:-sample}" bash scripts/tests/test_caos_continuo.sh $$ARGS
 
 test-secuencial:
 	@CANT="$(filter-out $@,$(MAKECMDGOALS))"; \
 	CANT=$${CANT:-5}; \
-	SEQUENTIAL=1 SEQUENTIAL_SOL="$(TEST_SOL)" CANT="$$CANT" bash -c 'source scripts/test_helpers.sh && lanzar_clientes "$$CANT" $(TEST_TX) $(TEST_ACC)'
+	SEQUENTIAL=1 SEQUENTIAL_SOL="$(TEST_SOL)" CANT="$$CANT" bash -c 'source scripts/tests/test_helpers.sh && lanzar_clientes "$$CANT" $(TEST_TX) $(TEST_ACC)'
 
 
 tirar-nodos:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
 	if [ -z "$$ARGS" ]; then \
-		python3 scripts/chaos_monkey.py 10; \
+		python3 scripts/chaos/chaos_monkey.py 10; \
 	else \
 		CMD_ARGS=""; \
 		FOR_PY=""; \
@@ -258,16 +263,8 @@ tirar-nodos:
 				FOR_PY="$$FOR_PY $$arg"; \
 			fi; \
 		done; \
-		python3 scripts/chaos_monkey.py $$FOR_PY; \
+		python3 scripts/chaos/chaos_monkey.py $$FOR_PY; \
 	fi
-
-
-
-
-
-
-
-
 
 test-caos-etapa:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
@@ -276,58 +273,57 @@ test-caos-etapa:
 		echo "Uso: make test-caos-etapa <prefix> [cant_clientes] [tx] [acc] [soluciones] [espera|random]"; \
 		exit 1; \
 	fi; \
-	bash scripts/test_etapa.sh $$ARGS
+	bash scripts/tests/test_etapa.sh $$ARGS
 
 test-caos-cliente:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
-	bash scripts/test_cliente.sh $$ARGS
+	bash scripts/tests/test_cliente.sh $$ARGS
 
 test-caos-gateway:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
-	bash scripts/test_gateway.sh $$ARGS
+	bash scripts/tests/test_gateway.sh $$ARGS
 
 test-caos-gateway-resultados:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
-	bash scripts/test_crash_gateway_resultados.sh $$ARGS
+	bash scripts/tests/test_crash_gateway_resultados.sh $$ARGS
 
 # --- CASOS DE FRONTERA / CRITICAL CORNER CASES ---
 test-crash-flush:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
-	bash scripts/test_crash_flush.sh $$ARGS
+	bash scripts/tests/test_crash_flush.sh $$ARGS
 
 test-crash-caso6:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
-	bash scripts/test_crash_caso6.sh $$ARGS
+	bash scripts/tests/test_crash_caso6.sh $$ARGS
 
 test-crash-caso7:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
-	bash scripts/test_crash_caso7.sh $$ARGS
+	bash scripts/tests/test_crash_caso7.sh $$ARGS
 
 test-crash-leader:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
-	bash scripts/test_crash_leader.sh $$ARGS
+	bash scripts/tests/test_crash_leader.sh $$ARGS
 
 # --- STRESS TESTING (BUCLES) ---
 test-stress-caos:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
-	bash scripts/test_stress_todos.sh $$ARGS
+	bash scripts/tests/test_stress_todos.sh $$ARGS
 
 test-stress-crash:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
-	bash scripts/test_stress_crash.sh $$ARGS
+	bash scripts/tests/test_stress_crash.sh $$ARGS
 
-# Helpers internos para test-todos (silencian docker)
-# _full_clean: baja todo, borra volumes de Docker (purga RabbitMQ), limpia output/logs/volume
-_full_clean = $(DOCKER_COMPOSE) down -v --remove-orphans >/dev/null 2>&1 || true; \
+
+# Helpers internos para test-todos (silencian docker y guardan logs en logs/run_*.log)
+_full_clean = { $(DOCKER_COMPOSE) down -v --remove-orphans; \
 	docker run --rm -v "$$(pwd)/volume:/vol" -v "$$(pwd)/output:/out" -v "$$(pwd)/logs:/lg" \
-		alpine sh -c "rm -rf /vol/* /out/*/ /out/client_id*.txt /lg/*.txt /lg/*.log" 2>/dev/null || true
-# _light_clean: sin bajar containers — purga colas de RabbitMQ + limpia output/volume
-_light_clean = docker exec $$(docker ps -qf name=rabbitmq) rabbitmqctl stop_app >/dev/null 2>&1; \
-	docker exec $$(docker ps -qf name=rabbitmq) rabbitmqctl reset >/dev/null 2>&1; \
-	docker exec $$(docker ps -qf name=rabbitmq) rabbitmqctl start_app >/dev/null 2>&1; \
+		alpine sh -c "rm -rf /vol/* /out/*/ /out/client_id*.txt /lg/*.txt /lg/*.log"; } > logs/run_clean_full.log 2>&1
+_light_clean = { docker exec $$(docker ps -qf name=rabbitmq) rabbitmqctl stop_app; \
+	docker exec $$(docker ps -qf name=rabbitmq) rabbitmqctl reset; \
+	docker exec $$(docker ps -qf name=rabbitmq) rabbitmqctl start_app; \
 	docker run --rm -v "$$(pwd)/volume:/vol" -v "$$(pwd)/output:/out" -v "$$(pwd)/logs:/lg" \
-		alpine sh -c "rm -rf /vol/* /out/*/ /out/client_id*.txt /lg/*.txt /lg/*.log" 2>/dev/null || true
-_start_env = $(DOCKER_COMPOSE) up -d --build >/dev/null 2>&1 && sleep 8
+		alpine sh -c "rm -rf /vol/* /out/*/ /out/client_id*.txt /lg/*.txt /lg/*.log"; sleep 10; } > logs/run_clean_light.log 2>&1
+_start_env = { $(DOCKER_COMPOSE) up -d --build && sleep 8; } > logs/run_start_env.log 2>&1
 
 # --- TEST TODOS ---
 test-todos:
@@ -358,20 +354,20 @@ test-todos:
 	@echo "========================================================="
 	@$(_full_clean)
 	@$(_start_env)
-	@echo "--- 6. Caos total (todos los workers) ---"
-	@$(MAKE) test-caos-todos 2 $(TEST_TX) $(TEST_ACC) $(TEST_SOL) 5
+	@echo "--- 6. Caos aleatorio ---"
+	@$(MAKE) test-caos-aleatorio 70 2
 	@$(_light_clean)
-	@echo "--- 7. Caos aleatorio ---"
-	@$(MAKE) test-caos-aleatorio 10 2
+	@echo "--- 7. Caos total (todos los workers) ---"
+	@$(MAKE) test-caos-todos 2 $(TEST_TX) $(TEST_ACC) $(TEST_SOL) 75
 	@$(_light_clean)
 	@echo "--- 8. Caos etapa: q2_agregador_shard ---"
-	@$(MAKE) test-caos-etapa q2_agregador_shard 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
+	@$(MAKE) test-caos-etapa q2_agregador_shard 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL) 70
 	@$(_light_clean)
 	@echo "--- 9. Caos etapa: q4_sumador ---"
-	@$(MAKE) test-caos-etapa q4_sumador 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
+	@$(MAKE) test-caos-etapa q4_sumador 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL) 70
 	@$(_light_clean)
 	@echo "--- 10. Caos etapa: q3_format_shard ---"
-	@$(MAKE) test-caos-etapa q3_format_shard 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
+	@$(MAKE) test-caos-etapa q3_format_shard 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL) 70
 	@$(_light_clean)
 	@echo "--- 11. Caos cliente ---"
 	@$(MAKE) test-caos-cliente 2 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
@@ -390,7 +386,7 @@ test-todos:
 	@echo "=== 15. Ejecutando stress test caos (2 iteraciones) ==="
 	@echo "========================================================="
 	@$(_light_clean)
-	@$(MAKE) test-stress-caos 2 2 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
+	@$(MAKE) test-stress-caos 2 2 $(TEST_TX) $(TEST_ACC) $(TEST_SOL) 70
 	@echo "========================================================="
 	@echo "  Todos los tests del sistema pasaron exitosamente"
 	@echo "========================================================="

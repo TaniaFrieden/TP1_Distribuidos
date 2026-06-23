@@ -10,6 +10,9 @@ lanzar_clientes() {
         || { rm -rf output/*/ output/client_id_*.txt 2>/dev/null || true; }
     for i in $(seq 1 "$cant"); do
         if [ "${SEQUENTIAL:-0}" = "1" ]; then
+            if [ "$i" -gt 1 ]; then
+                echo ""
+            fi
             echo "=== Cliente $i/$cant iniciando ==="
             ( export CLIENT_ID_SUFFIX=$i; make client TRANSACTIONS_FILE="$tx" ACCOUNTS_FILE="$acc" OUTPUT_DIR="output" \
                 > "logs/client_stdout_$i.txt" 2>&1 )
@@ -37,7 +40,7 @@ esperar_clientes() {
 obtener_queries() {
     .venv/bin/python -c "
 import sys
-sys.path.append('scripts')
+sys.path.append('scripts/utils')
 from obtener_queries import obtener_queries_desde_compose
 qs = obtener_queries_desde_compose('docker-compose.yml')
 print(' '.join(str(q) for q in qs))
@@ -66,7 +69,7 @@ comparar_ultimo_cliente() {
         if [ -f "$actual" ]; then
             .venv/bin/python -c "
 import sys
-sys.path.append('scripts')
+sys.path.append('scripts/utils')
 from comparar_datasets import comparar_csv_sin_orden
 ok, msg = comparar_csv_sin_orden('$actual', '$expected')
 print(f'[cliente $cid][q$q]', msg)
@@ -99,7 +102,7 @@ comparar_resultados() {
             if [ -f "$actual" ]; then
                 .venv/bin/python -c "
 import sys
-sys.path.append('scripts')
+sys.path.append('scripts/utils')
 from comparar_datasets import comparar_csv_sin_orden
 ok, msg = comparar_csv_sin_orden('$actual', '$expected')
 print(f'[cliente $cid][q$q]', msg)

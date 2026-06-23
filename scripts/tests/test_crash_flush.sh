@@ -18,7 +18,7 @@
 #   soluciones: carpeta en solutions/      (default: $TEST_SOL o sample)
 #
 set -e
-source scripts/test_helpers.sh
+source scripts/tests/test_helpers.sh
 
 ETAPA=${1:-counter}
 TX=${2:-${TEST_TX:-trans_sample}}

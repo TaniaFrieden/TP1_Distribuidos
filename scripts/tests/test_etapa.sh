@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -e
-source scripts/test_helpers.sh
+source scripts/tests/test_helpers.sh
 
 PREFIX=$1
 CANT_CLIENTES=${2:-3}
@@ -22,8 +22,18 @@ fi
 
 lanzar_clientes "$CANT_CLIENTES" "$TX" "$ACC"
 
+# Limpiar el log al iniciar este test
+> logs/chaos_monkey_run.log
+
 # Usamos el Chaos Monkey unificado para esperar y matar la etapa
-python3 scripts/chaos_monkey.py $ESPERA_ARG --etapa "$PREFIX"
+python3 scripts/chaos/chaos_monkey.py $ESPERA_ARG --etapa "$PREFIX" >> logs/chaos_monkey_run.log 2>&1 &
+CHAOS_PID=$!
+
+trap 'echo "=== Apagando Chaos Monkey... ==="; kill $CHAOS_PID 2>/dev/null || true' EXIT
 
 esperar_clientes
+
+echo "=== Clientes finalizaron. Deteniendo Chaos Monkey. ==="
+kill $CHAOS_PID 2>/dev/null || true
+
 comparar_resultados "$SOLUCIONES"

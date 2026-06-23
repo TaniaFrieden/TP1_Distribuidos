@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -e
-source scripts/test_helpers.sh
+source scripts/tests/test_helpers.sh
 
 CANT_CLIENTES=${1:-1}
 TX=${2:-${TEST_TX:-trans_sample}}
@@ -8,7 +8,6 @@ ACC=${3:-${TEST_ACC:-LI-Small_accounts}}
 SOLUCIONES=${4:-${TEST_SOL:-sample}}
 
 echo "=== Preparando entorno para Test Caso 6 (Crash post-flush / pre-confirmación) ==="
-make down
 docker run --rm -v "$(pwd)/volume:/cleanup" alpine sh -c "rm -rf /cleanup/*" 2>/dev/null \
     || rm -rf volume/* 2>/dev/null || true
 
