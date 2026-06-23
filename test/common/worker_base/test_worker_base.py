@@ -293,3 +293,88 @@ class TestZombiePrevention:
             worker.iniciar()
 
         mock_exit.assert_not_called()
+
+
+class TestSesionInvalidada:
+    """Verifica que datos de una sesión desconectada se descartan,
+    evitando la race condition DISCONNECT vs datos en vuelo."""
+
+    def test_datos_de_sesion_invalidada_se_descartan(self, worker):
+        ack = MagicMock()
+        nack = MagicMock()
+
+        disconnect_msg = b'{"client_id": "c1", "CLIENT_DISCONNECT": true, "session_id": "abc123"}'
+        worker._callback_interno(INPUT_QUEUE_NAME, disconnect_msg, MagicMock(), MagicMock())
+
+        dato_viejo = b'{"client_id": "c1", "request_id": "c1:abc123:q:1", "dato": 1}'
+        worker._callback_interno(INPUT_QUEUE_NAME, dato_viejo, ack, nack)
+
+        assert dato_viejo not in worker._mensajes_procesados
+        ack.assert_called_once()
+
+    def test_datos_de_sesion_nueva_se_procesan(self, worker):
+        ack = MagicMock()
+
+        disconnect_msg = b'{"client_id": "c1", "CLIENT_DISCONNECT": true, "session_id": "abc123"}'
+        worker._callback_interno(INPUT_QUEUE_NAME, disconnect_msg, MagicMock(), MagicMock())
+
+        dato_nuevo = b'{"client_id": "c1", "request_id": "c1:def456:q:1", "dato": 1}'
+        worker._callback_interno(INPUT_QUEUE_NAME, dato_nuevo, ack, MagicMock())
+
+        assert dato_nuevo in worker._mensajes_procesados
+
+    def test_disconnect_sin_session_no_invalida_nada(self, worker):
+        ack = MagicMock()
+
+        disconnect_msg = b'{"client_id": "c1", "CLIENT_DISCONNECT": true}'
+        worker._callback_interno(INPUT_QUEUE_NAME, disconnect_msg, MagicMock(), MagicMock())
+
+        dato = b'{"client_id": "c1", "request_id": "c1:abc123:q:1", "dato": 1}'
+        worker._callback_interno(INPUT_QUEUE_NAME, dato, ack, MagicMock())
+
+        assert dato in worker._mensajes_procesados
+
+    def test_datos_sin_request_id_no_se_filtran(self, worker):
+        ack = MagicMock()
+
+        disconnect_msg = b'{"client_id": "c1", "CLIENT_DISCONNECT": true, "session_id": "abc123"}'
+        worker._callback_interno(INPUT_QUEUE_NAME, disconnect_msg, MagicMock(), MagicMock())
+
+        dato_sin_rid = b'{"client_id": "c1", "dato": 1}'
+        worker._callback_interno(INPUT_QUEUE_NAME, dato_sin_rid, ack, MagicMock())
+
+        assert dato_sin_rid in worker._mensajes_procesados
+
+    def test_sesion_invalidada_se_limpia_al_completar_cliente(self, worker):
+        worker._sesiones_invalidadas["c1"] = {"abc123"}
+        worker.al_completar_cliente("c1")
+        assert "c1" not in worker._sesiones_invalidadas
+
+    def test_multiples_sesiones_invalidadas_acumulan(self, worker):
+        d1 = b'{"client_id": "c1", "CLIENT_DISCONNECT": true, "session_id": "s1"}'
+        d2 = b'{"client_id": "c1", "CLIENT_DISCONNECT": true, "session_id": "s2"}'
+        worker._callback_interno(INPUT_QUEUE_NAME, d1, MagicMock(), MagicMock())
+        worker._callback_interno(INPUT_QUEUE_NAME, d2, MagicMock(), MagicMock())
+
+        dato_s1 = b'{"client_id": "c1", "request_id": "c1:s1:q:1"}'
+        dato_s2 = b'{"client_id": "c1", "request_id": "c1:s2:q:1"}'
+        dato_s3 = b'{"client_id": "c1", "request_id": "c1:s3:q:1"}'
+
+        worker._callback_interno(INPUT_QUEUE_NAME, dato_s1, MagicMock(), MagicMock())
+        worker._callback_interno(INPUT_QUEUE_NAME, dato_s2, MagicMock(), MagicMock())
+        worker._callback_interno(INPUT_QUEUE_NAME, dato_s3, MagicMock(), MagicMock())
+
+        assert dato_s1 not in worker._mensajes_procesados
+        assert dato_s2 not in worker._mensajes_procesados
+        assert dato_s3 in worker._mensajes_procesados
+
+    def test_session_id_se_extrae_de_request_id_derivado(self, worker):
+        disconnect_msg = b'{"client_id": "c1", "CLIENT_DISCONNECT": true, "session_id": "abc"}'
+        worker._callback_interno(INPUT_QUEUE_NAME, disconnect_msg, MagicMock(), MagicMock())
+
+        dato_derivado = b'{"client_id": "c1", "request_id": "c1:abc:q:1:s2:s1"}'
+        ack = MagicMock()
+        worker._callback_interno(INPUT_QUEUE_NAME, dato_derivado, ack, MagicMock())
+
+        assert dato_derivado not in worker._mensajes_procesados
+        ack.assert_called_once()

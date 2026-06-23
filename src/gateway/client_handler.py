@@ -1,14 +1,15 @@
-import os
 import socket
 import uuid
 import json
 import gc
 import ctypes
 from common.logger import obtener_logger
+from common.crash_hook import CrashHook
 from common import message_protocol, middleware, sharding
+from common import crash_points as CP
 from common.constantes_protocolo import (
     CABECERA, ESQUEMA, PAYLOAD, ID_CLIENTE, ID_SOLICITUD, LOTES, CANTIDAD,
-    FIN_DE_ARCHIVO, DESCONEXION_CLIENTE,
+    FIN_DE_ARCHIVO, DESCONEXION_CLIENTE, ID_SESION,
     CONF_PREFIJO_SHARD, CONF_TOTAL_WORKERS, CONF_CAMPO_HASH,
 )
 from config import GatewayConfig
@@ -22,6 +23,7 @@ class ClientHandler:
     def __init__(self, config: GatewayConfig, state):
         self.config = config
         self.state = state
+        self._hook = CrashHook()
 
     def atender(self, client_socket):
         client_id = self._leer_hello(client_socket)
@@ -150,17 +152,18 @@ class ClientHandler:
 
         estado_previo = self.state.cargar_estado_cliente(client_id)
         if estado_previo.get("conectado"):
-            logger.info(f"Cliente {client_id} reconectando — enviando DISCONNECT por colas de datos")
-            self._enviar_disconnect(client_id, colas_tx, colas_bancos)
+            sesion_vieja = estado_previo.get("session_id")
+            logger.info(f"Cliente {client_id} reconectando — enviando DISCONNECT por colas de datos (sesión {sesion_vieja})")
+            self._enviar_disconnect(client_id, colas_tx, colas_bancos, sesion_vieja)
 
-        self._verificar_crash("CRASH_GATEWAY_BEFORE_PERSIST_CONNECTED", client_id, "pre-conectado")
+        self._hook.verificar(CP.GW_BEFORE_PERSIST_CONNECTED, f"pre-conectado {client_id}")
 
         session_id = str(uuid.uuid4())[:8]
         self.state.registrar_sesion(client_id, session_id)
-        self.state.actualizar_estado_cliente(client_id, {"conectado": True})
+        self.state.actualizar_estado_cliente(client_id, {"conectado": True, "session_id": session_id})
         logger.info(f"Cliente {client_id} sesión {session_id} iniciada")
 
-        self._verificar_crash("CRASH_GATEWAY_AFTER_PERSIST_CONNECTED", client_id, "post-conectado")
+        self._hook.verificar(CP.GW_AFTER_PERSIST_CONNECTED, f"post-conectado {client_id}")
 
         eof_enviado = False
         try:
@@ -192,9 +195,9 @@ class ClientHandler:
                     eof_enviado = True
                     logger.info(f"EOF enviado para {client_id}")
 
-                    self._verificar_crash("CRASH_GATEWAY_BEFORE_PERSIST_DATOS_ENVIADOS", client_id, "pre-datos_enviados")
+                    self._hook.verificar(CP.GW_BEFORE_PERSIST_DATOS_ENVIADOS, f"pre-datos_enviados {client_id}")
                     self.state.actualizar_estado_cliente(client_id, {"datos_enviados": True, "session_id": session_id})
-                    self._verificar_crash("CRASH_GATEWAY_AFTER_PERSIST_DATOS_ENVIADOS", client_id, "post-datos_enviados")
+                    self._hook.verificar(CP.GW_AFTER_PERSIST_DATOS_ENVIADOS, f"post-datos_enviados {client_id}")
                     break
 
         except socket.error:
@@ -203,7 +206,8 @@ class ClientHandler:
             logger.error(f"Error con cliente {client_id}: {e}", exc_info=True)
         finally:
             if not eof_enviado:
-                self._enviar_disconnect(client_id, colas_tx, colas_bancos)
+                sesion_actual = self.state.obtener_sesion(client_id)
+                self._enviar_disconnect(client_id, colas_tx, colas_bancos, sesion_actual)
                 self.state.remover_cliente(client_id)
             for q in colas_tx:
                 q.close()
@@ -235,7 +239,7 @@ class ClientHandler:
             }).encode("utf-8")
             q.send(internal_msg)
 
-        self._verificar_crash_antes_ack(client_id, "tx")
+        self._hook.verificar(CP.GW_UPSTREAM_BEFORE_ACK, f"upstream {client_id}")
         _, lock, _ = self.state.obtener_cliente(client_id)
         if lock:
             with lock:
@@ -276,25 +280,11 @@ class ClientHandler:
             }).encode("utf-8")
             colas_bancos[shard_id].send(shard_batch)
 
-        self._verificar_crash_antes_ack(client_id, "bancos")
+        self._hook.verificar(CP.GW_UPSTREAM_BEFORE_ACK, f"upstream {client_id}")
         _, lock, _ = self.state.obtener_cliente(client_id)
         if lock:
             with lock:
                 message_protocol.external.enviar_mensaje(client_socket, message_protocol.external.TipoMensaje.ACK)
-
-    def _verificar_crash(self, env_var, client_id, descripcion=""):
-        if os.environ.get(env_var) == "true":
-            from common.persistencia import VOLUMEN_DIR
-            bandera = os.path.join(VOLUMEN_DIR, f"gateway_crash_{env_var}_done")
-            if not os.path.exists(bandera):
-                os.makedirs(os.path.dirname(bandera), exist_ok=True)
-                with open(bandera, "w") as f:
-                    f.write("1")
-                logger.warning(f"CRASH GATEWAY: {env_var} ({descripcion}) para {client_id}")
-                os._exit(1)
-
-    def _verificar_crash_antes_ack(self, client_id, tipo_lote):
-        self._verificar_crash("CRASH_GATEWAY_UPSTREAM_BEFORE_ACK", client_id, tipo_lote)
 
     @staticmethod
     def _deduplicar_schema(schema):
@@ -309,8 +299,11 @@ class ClientHandler:
                 limpio.append(col)
         return limpio
 
-    def _enviar_disconnect(self, client_id, colas_tx, colas_bancos):
-        disconnect_msg = json.dumps({ID_CLIENTE: client_id, DESCONEXION_CLIENTE: True}).encode("utf-8")
+    def _enviar_disconnect(self, client_id, colas_tx, colas_bancos, session_id=None):
+        payload = {ID_CLIENTE: client_id, DESCONEXION_CLIENTE: True}
+        if session_id:
+            payload[ID_SESION] = session_id
+        disconnect_msg = json.dumps(payload).encode("utf-8")
         logger.info(f"Enviando CLIENT_DISCONNECT para {client_id}")
         for q in colas_tx:
             try:

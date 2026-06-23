@@ -8,6 +8,7 @@ from common.message_protocol.internal import ParseadorMensajes
 from common.constantes_protocolo import (
     ID_CLIENTE,
     ID_SOLICITUD,
+    ID_SESION,
     FIN_DE_ARCHIVO,
     DESCONEXION_CLIENTE,
 )
@@ -32,6 +33,7 @@ class WorkerBase(ABC):
         self.condicion_pendiente = threading.Condition(threading.Lock())
         self._evento_cierre_latido = threading.Event()
         self._hilo_local = threading.local()
+        self._sesiones_invalidadas: dict[str, set[str]] = {}
 
         self.configuracion = ConfiguracionWorker()
         self.contador_vuelos = ContadorVuelos()
@@ -105,35 +107,41 @@ class WorkerBase(ABC):
         self.enrutador.detener_consumo()
         self.coordinador.detener_consumo()
 
-    def _registrar_en_watchdog(self):
-        try:
-            cola = MessageMiddlewareQueueRabbitMQ(
-                self.configuracion.host_mom,
-                "watchdog.registro.temp"
-            )
-            cola.channel.exchange_declare(
-                exchange="watchdog.exchange.registro",
-                exchange_type="fanout",
-                durable=True
-            )
-            payload = {
-                "etapa": self.configuracion.prefijo_nodo,
-                "instancia": str(self.configuracion.id_nodo)
-            }
-            cola.channel.basic_publish(
-                exchange="watchdog.exchange.registro",
-                routing_key="",
-                body=json.dumps(payload).encode("utf-8")
-            )
-            logger.info(
-                f"[{self.__class__.__name__}] Registro enviado a exchange fanout: "
-                f"{self.configuracion.prefijo_nodo}_{self.configuracion.id_nodo}"
-            )
-            cola.close()
-        except Exception as e:
-            logger.warning(
-                f"[{self.__class__.__name__}] No se pudo enviar registro a exchange: {e}"
-            )
+    def _registrar_en_watchdog(self, max_intentos=5):
+        for intento in range(1, max_intentos + 1):
+            try:
+                cola = MessageMiddlewareQueueRabbitMQ(
+                    self.configuracion.host_mom,
+                    "watchdog.registro.temp"
+                )
+                cola.channel.exchange_declare(
+                    exchange="watchdog.exchange.registro",
+                    exchange_type="fanout",
+                    durable=True
+                )
+                payload = {
+                    "etapa": self.configuracion.prefijo_nodo,
+                    "instancia": str(self.configuracion.id_nodo)
+                }
+                cola.channel.basic_publish(
+                    exchange="watchdog.exchange.registro",
+                    routing_key="",
+                    body=json.dumps(payload).encode("utf-8")
+                )
+                logger.info(
+                    f"[{self.__class__.__name__}] Registro enviado a exchange fanout: "
+                    f"{self.configuracion.prefijo_nodo}_{self.configuracion.id_nodo}"
+                )
+                cola.close()
+                return
+            except Exception as e:
+                logger.warning(
+                    f"[{self.__class__.__name__}] No se pudo enviar registro a exchange "
+                    f"(intento {intento}/{max_intentos}): {e}"
+                )
+                if intento < max_intentos:
+                    import time
+                    time.sleep(2)
 
     def iniciar(self):
         logger.info(f"[{self.__class__.__name__}] Arrancando worker…")
@@ -236,10 +244,13 @@ class WorkerBase(ABC):
             nack()
 
     def _procesar_desconexion(self, client_id, mensaje, mensaje_json, ack):
+        sesion_invalidada = mensaje_json.get(ID_SESION)
         logger.info(
             f"[{self.__class__.__name__}] {DESCONEXION_CLIENTE} "
-            f"para {client_id}. Limpiando estado."
+            f"para {client_id} (sesión={sesion_invalidada}). Limpiando estado."
         )
+        if sesion_invalidada:
+            self._sesiones_invalidadas.setdefault(client_id, set()).add(sesion_invalidada)
         self._manejador_eof.limpiar_cliente(client_id)
         self.al_desconectar_cliente(client_id)
         self.coordinador.limpiar_cliente(client_id)
@@ -247,9 +258,30 @@ class WorkerBase(ABC):
         self._enviar(mensaje, mensaje_json)
         ack()
 
+    @staticmethod
+    def _extraer_session_id(request_id):
+        if not request_id:
+            return None
+        partes = request_id.split(":")
+        return partes[1] if len(partes) >= 2 else None
+
+    def _es_sesion_invalidada(self, client_id, request_id):
+        sesiones = self._sesiones_invalidadas.get(client_id)
+        if not sesiones:
+            return False
+        session_id = self._extraer_session_id(request_id)
+        return session_id in sesiones if session_id else False
+
     def _procesar_mensaje_datos(self, nombre_cola, client_id, mensaje_json,
                                 mensaje, ack, nack):
         request_id = mensaje_json.get(ID_SOLICITUD)
+
+        if self._es_sesion_invalidada(client_id, request_id):
+            logger.info(
+                f"[{self.__class__.__name__}] Descartado por sesión invalidada "
+                f"request_id={request_id} client_id={client_id}."
+            )
+            return ack()
 
         if self.filtro_dedup.es_duplicado(client_id, request_id):
             logger.info(
@@ -333,7 +365,7 @@ class WorkerBase(ABC):
         pass
 
     def al_completar_cliente(self, client_id):
-        pass
+        self._sesiones_invalidadas.pop(client_id, None)
 
     def al_desconectar_cliente(self, client_id):
         pass
