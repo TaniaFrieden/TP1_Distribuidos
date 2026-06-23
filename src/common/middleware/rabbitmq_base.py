@@ -18,8 +18,8 @@ _CONNECT_MAX_INTENTOS = int(os.getenv("RABBITMQ_CONNECT_MAX_INTENTOS", "10"))
 _CONNECT_DELAY_BASE    = float(os.getenv("RABBITMQ_CONNECT_DELAY_BASE", "1.0"))
 _CONNECT_DELAY_CAP     = float(os.getenv("RABBITMQ_CONNECT_DELAY_CAP", "30.0"))
 
-HEARTBEAT_SEGUNDOS = 10
-CONEXION_BLOQUEO_SEGUNDOS = 40
+HEARTBEAT_SEGUNDOS = 30
+CONEXION_BLOQUEO_SEGUNDOS = 120
 
 # Errores transientes: el servidor todavía no está listo o DNS no resolvió aún.
 # Para estos tiene sentido reintentar.

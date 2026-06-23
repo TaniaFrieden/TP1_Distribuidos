@@ -1,5 +1,6 @@
 import os
 import signal
+import time
 from common.logger import obtener_logger
 import threading
 import json
@@ -23,6 +24,7 @@ from .latido import Latido
 from common.dedup_filter import DedupFilter
 from common.persistencia import PersistidorEstado
 from common.middleware import MessageMiddlewareQueueRabbitMQ
+from common.middleware.middleware import MessageMiddlewareDisconnectedError
 
 logger = obtener_logger(__name__)
 
@@ -175,21 +177,54 @@ class WorkerBase(ABC):
         finally:
             self._cerrar()
 
+    _MAX_REINTENTOS_CONSUMO = 5
+
     def _ejecutar_hilo_consumo(self, nombre_cola, cola):
-        try:
-            cola.start_consuming(
-                lambda msg, ack, nack, q=nombre_cola: self._callback_interno(
-                    q, msg, ack, nack
+        intentos = 0
+        while not self._cierre_solicitado:
+            try:
+                cola.start_consuming(
+                    lambda msg, ack, nack, q=nombre_cola: self._callback_interno(
+                        q, msg, ack, nack
+                    )
                 )
-            )
-        except Exception as e:
-            if not self._cierre_solicitado:
-                logger.critical(
-                    f"[{self.__class__.__name__}] Hilo de consumo "
-                    f"'{nombre_cola}' terminó inesperadamente: {e}",
-                    exc_info=True,
+                return
+            except MessageMiddlewareDisconnectedError as e:
+                intentos += 1
+                if self._cierre_solicitado:
+                    return
+                if intentos > self._MAX_REINTENTOS_CONSUMO:
+                    logger.critical(
+                        f"[{self.__class__.__name__}] Hilo de consumo "
+                        f"'{nombre_cola}' agotó reintentos de reconexión: {e}",
+                        exc_info=True,
+                    )
+                    os._exit(1)
+                delay = min(2 ** intentos, 30)
+                logger.warning(
+                    f"[{self.__class__.__name__}] Conexión perdida en "
+                    f"'{nombre_cola}'. Reconectando en {delay}s "
+                    f"(intento {intentos}/{self._MAX_REINTENTOS_CONSUMO})..."
                 )
-                os._exit(1)
+                time.sleep(delay)
+                try:
+                    cola._reconnect()
+                except Exception as reconn_err:
+                    logger.critical(
+                        f"[{self.__class__.__name__}] Reconexión fallida "
+                        f"para '{nombre_cola}': {reconn_err}",
+                        exc_info=True,
+                    )
+                    os._exit(1)
+            except Exception as e:
+                if not self._cierre_solicitado:
+                    logger.critical(
+                        f"[{self.__class__.__name__}] Hilo de consumo "
+                        f"'{nombre_cola}' terminó inesperadamente: {e}",
+                        exc_info=True,
+                    )
+                    os._exit(1)
+                return
 
     def _ejecutar_coordinador(self):
         try:
