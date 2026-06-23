@@ -34,28 +34,11 @@ class GatewayState:
 
     def generar_request_id(self, client_id, query_key):
         with self.state_lock:
-            # Clave para cache en memoria
             key = (client_id, query_key)
             if key not in self.request_counters:
-                # Intentar cargar del persistidor si existe
                 self.request_counters[key] = 0
-                estado = self.cargar_estado_cliente(client_id)
-                if estado and "request_counters" in estado:
-                    # En el estado persistido lo guardamos como dict de {query_key: count}
-                    self.request_counters[key] = estado["request_counters"].get(query_key, 0)
-            
             self.request_counters[key] += 1
-            seq = self.request_counters[key]
-
-            # Persistir la actualización del contador en el estado del cliente
-            estado = self.cargar_estado_cliente(client_id)
-            if estado:
-                if "request_counters" not in estado:
-                    estado["request_counters"] = {}
-                estado["request_counters"][query_key] = seq
-                self.guardar_estado_cliente(client_id, estado)
-
-            return f"{client_id}:{query_key}:{seq}"
+            return f"{client_id}:{query_key}:{self.request_counters[key]}"
 
     def obtener_cliente(self, client_id):
         with self.state_lock:

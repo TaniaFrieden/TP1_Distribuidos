@@ -46,6 +46,19 @@ class ClientHandler:
             self._enviar_config(client_socket, client_id, datos_ya_enviados)
 
         if datos_ya_enviados:
+            if len(queries_ya_entregadas) >= len(self._obtener_lista_queries()):
+                logger.info(f"Cliente {client_id}: todas las queries ya entregadas, enviando FIN_DE_REGISTROS")
+                try:
+                    with lock:
+                        message_protocol.external.enviar_mensaje(
+                            client_socket, message_protocol.external.TipoMensaje.FIN_DE_REGISTROS
+                        )
+                except Exception as e:
+                    logger.warning(f"Error enviando FIN_DE_REGISTROS a {client_id}: {e}")
+                self.state.limpiar_estado_cliente(client_id)
+                self.state.remover_cliente(client_id)
+                client_socket.close()
+                return
             self._modo_solo_resultados(client_id, client_socket)
         else:
             self._modo_normal(client_id, client_socket)

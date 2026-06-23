@@ -10,7 +10,7 @@ from datetime import datetime
 # Nota: "gateway" y "rabbitmq" son servicios de infraestructura base para que el test unitario de workers
 # pueda correr o reconectar, no son workers stateless. Los watchdogs y actuadores controlan el ciclo de vida.
 # Excluimos estos servicios clave de "--todos" para evitar que el test falle por indisponibilidad de RabbitMQ o Gateway muerto permanente.
-SERVICIOS_CRITICOS = ["client", "rabbitmq", "gateway", "watchdog", "actuador"]
+SERVICIOS_CRITICOS = ["client", "rabbitmq", "watchdog", "actuador"]
 
 def log(msg):
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')

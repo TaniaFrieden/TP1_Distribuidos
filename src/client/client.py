@@ -77,7 +77,7 @@ def _ejecutar_sesion(client_id, inicio_cliente):
     )
     hilo_receptor.start()
 
-    ya_enviado = omitir_envio or _envio_ya_completado(client_id)
+    ya_enviado = omitir_envio
 
     if not ya_enviado:
         hilos_envio = _iniciar_hilos_envio(sock, socket_lock, client_id, shutdown_event)
