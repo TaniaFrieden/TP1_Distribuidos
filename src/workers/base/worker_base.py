@@ -121,7 +121,7 @@ class WorkerBase(ABC):
                 )
                 payload = {
                     "etapa": self.configuracion.prefijo_nodo,
-                    "instancia": str(self.configuracion.id_nodo)
+                    "instancia": f"{self.configuracion.id_nodo:02d}"
                 }
                 cola.channel.basic_publish(
                     exchange="watchdog.exchange.registro",

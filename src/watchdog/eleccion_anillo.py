@@ -18,11 +18,12 @@ EXCHANGE_LATIDO_LIDER = "heartbeat.watchdog"
 
 class EleccionAnillo:
 
-    def __init__(self, config, al_ser_lider, al_perder_liderazgo, al_caer_standby=None):
+    def __init__(self, config, al_ser_lider, al_perder_liderazgo, al_caer_standby=None, al_registrar_nodo=None):
         self._config = config
         self._al_ser_lider = al_ser_lider
         self._al_perder_liderazgo = al_perder_liderazgo
         self._al_caer_standby = al_caer_standby
+        self._al_registrar_nodo = al_registrar_nodo
 
         self._id = config.id_watchdog
         self._n = config.cantidad_watchdogs
@@ -73,7 +74,7 @@ class EleccionAnillo:
         if estado:
             with self._lock_topologia:
                 for etapa, instancias in estado.items():
-                    self._topologia[etapa] = set(str(i) for i in instancias)
+                    self._topologia[etapa] = set(f"{int(i):02d}" if str(i).isdigit() else str(i) for i in instancias)
             self._logger.info(f"Topología cargada de disco: {len(estado)} etapas.")
             self._hook.verificar(CP.WD_POST_TOPOLOGY_LOAD, f"post-load watchdog_{self._id}")
 
@@ -95,7 +96,7 @@ class EleccionAnillo:
                 if etapa not in self._topologia:
                     self._topologia[etapa] = set()
                     hubo_cambio = True
-                nuevos = set(str(inst) for inst in instancias)
+                nuevos = set(f"{int(inst):02d}" if str(inst).isdigit() else str(inst) for inst in instancias)
                 if not nuevos.issubset(self._topologia[etapa]):
                     self._topologia[etapa].update(nuevos)
                     hubo_cambio = True
@@ -115,13 +116,16 @@ class EleccionAnillo:
                     with self._lock_topologia:
                         if etapa not in self._topologia:
                             self._topologia[etapa] = set()
-                        inst_str = str(instancia)
+                        raw = str(instancia)
+                        inst_str = f"{int(raw):02d}" if raw.isdigit() else raw
                         if inst_str not in self._topologia[etapa]:
                             self._topologia[etapa].add(inst_str)
                             hubo_cambio = True
                         if hubo_cambio:
                             self._guardar_topologia_a_disco()
                     self._logger.info(f"Registro dinámico recibido: {etapa}/{instancia}")
+                    if hubo_cambio and self._al_registrar_nodo:
+                        self._al_registrar_nodo(etapa, inst_str)
                 ack()
             except Exception as e:
                 self._logger.warning(f"Error procesando registro de topología: {e}")

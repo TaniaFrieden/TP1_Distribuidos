@@ -58,7 +58,12 @@ def main():
         logger.warning(f"Standby watchdog_{id_nodo} caído — publicando para reinicio.")
         _publicar_caidas_watchdogs(logger, config, [id_nodo])
 
-    eleccion = EleccionAnillo(config, al_ser_lider, al_perder_liderazgo, al_caer_standby)
+    def al_registrar_nodo(etapa: str, instancia: str):
+        with lock_detector:
+            if detector_actual is not None:
+                detector_actual.registrar_nodo(etapa, instancia)
+
+    eleccion = EleccionAnillo(config, al_ser_lider, al_perder_liderazgo, al_caer_standby, al_registrar_nodo)
     evento_parada = threading.Event()
 
     def manejar_senal(signum, frame):

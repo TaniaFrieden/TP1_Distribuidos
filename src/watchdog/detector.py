@@ -99,6 +99,12 @@ class DetectorLatidos:
                 )
                 self._publicar_caida(etapa, instancia)
 
+    def registrar_nodo(self, etapa: str, instancia: str):
+        with self._lock:
+            if (etapa, instancia) not in self._ultimo_visto:
+                self._ultimo_visto[(etapa, instancia)] = time.time()
+                self._logger.info(f"Nodo registrado dinámicamente: {etapa}/{instancia}")
+
     def _publicar_caida(self, etapa: str, instancia: str):
         self._hook.verificar(CP.WD_PRE_PUBLISH_CAIDA, f"pre-publish {etapa}/{instancia}")
         try:
