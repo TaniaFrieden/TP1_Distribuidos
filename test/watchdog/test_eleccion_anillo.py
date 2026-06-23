@@ -22,7 +22,7 @@ def crear_config(id_watchdog=1, cantidad_watchdogs=3):
     return config
 
 
-def crear_eleccion(id_watchdog=1, cantidad_watchdogs=3, tmp_path=None):
+def crear_eleccion(id_watchdog=1, cantidad_watchdogs=3, tmp_path=None, al_registrar_nodo=None):
     config = crear_config(id_watchdog, cantidad_watchdogs)
     al_ser_lider = MagicMock()
     al_perder_liderazgo = MagicMock()
@@ -38,7 +38,7 @@ def crear_eleccion(id_watchdog=1, cantidad_watchdogs=3, tmp_path=None):
         ]
     for p in patches:
         p.start()
-    eleccion = EleccionAnillo(config, al_ser_lider, al_perder_liderazgo, al_caer_standby)
+    eleccion = EleccionAnillo(config, al_ser_lider, al_perder_liderazgo, al_caer_standby, al_registrar_nodo)
     for p in patches:
         p.stop()
     eleccion._enviar_a = MagicMock()
@@ -485,6 +485,114 @@ class TestTopologiaEndToEnd(unittest.TestCase):
             self.assertIn(("q5_converter", "01"), detector._ultimo_visto)
             self.assertIn(("q5_converter", "02"), detector._ultimo_visto)
             self.assertIn(("gateway", "01"), detector._ultimo_visto)
+
+
+class TestNormalizacionInstanciaTopologia(unittest.TestCase):
+    """Verifica que las instancias en la topología se normalicen a formato
+    zero-padded ('01', '02') para coincidir con el formato de heartbeats."""
+
+    def test_cargar_topologia_normaliza_ids_numericos(self):
+        """IDs numéricos sin zero-pad ('1', '2') deben normalizarse a '01', '02'."""
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            eleccion, *_ = crear_eleccion(id_watchdog=1, tmp_path=tmp)
+            # Simular topología guardada con formato viejo (sin zero-pad)
+            eleccion._fusionar_topologia({"q5_counter": ["1", "2"]})
+
+            # Recargar (simula reinicio)
+            eleccion2, *_ = crear_eleccion(id_watchdog=1, tmp_path=tmp)
+            topo = eleccion2.obtener_topologia_serializable()
+
+            self.assertIn("01", topo["q5_counter"])
+            self.assertIn("02", topo["q5_counter"])
+            self.assertNotIn("1", topo["q5_counter"])
+            self.assertNotIn("2", topo["q5_counter"])
+
+    def test_fusionar_topologia_normaliza_ids_numericos(self):
+        eleccion, *_ = crear_eleccion(id_watchdog=1)
+        eleccion._fusionar_topologia({"gateway": ["1", "2", "3"]})
+        topo = eleccion.obtener_topologia_serializable()
+        self.assertCountEqual(topo["gateway"], ["01", "02", "03"])
+
+    def test_fusionar_topologia_ids_ya_zero_padded_no_cambian(self):
+        eleccion, *_ = crear_eleccion(id_watchdog=1)
+        eleccion._fusionar_topologia({"gateway": ["01", "02"]})
+        topo = eleccion.obtener_topologia_serializable()
+        self.assertCountEqual(topo["gateway"], ["01", "02"])
+
+    def test_fusionar_topologia_mixto_no_duplica(self):
+        """Si llega '1' y luego '01', no debe haber dos entries."""
+        eleccion, *_ = crear_eleccion(id_watchdog=1)
+        eleccion._fusionar_topologia({"q1": ["1"]})
+        eleccion._fusionar_topologia({"q1": ["01"]})
+        topo = eleccion.obtener_topologia_serializable()
+        self.assertEqual(len(topo["q1"]), 1)
+        self.assertIn("01", topo["q1"])
+
+    def test_fusionar_topologia_enteros_se_normalizan(self):
+        """IDs que vienen como enteros (no strings) se normalizan."""
+        eleccion, *_ = crear_eleccion(id_watchdog=1)
+        eleccion._fusionar_topologia({"q1": [1, 2, 3]})
+        topo = eleccion.obtener_topologia_serializable()
+        self.assertCountEqual(topo["q1"], ["01", "02", "03"])
+
+
+class TestCallbackRegistroNodo(unittest.TestCase):
+    """Verifica que al_registrar_nodo se invoque al recibir un registro dinámico."""
+
+    def _simular_registro(self, eleccion, etapa, instancia):
+        payload = json.dumps({"etapa": etapa, "instancia": instancia}).encode()
+        ack = MagicMock()
+        # Invocar directamente el handler interno de _consumir_registro_topologia
+        # simulando un mensaje recibido.
+        # Para esto, llamamos al callback que _consumir_registro_topologia pasaría
+        # a start_consuming. Extraemos la lógica capturando el callback.
+        callback_capturado = []
+
+        def mock_constructor(host, nombre_cola, exchange):
+            mock_cola = MagicMock()
+            def capturar_cb(cb):
+                callback_capturado.append(cb)
+                cb(payload, ack, None)
+                eleccion._evento_parada.set()
+            mock_cola.start_consuming = capturar_cb
+            return mock_cola
+
+        with patch("watchdog.eleccion_anillo.FanoutQueueRabbitMQ", side_effect=mock_constructor):
+            eleccion._consumir_registro_topologia()
+
+        return ack
+
+    def test_callback_invocado_con_nodo_nuevo(self):
+        al_registrar = MagicMock()
+        eleccion, *_ = crear_eleccion(al_registrar_nodo=al_registrar)
+
+        self._simular_registro(eleccion, "q5_converter", "02")
+
+        al_registrar.assert_called_once_with("q5_converter", "02")
+
+    def test_callback_no_invocado_si_nodo_ya_existe(self):
+        al_registrar = MagicMock()
+        eleccion, *_ = crear_eleccion(al_registrar_nodo=al_registrar)
+
+        with eleccion._lock_topologia:
+            eleccion._topologia["q5_converter"] = {"02"}
+
+        self._simular_registro(eleccion, "q5_converter", "02")
+
+        al_registrar.assert_not_called()
+
+    def test_callback_none_no_falla(self):
+        eleccion, *_ = crear_eleccion(al_registrar_nodo=None)
+        self._simular_registro(eleccion, "q5_converter", "01")
+
+    def test_callback_recibe_instancia_normalizada(self):
+        al_registrar = MagicMock()
+        eleccion, *_ = crear_eleccion(al_registrar_nodo=al_registrar)
+
+        self._simular_registro(eleccion, "q5_converter", "2")
+
+        al_registrar.assert_called_once_with("q5_converter", "02")
 
 
 if __name__ == "__main__":

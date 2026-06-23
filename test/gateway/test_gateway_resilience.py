@@ -34,6 +34,8 @@ from gateway.client_handler import ClientHandler
 from gateway.backend import BackendListener
 from common.constantes_protocolo import CABECERA, ESQUEMA, PAYLOAD, ID_CLIENTE, ID_SOLICITUD, LOTES, CLAVE_QUERY, CLAVE_RESULTADO, CLAVE_EOF_REPORTE
 from config import GatewayConfig
+from common.crash_hook import CrashHook
+from common import crash_points as CP
 
 class DummyConfig:
     def __init__(self):
@@ -103,13 +105,14 @@ def test_gateway_upstream_crash_hook(tmp_path):
          patch("common.persistencia.VOLUMEN_DIR", str(tmp_path)), \
          patch("os._exit") as mock_exit:
          
-        handler._verificar_crash_antes_ack("client-1", "tx")
+        handler._hook = CrashHook(volumen_dir=str(tmp_path))
+        handler._hook.verificar(CP.GW_UPSTREAM_BEFORE_ACK, "upstream client-1")
         
         # Debe haber llamado a os._exit(1)
         mock_exit.assert_called_once_with(1)
         
         # El archivo de bandera debe haberse creado
-        bandera = tmp_path / "gateway_crash_upstream_client-1_tx_done"
+        bandera = tmp_path / "crash_CRASH_GATEWAY_UPSTREAM_BEFORE_ACK_done"
         assert bandera.exists()
 
 def test_gateway_downstream_crash_hook(tmp_path):
@@ -126,8 +129,9 @@ def test_gateway_downstream_crash_hook(tmp_path):
          patch("common.persistencia.VOLUMEN_DIR", str(tmp_path)), \
          patch("os._exit") as mock_exit:
          
-        listener._verificar_crash_downstream("client-1", "batch-1", "before_send", "CRASH_GATEWAY_DOWNSTREAM_BEFORE_SEND")
+        listener._hook = CrashHook(volumen_dir=str(tmp_path))
+        listener._hook.verificar(CP.GW_DOWNSTREAM_BEFORE_SEND, "before-send-eof client-1")
         
         mock_exit.assert_called_once_with(1)
-        bandera = tmp_path / "gateway_crash_downstream_client-1_batch-1_before_send_done"
+        bandera = tmp_path / "crash_CRASH_GATEWAY_DOWNSTREAM_BEFORE_SEND_done"
         assert bandera.exists()

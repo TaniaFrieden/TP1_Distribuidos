@@ -291,5 +291,122 @@ class TestDetectorWorkerInvisible(unittest.TestCase):
         self.assertIn(("q5_converter", "01"), detector._ultimo_visto)
 
 
+class TestFormatoInstanciaConsistente(unittest.TestCase):
+    """Verifica que la topología y los heartbeats usen el mismo formato de
+    instancia (zero-padded '01', '02', etc.) para evitar falsos positivos."""
+
+    def test_topologia_zero_padded_matchea_heartbeat(self):
+        """Si la topología usa '01' y el heartbeat envía '01', no hay
+        timeout espurio."""
+        topologia = {"q5_counter": ["01"]}
+        config = crear_config(etapas=["q5_counter"], timeout=5.0)
+        detector = DetectorLatidos(config, topologia=topologia)
+
+        ack = MagicMock()
+        detector._al_recibir_latido(crear_msg_latido("q5_counter", "01"), ack, None)
+
+        ahora = time.time()
+        snapshot = dict(detector._ultimo_visto)
+        caidas = [
+            (e, i) for (e, i), ts in snapshot.items()
+            if ahora - ts > config.timeout_segundos
+        ]
+        self.assertEqual(caidas, [])
+
+    def test_topologia_sin_zero_pad_no_matchea_heartbeat(self):
+        """Si la topología tiene '1' pero el heartbeat envía '01',
+        son keys distintas y la entry '1' nunca se actualiza → false positive.
+        Este test documenta el bug que existía antes del fix."""
+        topologia = {"q5_counter": ["1"]}
+        config = crear_config(etapas=["q5_counter"], timeout=0.1)
+        detector = DetectorLatidos(config, topologia=topologia)
+
+        ack = MagicMock()
+        detector._al_recibir_latido(crear_msg_latido("q5_counter", "01"), ack, None)
+
+        # Forzar timeout de la entry "1" que nunca fue actualizada
+        detector._ultimo_visto[("q5_counter", "1")] = time.time() - 1
+
+        ahora = time.time()
+        snapshot = dict(detector._ultimo_visto)
+        caidas = [
+            (e, i) for (e, i), ts in snapshot.items()
+            if ahora - ts > config.timeout_segundos
+        ]
+        # Hay dos entries: ("q5_counter","1") vieja y ("q5_counter","01") nueva
+        self.assertEqual(len(detector._ultimo_visto), 2)
+        self.assertEqual(len(caidas), 1)
+        self.assertEqual(caidas[0], ("q5_counter", "1"))
+
+    def test_multiples_instancias_zero_padded_en_topologia(self):
+        topologia = {"q5_filter": ["01", "02", "03"]}
+        config = crear_config(etapas=["q5_filter"], timeout=5.0)
+        detector = DetectorLatidos(config, topologia=topologia)
+
+        ack = MagicMock()
+        for inst in ["01", "02", "03"]:
+            detector._al_recibir_latido(crear_msg_latido("q5_filter", inst), ack, None)
+
+        ahora = time.time()
+        snapshot = dict(detector._ultimo_visto)
+        caidas = [
+            (e, i) for (e, i), ts in snapshot.items()
+            if ahora - ts > config.timeout_segundos
+        ]
+        self.assertEqual(caidas, [])
+        self.assertEqual(len(detector._ultimo_visto), 3)
+
+
+class TestRegistrarNodo(unittest.TestCase):
+
+    def test_registra_nodo_nuevo_en_ultimo_visto(self):
+        detector = crear_detector()
+        detector.registrar_nodo("q5_converter", "02")
+        self.assertIn(("q5_converter", "02"), detector._ultimo_visto)
+
+    def test_no_sobreescribe_nodo_existente(self):
+        detector = crear_detector()
+        ts_original = time.time() - 10
+        detector._ultimo_visto[("q5_converter", "01")] = ts_original
+        detector.registrar_nodo("q5_converter", "01")
+        self.assertAlmostEqual(
+            detector._ultimo_visto[("q5_converter", "01")], ts_original, places=1
+        )
+
+    def test_nodo_registrado_sin_heartbeat_se_detecta_como_caido(self):
+        detector = crear_detector(timeout=0.1)
+        detector._cola_caidas = MagicMock()
+        detector.registrar_nodo("q5_converter", "02")
+
+        detector._ultimo_visto[("q5_converter", "02")] = time.time() - 1
+
+        with patch.object(detector, '_publicar_caida') as mock_pub:
+            ahora = time.time()
+            snapshot = dict(detector._ultimo_visto)
+            caidas = [
+                (etapa, inst) for (etapa, inst), ts in snapshot.items()
+                if ahora - ts > detector._config.timeout_segundos
+            ]
+            for etapa, inst in caidas:
+                detector._publicar_caida(etapa, inst)
+
+        mock_pub.assert_called_once_with("q5_converter", "02")
+
+    def test_nodo_registrado_con_heartbeat_posterior_no_se_detecta(self):
+        detector = crear_detector(timeout=5.0)
+        detector.registrar_nodo("q5_converter", "02")
+
+        ack = MagicMock()
+        detector._al_recibir_latido(crear_msg_latido("q5_converter", "02"), ack, None)
+
+        ahora = time.time()
+        snapshot = dict(detector._ultimo_visto)
+        caidas = [
+            (etapa, inst) for (etapa, inst), ts in snapshot.items()
+            if ahora - ts > detector._config.timeout_segundos
+        ]
+        self.assertEqual(caidas, [])
+
+
 if __name__ == "__main__":
     unittest.main()
