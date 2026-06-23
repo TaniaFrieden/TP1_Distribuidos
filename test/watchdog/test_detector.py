@@ -150,5 +150,146 @@ class TestBucleChequeo(unittest.TestCase):
         mock_pub.assert_called_once_with("gateway", "1")
 
 
+class TestDetectorConTopologiaPersistida(unittest.TestCase):
+    """Verifica que el detector detecte caídas de workers que se conocen
+    por topología (persistida en disco) pero nunca mandaron heartbeats."""
+
+    def test_worker_conocido_por_topologia_se_detecta_como_caido(self):
+        """Si la topología dice que q5_converter/01 existe, el detector
+        lo agrega a _ultimo_visto al arrancar. Si nunca manda heartbeat,
+        se detecta como caído tras el timeout."""
+        topologia = {"q5_converter": ["01", "02"], "gateway": ["01"]}
+        config = crear_config(etapas=["q5_converter", "gateway"], timeout=1.0)
+        detector = DetectorLatidos(config, topologia=topologia)
+
+        self.assertIn(("q5_converter", "01"), detector._ultimo_visto)
+        self.assertIn(("q5_converter", "02"), detector._ultimo_visto)
+        self.assertIn(("gateway", "01"), detector._ultimo_visto)
+
+    def test_worker_conocido_se_detecta_caido_tras_timeout(self):
+        topologia = {"q5_converter": ["01"]}
+        config = crear_config(etapas=["q5_converter"], timeout=0.1)
+        detector = DetectorLatidos(config, topologia=topologia)
+        detector._cola_caidas = MagicMock()
+
+        # Forzar timestamp viejo para simular timeout
+        detector._ultimo_visto[("q5_converter", "01")] = time.time() - 1
+
+        with patch.object(detector, '_publicar_caida') as mock_pub:
+            ahora = time.time()
+            snapshot = dict(detector._ultimo_visto)
+            caidas = [
+                (etapa, inst) for (etapa, inst), ts in snapshot.items()
+                if ahora - ts > detector._config.timeout_segundos
+            ]
+            for etapa, inst in caidas:
+                detector._publicar_caida(etapa, inst)
+
+        mock_pub.assert_called_once_with("q5_converter", "01")
+
+    def test_sin_topologia_detector_no_tiene_workers_conocidos(self):
+        config = crear_config(etapas=["q5_converter"])
+        detector = DetectorLatidos(config)
+        self.assertEqual(len(detector._ultimo_visto), 0)
+
+    def test_worker_que_manda_heartbeat_no_se_reporta(self):
+        """Worker conocido por topología que manda heartbeat a tiempo
+        no se reporta como caído."""
+        topologia = {"gateway": ["01"]}
+        config = crear_config(etapas=["gateway"], timeout=5.0)
+        detector = DetectorLatidos(config, topologia=topologia)
+
+        # Heartbeat reciente
+        ack = MagicMock()
+        detector._al_recibir_latido(crear_msg_latido("gateway", "01"), ack, None)
+
+        with patch.object(detector, '_publicar_caida') as mock_pub:
+            ahora = time.time()
+            snapshot = dict(detector._ultimo_visto)
+            caidas = [
+                (etapa, inst) for (etapa, inst), ts in snapshot.items()
+                if ahora - ts > detector._config.timeout_segundos
+            ]
+            for etapa, inst in caidas:
+                detector._publicar_caida(etapa, inst)
+
+        mock_pub.assert_not_called()
+
+
+class TestDetectorWorkerInvisible(unittest.TestCase):
+    """Verifica el escenario donde un worker nunca se registró
+    y nunca mandó heartbeat — sin topología es invisible."""
+
+    def test_worker_sin_registro_ni_heartbeat_es_invisible(self):
+        config = crear_config(etapas=["q5_converter"], timeout=0.1)
+        detector = DetectorLatidos(config)
+        detector._cola_caidas = MagicMock()
+
+        time.sleep(0.15)
+
+        with patch.object(detector, '_publicar_caida') as mock_pub:
+            ahora = time.time()
+            snapshot = dict(detector._ultimo_visto)
+            caidas = [
+                (etapa, inst) for (etapa, inst), ts in snapshot.items()
+                if ahora - ts > detector._config.timeout_segundos
+            ]
+            for etapa, inst in caidas:
+                detector._publicar_caida(etapa, inst)
+
+        mock_pub.assert_not_called()
+
+    def test_worker_invisible_se_detecta_con_topologia(self):
+        """Mismo escenario pero con topología: el worker se detecta."""
+        topologia = {"q5_converter": ["01"]}
+        config = crear_config(etapas=["q5_converter"], timeout=0.1)
+        detector = DetectorLatidos(config, topologia=topologia)
+        detector._cola_caidas = MagicMock()
+
+        # Forzar timestamp viejo
+        detector._ultimo_visto[("q5_converter", "01")] = time.time() - 1
+
+        with patch.object(detector, '_publicar_caida') as mock_pub:
+            ahora = time.time()
+            snapshot = dict(detector._ultimo_visto)
+            caidas = [
+                (etapa, inst) for (etapa, inst), ts in snapshot.items()
+                if ahora - ts > detector._config.timeout_segundos
+            ]
+            for etapa, inst in caidas:
+                detector._publicar_caida(etapa, inst)
+
+        mock_pub.assert_called_once_with("q5_converter", "01")
+
+    def test_publicar_caida_borra_worker_de_ultimo_visto(self):
+        """Tras publicar caída, el worker desaparece de _ultimo_visto.
+        Si no vuelve a registrarse, no se vuelve a detectar."""
+        topologia = {"q5_converter": ["01"]}
+        config = crear_config(etapas=["q5_converter"], timeout=0.1)
+        detector = DetectorLatidos(config, topologia=topologia)
+        detector._cola_caidas = MagicMock()
+        detector._ultimo_visto[("q5_converter", "01")] = time.time() - 1
+
+        detector._publicar_caida("q5_converter", "01")
+
+        self.assertNotIn(("q5_converter", "01"), detector._ultimo_visto)
+
+    def test_worker_reaparece_tras_caida_publicada(self):
+        """Tras publicar caída, si el worker manda heartbeat, vuelve
+        a ser monitoreado."""
+        topologia = {"q5_converter": ["01"]}
+        config = crear_config(etapas=["q5_converter"], timeout=0.1)
+        detector = DetectorLatidos(config, topologia=topologia)
+        detector._cola_caidas = MagicMock()
+        detector._ultimo_visto[("q5_converter", "01")] = time.time() - 1
+
+        detector._publicar_caida("q5_converter", "01")
+        self.assertNotIn(("q5_converter", "01"), detector._ultimo_visto)
+
+        ack = MagicMock()
+        detector._al_recibir_latido(crear_msg_latido("q5_converter", "01"), ack, None)
+        self.assertIn(("q5_converter", "01"), detector._ultimo_visto)
+
+
 if __name__ == "__main__":
     unittest.main()

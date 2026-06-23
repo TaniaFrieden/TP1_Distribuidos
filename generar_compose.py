@@ -217,11 +217,12 @@ def generar_compose():
         compose_data['services'][service_name] = {
             'build': {'context': './src', 'dockerfile': 'watchdog/Dockerfile'},
             'container_name': service_name,
+            'restart': 'on-failure',
             'depends_on': {
                 'rabbitmq': {'condition': 'service_healthy'},
                 'gateway': {'condition': 'service_started'},
             },
-            'volumes': ['./logs:/app/logs'],
+            'volumes': ['./logs:/app/logs', f'./volume/{service_name}:/app/volumen'],
             'environment': {
                 'MOM_HOST': 'rabbitmq',
                 'MOM_PORT': '5672',
@@ -244,6 +245,10 @@ def generar_compose():
                 'LOG_LEVEL': 'INFO',
                 'LOG_FILE': f'/app/logs/watchdog_{wid}.txt',
                 'CRASH_LEADER_MID_ELECTION': '${CRASH_LEADER_MID_ELECTION:-false}',
+                'CRASH_WD_POST_TOPOLOGY_SAVE': '${CRASH_WD_POST_TOPOLOGY_SAVE:-false}',
+                'CRASH_WD_POST_TOPOLOGY_LOAD': '${CRASH_WD_POST_TOPOLOGY_LOAD:-false}',
+                'CRASH_WD_PRE_PUBLISH_CAIDA': '${CRASH_WD_PRE_PUBLISH_CAIDA:-false}',
+                'CRASH_WD_POST_LEADER_DECLARE': '${CRASH_WD_POST_LEADER_DECLARE:-false}',
             },
         }
 

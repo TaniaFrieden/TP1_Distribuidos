@@ -1,3 +1,6 @@
+import json
+import os
+import threading
 import time
 import unittest
 from unittest.mock import MagicMock, patch
@@ -19,12 +22,25 @@ def crear_config(id_watchdog=1, cantidad_watchdogs=3):
     return config
 
 
-def crear_eleccion(id_watchdog=1, cantidad_watchdogs=3):
+def crear_eleccion(id_watchdog=1, cantidad_watchdogs=3, tmp_path=None):
     config = crear_config(id_watchdog, cantidad_watchdogs)
     al_ser_lider = MagicMock()
     al_perder_liderazgo = MagicMock()
     al_caer_standby = MagicMock()
+    patches = [
+        patch("watchdog.eleccion_anillo.PersistidorEstado"),
+    ]
+    if tmp_path is not None:
+        from common.persistencia import PersistidorEstado
+        patches = [
+            patch("watchdog.eleccion_anillo.PersistidorEstado",
+                  lambda name: PersistidorEstado(name, base_dir=str(tmp_path))),
+        ]
+    for p in patches:
+        p.start()
     eleccion = EleccionAnillo(config, al_ser_lider, al_perder_liderazgo, al_caer_standby)
+    for p in patches:
+        p.stop()
     eleccion._enviar_a = MagicMock()
     eleccion._bucle_latido_lider = MagicMock()
     return eleccion, al_ser_lider, al_perder_liderazgo, al_caer_standby
@@ -298,6 +314,177 @@ class TestIniciarEleccionTimeout(unittest.TestCase):
         eleccion._eleccion_iniciada_en = time.time() - 5
         eleccion._iniciar_eleccion()
         eleccion._enviar_a.assert_not_called()
+
+
+class TestTopologiaPersistida(unittest.TestCase):
+    """Verifica que la topología se persista en disco y se cargue al reiniciar."""
+
+    def test_fusionar_topologia_guarda_a_disco(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            eleccion, *_ = crear_eleccion(id_watchdog=1, tmp_path=tmp)
+            eleccion._fusionar_topologia({
+                "q5_converter": ["01", "02"],
+                "gateway": ["01"],
+            })
+
+            topo = eleccion.obtener_topologia_serializable()
+            self.assertIn("q5_converter", topo)
+            self.assertIn("01", topo["q5_converter"])
+            self.assertIn("02", topo["q5_converter"])
+
+            archivo = os.path.join(tmp, "topologia", "estado.json")
+            self.assertTrue(os.path.exists(archivo))
+            with open(archivo) as f:
+                guardado = json.load(f)
+            self.assertIn("q5_converter", guardado)
+
+    def test_topologia_se_carga_de_disco_al_reiniciar(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            eleccion1, *_ = crear_eleccion(id_watchdog=1, tmp_path=tmp)
+            eleccion1._fusionar_topologia({
+                "q5_converter": ["01", "02"],
+                "q4_sumador": ["01"],
+            })
+
+            eleccion2, *_ = crear_eleccion(id_watchdog=1, tmp_path=tmp)
+            topo = eleccion2.obtener_topologia_serializable()
+            self.assertIn("q5_converter", topo)
+            self.assertCountEqual(topo["q5_converter"], ["01", "02"])
+            self.assertIn("q4_sumador", topo)
+
+    def test_fusionar_no_sobreescribe_instancias_existentes(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            eleccion, *_ = crear_eleccion(id_watchdog=1, tmp_path=tmp)
+            eleccion._fusionar_topologia({"q1": ["01", "02"]})
+            eleccion._fusionar_topologia({"q1": ["03"]})
+
+            topo = eleccion.obtener_topologia_serializable()
+            self.assertCountEqual(topo["q1"], ["01", "02", "03"])
+
+    def test_fusionar_none_no_falla(self):
+        eleccion, *_ = crear_eleccion(id_watchdog=1)
+        eleccion._fusionar_topologia(None)
+        self.assertEqual(eleccion.obtener_topologia_serializable(), {})
+
+    def test_fusionar_sin_cambio_no_escribe_a_disco(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            eleccion, *_ = crear_eleccion(id_watchdog=1, tmp_path=tmp)
+            eleccion._fusionar_topologia({"q1": ["01"]})
+
+            with patch.object(eleccion._persistidor_topologia, 'guardar') as mock_guardar:
+                eleccion._fusionar_topologia({"q1": ["01"]})
+                mock_guardar.assert_not_called()
+
+    def test_topologia_vacia_en_disco_arranca_limpia(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            eleccion, *_ = crear_eleccion(id_watchdog=1, tmp_path=tmp)
+            topo = eleccion.obtener_topologia_serializable()
+            self.assertEqual(topo, {})
+
+
+class TestRetryConsumidores(unittest.TestCase):
+    """Verifica que los hilos consumidores reconectan tras perder conexión."""
+
+    def test_consumir_anillo_reintenta_tras_error(self):
+        eleccion, *_ = crear_eleccion(id_watchdog=1)
+        intentos = []
+
+        def mock_constructor(host, nombre_cola):
+            intentos.append(1)
+            if len(intentos) <= 2:
+                raise ConnectionError("simulación de desconexión")
+            mock_cola = MagicMock()
+            mock_cola.start_consuming = MagicMock(side_effect=lambda cb: eleccion._evento_parada.set())
+            return mock_cola
+
+        with patch("watchdog.eleccion_anillo.MessageMiddlewareQueueRabbitMQ", side_effect=mock_constructor):
+            eleccion._consumir_anillo()
+
+        self.assertEqual(len(intentos), 3)
+
+    def test_consumir_latido_lider_reintenta_tras_error(self):
+        eleccion, *_ = crear_eleccion(id_watchdog=1)
+        intentos = []
+
+        def mock_constructor(host, nombre_cola, exchange):
+            intentos.append(1)
+            if len(intentos) <= 1:
+                raise ConnectionError("simulación de desconexión")
+            mock_cola = MagicMock()
+            mock_cola.start_consuming = MagicMock(side_effect=lambda cb: eleccion._evento_parada.set())
+            return mock_cola
+
+        with patch("watchdog.eleccion_anillo.FanoutQueueRabbitMQ", side_effect=mock_constructor):
+            eleccion._consumir_latido_lider()
+
+        self.assertEqual(len(intentos), 2)
+
+    def test_consumir_anillo_para_limpiamente_con_evento_parada(self):
+        eleccion, *_ = crear_eleccion(id_watchdog=1)
+
+        def mock_constructor(host, nombre_cola):
+            raise ConnectionError("simulación")
+
+        eleccion._evento_parada.set()
+
+        with patch("watchdog.eleccion_anillo.MessageMiddlewareQueueRabbitMQ", side_effect=mock_constructor):
+            eleccion._consumir_anillo()
+
+    def test_consumir_registro_topologia_reintenta_tras_error(self):
+        eleccion, *_ = crear_eleccion(id_watchdog=1)
+        intentos = []
+
+        def mock_constructor(host, nombre_cola, exchange):
+            intentos.append(1)
+            if len(intentos) <= 1:
+                raise ConnectionError("simulación de desconexión")
+            mock_cola = MagicMock()
+            mock_cola.start_consuming = MagicMock(side_effect=lambda cb: eleccion._evento_parada.set())
+            return mock_cola
+
+        with patch("watchdog.eleccion_anillo.FanoutQueueRabbitMQ", side_effect=mock_constructor):
+            eleccion._consumir_registro_topologia()
+
+        self.assertEqual(len(intentos), 2)
+
+
+class TestTopologiaEndToEnd(unittest.TestCase):
+    """Test end-to-end: topología persistida permite al detector
+    conocer workers que nunca mandaron heartbeat."""
+
+    def test_topologia_persistida_se_pasa_al_detector(self):
+        """Simula el flujo: eleccion guarda topología → reinicia →
+        la topología cargada de disco se pasa al detector."""
+        import tempfile
+        from watchdog.detector import DetectorLatidos
+
+        with tempfile.TemporaryDirectory() as tmp:
+            eleccion1, *_ = crear_eleccion(id_watchdog=1, tmp_path=tmp)
+            eleccion1._fusionar_topologia({
+                "q5_converter": ["01", "02"],
+                "gateway": ["01"],
+            })
+
+            eleccion2, *_ = crear_eleccion(id_watchdog=1, tmp_path=tmp)
+            topo = eleccion2.obtener_topologia_serializable()
+
+            config_det = MagicMock()
+            config_det.host_mom = "localhost"
+            config_det.etapas = list(topo.keys())
+            config_det.timeout_segundos = 1.0
+            config_det.intervalo_chequeo_segundos = 0.5
+            config_det.cola_caidas = "caidas"
+
+            detector = DetectorLatidos(config_det, topologia=topo)
+
+            self.assertIn(("q5_converter", "01"), detector._ultimo_visto)
+            self.assertIn(("q5_converter", "02"), detector._ultimo_visto)
+            self.assertIn(("gateway", "01"), detector._ultimo_visto)
 
 
 if __name__ == "__main__":

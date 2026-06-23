@@ -3,6 +3,8 @@ import threading
 import time
 
 from common.logger import obtener_logger
+from common.crash_hook import CrashHook
+from common import crash_points as CP
 from common.middleware.middleware_rabbitmq import MessageMiddlewareQueueRabbitMQ
 
 
@@ -11,6 +13,7 @@ class DetectorLatidos:
     def __init__(self, config, topologia=None):
         self._config = config
         self._logger = obtener_logger("Detector")
+        self._hook = CrashHook()
         self._lock = threading.Lock()
         self._ultimo_visto: dict[tuple, float] = {}
         if topologia:
@@ -97,6 +100,7 @@ class DetectorLatidos:
                 self._publicar_caida(etapa, instancia)
 
     def _publicar_caida(self, etapa: str, instancia: str):
+        self._hook.verificar(CP.WD_PRE_PUBLISH_CAIDA, f"pre-publish {etapa}/{instancia}")
         try:
             if self._cola_caidas is None:
                 self._cola_caidas = MessageMiddlewareQueueRabbitMQ(

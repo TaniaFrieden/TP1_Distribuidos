@@ -1980,6 +1980,7 @@ services:
       context: ./src
       dockerfile: watchdog/Dockerfile
     container_name: watchdog_1
+    restart: on-failure
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -1987,6 +1988,7 @@ services:
         condition: service_started
     volumes:
     - ./logs:/app/logs
+    - ./volume/watchdog_1:/app/volumen
     environment:
       MOM_HOST: rabbitmq
       MOM_PORT: '5672'
@@ -2009,11 +2011,16 @@ services:
       LOG_LEVEL: INFO
       LOG_FILE: /app/logs/watchdog_1.txt
       CRASH_LEADER_MID_ELECTION: ${CRASH_LEADER_MID_ELECTION:-false}
+      CRASH_WD_POST_TOPOLOGY_SAVE: ${CRASH_WD_POST_TOPOLOGY_SAVE:-false}
+      CRASH_WD_POST_TOPOLOGY_LOAD: ${CRASH_WD_POST_TOPOLOGY_LOAD:-false}
+      CRASH_WD_PRE_PUBLISH_CAIDA: ${CRASH_WD_PRE_PUBLISH_CAIDA:-false}
+      CRASH_WD_POST_LEADER_DECLARE: ${CRASH_WD_POST_LEADER_DECLARE:-false}
   watchdog_2:
     build:
       context: ./src
       dockerfile: watchdog/Dockerfile
     container_name: watchdog_2
+    restart: on-failure
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -2021,6 +2028,7 @@ services:
         condition: service_started
     volumes:
     - ./logs:/app/logs
+    - ./volume/watchdog_2:/app/volumen
     environment:
       MOM_HOST: rabbitmq
       MOM_PORT: '5672'
@@ -2043,11 +2051,16 @@ services:
       LOG_LEVEL: INFO
       LOG_FILE: /app/logs/watchdog_2.txt
       CRASH_LEADER_MID_ELECTION: ${CRASH_LEADER_MID_ELECTION:-false}
+      CRASH_WD_POST_TOPOLOGY_SAVE: ${CRASH_WD_POST_TOPOLOGY_SAVE:-false}
+      CRASH_WD_POST_TOPOLOGY_LOAD: ${CRASH_WD_POST_TOPOLOGY_LOAD:-false}
+      CRASH_WD_PRE_PUBLISH_CAIDA: ${CRASH_WD_PRE_PUBLISH_CAIDA:-false}
+      CRASH_WD_POST_LEADER_DECLARE: ${CRASH_WD_POST_LEADER_DECLARE:-false}
   watchdog_3:
     build:
       context: ./src
       dockerfile: watchdog/Dockerfile
     container_name: watchdog_3
+    restart: on-failure
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -2055,6 +2068,7 @@ services:
         condition: service_started
     volumes:
     - ./logs:/app/logs
+    - ./volume/watchdog_3:/app/volumen
     environment:
       MOM_HOST: rabbitmq
       MOM_PORT: '5672'
@@ -2077,6 +2091,10 @@ services:
       LOG_LEVEL: INFO
       LOG_FILE: /app/logs/watchdog_3.txt
       CRASH_LEADER_MID_ELECTION: ${CRASH_LEADER_MID_ELECTION:-false}
+      CRASH_WD_POST_TOPOLOGY_SAVE: ${CRASH_WD_POST_TOPOLOGY_SAVE:-false}
+      CRASH_WD_POST_TOPOLOGY_LOAD: ${CRASH_WD_POST_TOPOLOGY_LOAD:-false}
+      CRASH_WD_PRE_PUBLISH_CAIDA: ${CRASH_WD_PRE_PUBLISH_CAIDA:-false}
+      CRASH_WD_POST_LEADER_DECLARE: ${CRASH_WD_POST_LEADER_DECLARE:-false}
   actuador_1:
     build:
       context: ./src

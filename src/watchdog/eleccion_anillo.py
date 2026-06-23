@@ -4,6 +4,9 @@ import threading
 import time
 
 from common.logger import obtener_logger
+from common.crash_hook import CrashHook
+from common import crash_points as CP
+from common.persistencia import PersistidorEstado
 from common.middleware.middleware_rabbitmq import (
     FanoutExchangeRabbitMQ,
     FanoutQueueRabbitMQ,
@@ -25,6 +28,7 @@ class EleccionAnillo:
         self._n = config.cantidad_watchdogs
         self._id_siguiente = (self._id % self._n) + 1
         self._logger = obtener_logger(f"Anillo-{self._id}")
+        self._hook = CrashHook("/tmp")
 
         self._es_lider = False
         self._id_lider = None
@@ -45,6 +49,8 @@ class EleccionAnillo:
 
         self._topologia = {}
         self._lock_topologia = threading.Lock()
+        self._persistidor_topologia = PersistidorEstado("topologia")
+        self._cargar_topologia_de_disco()
 
         self._consumidor_anillo: MessageMiddlewareQueueRabbitMQ | None = None
         self._emisores_anillo: dict[int, MessageMiddlewareQueueRabbitMQ] = {}
@@ -62,6 +68,20 @@ class EleccionAnillo:
             f"Total nodos: {self._n}"
         )
 
+    def _cargar_topologia_de_disco(self):
+        estado = self._persistidor_topologia.cargar()
+        if estado:
+            with self._lock_topologia:
+                for etapa, instancias in estado.items():
+                    self._topologia[etapa] = set(str(i) for i in instancias)
+            self._logger.info(f"Topología cargada de disco: {len(estado)} etapas.")
+            self._hook.verificar(CP.WD_POST_TOPOLOGY_LOAD, f"post-load watchdog_{self._id}")
+
+    def _guardar_topologia_a_disco(self):
+        serializable = {etapa: list(instancias) for etapa, instancias in self._topologia.items()}
+        self._persistidor_topologia.guardar(serializable)
+        self._hook.verificar(CP.WD_POST_TOPOLOGY_SAVE, f"post-save watchdog_{self._id}")
+
     def obtener_topologia_serializable(self):
         with self._lock_topologia:
             return {etapa: list(instancias) for etapa, instancias in self._topologia.items()}
@@ -69,38 +89,54 @@ class EleccionAnillo:
     def _fusionar_topologia(self, otra_topologia):
         if not otra_topologia:
             return
+        hubo_cambio = False
         with self._lock_topologia:
             for etapa, instancias in otra_topologia.items():
                 if etapa not in self._topologia:
                     self._topologia[etapa] = set()
-                self._topologia[etapa].update(str(inst) for inst in instancias)
+                    hubo_cambio = True
+                nuevos = set(str(inst) for inst in instancias)
+                if not nuevos.issubset(self._topologia[etapa]):
+                    self._topologia[etapa].update(nuevos)
+                    hubo_cambio = True
+            if hubo_cambio:
+                self._guardar_topologia_a_disco()
 
     def _consumir_registro_topologia(self):
         nombre_cola = f"watchdog.registro.{self._id}"
-        try:
-            cola = FanoutQueueRabbitMQ(self._config.host_mom, nombre_cola, "watchdog.exchange.registro")
-            self._logger.info(f"Escuchando registros de topología en {nombre_cola}")
-            
-            def al_recibir_registro(msg: bytes, ack, _):
-                try:
-                    payload = json.loads(msg.decode("utf-8"))
-                    etapa = payload.get("etapa")
-                    instancia = payload.get("instancia")
-                    if etapa and instancia:
-                        with self._lock_topologia:
-                            if etapa not in self._topologia:
-                                self._topologia[etapa] = set()
-                            self._topologia[etapa].add(str(instancia))
-                        self._logger.info(f"Registro dinámico recibido: {etapa}/{instancia}")
-                    ack()
-                except Exception as e:
-                    self._logger.warning(f"Error procesando registro de topología: {e}")
-                    ack()
 
-            cola.start_consuming(al_recibir_registro)
-        except Exception as e:
-            if not self._evento_parada.is_set():
-                self._logger.error(f"Error en consumo de registros de topología: {e}", exc_info=True)
+        def al_recibir_registro(msg: bytes, ack, _):
+            try:
+                payload = json.loads(msg.decode("utf-8"))
+                etapa = payload.get("etapa")
+                instancia = payload.get("instancia")
+                if etapa and instancia:
+                    hubo_cambio = False
+                    with self._lock_topologia:
+                        if etapa not in self._topologia:
+                            self._topologia[etapa] = set()
+                        inst_str = str(instancia)
+                        if inst_str not in self._topologia[etapa]:
+                            self._topologia[etapa].add(inst_str)
+                            hubo_cambio = True
+                        if hubo_cambio:
+                            self._guardar_topologia_a_disco()
+                    self._logger.info(f"Registro dinámico recibido: {etapa}/{instancia}")
+                ack()
+            except Exception as e:
+                self._logger.warning(f"Error procesando registro de topología: {e}")
+                ack()
+
+        while not self._evento_parada.is_set():
+            try:
+                cola = FanoutQueueRabbitMQ(self._config.host_mom, nombre_cola, "watchdog.exchange.registro")
+                self._logger.info(f"Escuchando registros de topología en {nombre_cola}")
+                cola.start_consuming(al_recibir_registro)
+            except Exception as e:
+                if self._evento_parada.is_set():
+                    return
+                self._logger.error(f"Error en consumo de registros de topología: {e}. Reconectando en 2s...")
+                self._evento_parada.wait(2)
 
     def detener(self):
         self._evento_parada.set()
@@ -241,13 +277,8 @@ class EleccionAnillo:
         self._logger.info(f"¡SOY EL LÍDER! Nodos caídos detectados: {nodos_caidos}")
         self._al_ser_lider(nodos_caidos)
 
-        import os
-        if os.environ.get("CRASH_LEADER_MID_ELECTION") == "true":
-            bandera = f"/tmp/watchdog_{self._id}_election_crash_done"
-            if not os.path.exists(bandera):
-                open(bandera, "w").close()
-                self._logger.warning(f"CRASH_LEADER_MID_ELECTION activado: Muriendo antes de propagar coordinador!")
-                os._exit(1)
+        self._hook.verificar(CP.LEADER_MID_ELECTION, f"mid-election watchdog_{self._id}")
+        self._hook.verificar(CP.WD_POST_LEADER_DECLARE, f"post-leader watchdog_{self._id}")
 
         self._enviar_a(destino_coordinador, {"tipo": "coordinador", "id": self._id, "topologia": self.obtener_topologia_serializable()})
         threading.Thread(
@@ -290,14 +321,17 @@ class EleccionAnillo:
 
     def _consumir_anillo(self):
         nombre_cola = f"ring.{self._id}"
-        try:
-            cola = MessageMiddlewareQueueRabbitMQ(self._config.host_mom, nombre_cola)
-            self._consumidor_anillo = cola
-            self._logger.info(f"Escuchando cola {nombre_cola}")
-            cola.start_consuming(self._al_recibir_mensaje_anillo)
-        except Exception as e:
-            if not self._evento_parada.is_set():
-                self._logger.error(f" Error en cola {nombre_cola}: {e}", exc_info=True)
+        while not self._evento_parada.is_set():
+            try:
+                cola = MessageMiddlewareQueueRabbitMQ(self._config.host_mom, nombre_cola)
+                self._consumidor_anillo = cola
+                self._logger.info(f"Escuchando cola {nombre_cola}")
+                cola.start_consuming(self._al_recibir_mensaje_anillo)
+            except Exception as e:
+                if self._evento_parada.is_set():
+                    return
+                self._logger.error(f"Error en cola {nombre_cola}: {e}. Reconectando en 2s...")
+                self._evento_parada.wait(2)
 
     def _al_recibir_mensaje_anillo(self, msg: bytes, ack, nack):
         try:
@@ -342,14 +376,17 @@ class EleccionAnillo:
 
     def _consumir_latido_lider(self):
         nombre_cola = f"heartbeat.watchdog.{self._id}"
-        try:
-            cola = FanoutQueueRabbitMQ(self._config.host_mom, nombre_cola, EXCHANGE_LATIDO_LIDER)
-            self._consumidor_latidos = cola
-            self._logger.info(f"Monitoreando heartbeats de líder en {nombre_cola}")
-            cola.start_consuming(self._al_recibir_latido_lider)
-        except Exception as e:
-            if not self._evento_parada.is_set():
-                self._logger.error(f" Error monitoreando heartbeat líder: {e}", exc_info=True)
+        while not self._evento_parada.is_set():
+            try:
+                cola = FanoutQueueRabbitMQ(self._config.host_mom, nombre_cola, EXCHANGE_LATIDO_LIDER)
+                self._consumidor_latidos = cola
+                self._logger.info(f"Monitoreando heartbeats de líder en {nombre_cola}")
+                cola.start_consuming(self._al_recibir_latido_lider)
+            except Exception as e:
+                if self._evento_parada.is_set():
+                    return
+                self._logger.error(f"Error monitoreando heartbeat líder: {e}. Reconectando en 2s...")
+                self._evento_parada.wait(2)
 
     def _al_recibir_latido_lider(self, msg: bytes, ack, _):
         try:
