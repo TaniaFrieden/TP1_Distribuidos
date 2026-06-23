@@ -1,3 +1,6 @@
+import threading
+import time
+
 import pytest
 from unittest.mock import MagicMock, patch, call
 from types import SimpleNamespace
@@ -193,3 +196,136 @@ class TestBarreraConHooks:
         })
 
         mocks_infra["transporte"].enviar.assert_not_called()
+
+
+class TestFlushAsyncNoDeadlock:
+    """Verifica que el flush async no deadlockea cuando hay mensajes en vuelo.
+
+    Escenario real: el hilo de datos recibe un EOF y llama iniciar_barrera.
+    Si hay mensajes en vuelo (counter > 0), esperar_cero bloquea.
+    Antes del fix, esto bloqueaba el mismo hilo que necesitaba ackear
+    los mensajes para descontar el counter → deadlock.
+    Con el fix (flush en hilo separado), el hilo de datos retorna
+    inmediatamente y puede seguir ackeando.
+    """
+
+    def test_flush_no_bloquea_hilo_que_llama_iniciar_barrera(self, mocks_infra):
+        contador = ContadorVuelos()
+        config = _crear_config(id_nodo=0, total_workers=1, sharded=True)
+        coord = CoordinadorDistribuido(
+            config,
+            al_completar_sincronizacion=MagicMock(),
+            al_completar_barrera=MagicMock(),
+            contador_vuelos=contador,
+        )
+
+        contador.registrar("c1")
+
+        # Simular que otro worker ya difundió EOF_RECEIVED (seteamos originador)
+        with coord._coordinacion_lock:
+            ec = coord._obtener("c1")
+            ec.originador = 0
+
+        hilo_retorno = threading.Event()
+
+        def llamar_barrera():
+            coord.iniciar_barrera("c1", b"msg")
+            hilo_retorno.set()
+
+        t = threading.Thread(target=llamar_barrera)
+        t.start()
+
+        # iniciar_barrera debe retornar inmediatamente (flush en otro hilo)
+        assert hilo_retorno.wait(timeout=2), \
+            "iniciar_barrera bloqueó el hilo llamador — deadlock"
+
+        # El flush está esperando vuelos a cero en background
+        coord._al_completar_sincronizacion.assert_not_called()
+
+        # Simular que el hilo de datos ackea el mensaje pendiente
+        contador.descontar("c1")
+
+        # El flush async debe completar
+        time.sleep(0.2)
+        coord._al_completar_sincronizacion.assert_called_once_with("c1", None)
+        t.join(timeout=1)
+
+    def test_flush_async_completa_cuando_vuelos_llegan_a_cero(self, mocks_infra):
+        contador = ContadorVuelos()
+        config = _crear_config(id_nodo=0, total_workers=1, sharded=True)
+        flush_completado = threading.Event()
+        sincronizacion_original = MagicMock(side_effect=lambda *a: flush_completado.set())
+
+        coord = CoordinadorDistribuido(
+            config,
+            al_completar_sincronizacion=sincronizacion_original,
+            al_completar_barrera=MagicMock(),
+            contador_vuelos=contador,
+        )
+
+        # 3 mensajes en vuelo
+        for _ in range(3):
+            contador.registrar("c1")
+
+        with coord._coordinacion_lock:
+            ec = coord._obtener("c1")
+            ec.originador = 0
+
+        coord.iniciar_barrera("c1", b"msg")
+
+        # Flush no debería haber corrido aún
+        assert not flush_completado.is_set()
+
+        # Descontar de a uno
+        contador.descontar("c1")
+        time.sleep(0.05)
+        assert not flush_completado.is_set()
+
+        contador.descontar("c1")
+        time.sleep(0.05)
+        assert not flush_completado.is_set()
+
+        # Último descuento libera el flush
+        contador.descontar("c1")
+        assert flush_completado.wait(timeout=2), \
+            "El flush async no completó tras descontar todos los vuelos"
+
+    def test_manejar_eof_recibido_no_bloquea_con_vuelos_pendientes(self, mocks_infra):
+        contador = ContadorVuelos()
+        config = _crear_config(id_nodo=0, total_workers=1, sharded=True)
+        coord = CoordinadorDistribuido(
+            config,
+            al_completar_sincronizacion=MagicMock(),
+            al_completar_barrera=MagicMock(),
+            contador_vuelos=contador,
+        )
+
+        contador.registrar("c1")
+
+        # Marcar EOF local como completo y setear originador
+        with coord._coordinacion_lock:
+            ec = coord._obtener("c1")
+            ec.eof_local_completo = True
+            ec.originador = 0
+            ec.barrera_activa = True
+
+        hilo_retorno = threading.Event()
+
+        def llamar_eof_recibido():
+            coord._manejar_eof_recibido({
+                ID_CLIENTE: "c1",
+                ORIGINADOR: 0,
+            })
+            hilo_retorno.set()
+
+        t = threading.Thread(target=llamar_eof_recibido)
+        t.start()
+
+        assert hilo_retorno.wait(timeout=2), \
+            "_manejar_eof_recibido bloqueó el hilo — deadlock"
+
+        # Liberar vuelos para que el flush async complete
+        contador.descontar("c1")
+        time.sleep(0.2)
+        coord._al_completar_sincronizacion.assert_called_once()
+        t.join(timeout=1)

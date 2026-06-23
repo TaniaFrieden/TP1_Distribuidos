@@ -151,7 +151,15 @@ class CoordinadorDistribuido:
                 self._transporte.enviar(msg_eof_recibido(client_id, self._config.id_nodo))
 
         if ejecutar_flush:
-            self._ejecutar_flush_y_notificar(client_id, originador_para_flush)
+            self._lanzar_flush_async(client_id, originador_para_flush)
+
+    def _lanzar_flush_async(self, client_id, originador):
+        threading.Thread(
+            target=self._ejecutar_flush_y_notificar,
+            args=(client_id, originador),
+            daemon=True,
+            name=f"flush-{client_id[:8]}",
+        ).start()
 
     def _ejecutar_flush_y_notificar(self, client_id, originador):
         if self._pre_flush_fn:
@@ -249,7 +257,7 @@ class CoordinadorDistribuido:
             originador_final = ec.originador
 
         if local_completo:
-            self._ejecutar_flush_y_notificar(client_id, originador_final)
+            self._lanzar_flush_async(client_id, originador_final)
         else:
             logger.info(
                 f"{TIPO_EOF_RECIBIDO} para {client_id} "
