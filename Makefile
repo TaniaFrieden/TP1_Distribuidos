@@ -391,15 +391,19 @@ test-todos:
 	@echo "--- 12. Caos total (todos los workers) ---"
 	@$(MAKE) test-caos-todos 2 $(TEST_TX) $(TEST_ACC) $(TEST_SOL) 75
 	@echo "========================================================="
-	@echo "=== 13. Ejecutando test caos gateway con resultados ==="
+	@echo "=== 13. Ejecutando tests de crash del gateway (hooks) ==="
+	@echo "========================================================="
+	@$(MAKE) test-crash-gateway-hooks 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
+	@echo "========================================================="
+	@echo "=== 14. Ejecutando test caos gateway con resultados ==="
 	@echo "========================================================="
 	@$(MAKE) test-caos-gateway-resultados $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
 	@echo "========================================================="
-	@echo "=== 14. Ejecutando stress test crash (2 iteraciones) ==="
+	@echo "=== 15. Ejecutando stress test crash (2 iteraciones) ==="
 	@echo "========================================================="
 	@$(MAKE) test-stress-crash 2 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
 	@echo "========================================================="
-	@echo "=== 15. Ejecutando stress test caos (2 iteraciones) ==="
+	@echo "=== 16. Ejecutando stress test caos (2 iteraciones) ==="
 	@echo "========================================================="
 	@$(_light_clean)
 	@$(MAKE) test-stress-caos 2 2 $(TEST_TX) $(TEST_ACC) $(TEST_SOL) 70

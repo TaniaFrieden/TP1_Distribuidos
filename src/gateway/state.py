@@ -16,6 +16,7 @@ class GatewayState:
         self.state_lock = threading.Lock()
         self._eventos_reconexion = {}  # {client_id: threading.Event}
         self._acks_pendientes = {}     # {client_id: {batch_id: threading.Event}}
+        self._sesiones = {}            # {client_id: session_id}
 
     def generar_siguiente_id(self):
         return str(uuid.uuid4())
@@ -33,13 +34,22 @@ class GatewayState:
                 self._eventos_reconexion[client_id] = threading.Event()
             self._eventos_reconexion[client_id].set()
 
+    def registrar_sesion(self, client_id, session_id):
+        with self.state_lock:
+            self._sesiones[client_id] = session_id
+
+    def obtener_sesion(self, client_id):
+        with self.state_lock:
+            return self._sesiones.get(client_id)
+
     def generar_request_id(self, client_id, query_key):
         with self.state_lock:
             key = (client_id, query_key)
             if key not in self.request_counters:
                 self.request_counters[key] = 0
             self.request_counters[key] += 1
-            return f"{client_id}:{query_key}:{self.request_counters[key]}"
+            session_id = self._sesiones.get(client_id, "")
+            return f"{client_id}:{session_id}:{query_key}:{self.request_counters[key]}"
 
     def obtener_cliente(self, client_id):
         with self.state_lock:

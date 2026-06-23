@@ -26,13 +26,15 @@ logger = obtener_logger(__name__)
 
 class CoordinadorDistribuido:
     def __init__(self, config, al_completar_sincronizacion, al_completar_barrera,
-                 contador_vuelos, hooks=None, obtener_conteos_fn=None):
+                 contador_vuelos, hooks=None, obtener_conteos_fn=None,
+                 pre_flush_fn=None):
         self._config = config
         self._al_completar_sincronizacion = al_completar_sincronizacion
         self._al_completar_barrera = al_completar_barrera
         self._contador_vuelos = contador_vuelos
         self._hooks = hooks or {}
         self._obtener_conteos_fn = obtener_conteos_fn
+        self._pre_flush_fn = pre_flush_fn
         self._coordinacion_lock = threading.Lock()
 
         self._persistencia = PersistenciaCoordinacion(
@@ -152,6 +154,8 @@ class CoordinadorDistribuido:
             self._ejecutar_flush_y_notificar(client_id, originador_para_flush)
 
     def _ejecutar_flush_y_notificar(self, client_id, originador):
+        if self._pre_flush_fn:
+            self._pre_flush_fn(client_id)
         logger.info(
             f"EOF local y de control recibidos para {client_id}. "
             f"Esperando vuelos a cero antes de flush."

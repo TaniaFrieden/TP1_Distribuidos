@@ -65,7 +65,8 @@ class WorkerBase(ABC):
             al_completar_barrera=self._manejador_eof.al_completar_barrera,
             contador_vuelos=self.contador_vuelos,
             hooks=self._crear_hooks_coordinador(),
-            obtener_conteos_fn=lambda cid: (self.obtener_cantidad_procesados(cid), self.obtener_cantidad_emitidos(cid))
+            obtener_conteos_fn=lambda cid: (self.obtener_cantidad_procesados(cid), self.obtener_cantidad_emitidos(cid)),
+            pre_flush_fn=self.al_completar_eof_local,
         )
         self._manejador_eof.coordinador = self.coordinador
 
@@ -281,6 +282,9 @@ class WorkerBase(ABC):
                 nombre_cola, client_id, mensaje_json, mensaje,
                 ack_wrapper, nack_wrapper,
             )
+        except Exception as e:
+            logger.error(f"[{self.__class__.__name__}] Error en procesar_payload: {e}", exc_info=True)
+            nack_wrapper()
         finally:
             self._hilo_local.id_solicitud_actual = None
             self._hilo_local.mensajes_emitidos_temporales = 0

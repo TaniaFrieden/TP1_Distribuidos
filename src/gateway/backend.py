@@ -254,6 +254,11 @@ class BackendListener:
                 return
 
             request_id = transaccion.get(ID_SOLICITUD)
+
+            current_session = self.state.obtener_sesion(client_id)
+            if current_session and request_id and current_session not in request_id:
+                return ack()
+
             if self._es_duplicado(client_id, request_id):
                 logger.info(f"Ignorando mensaje duplicado request_id={request_id} en {cola_nombre} para {client_id}")
                 return ack()

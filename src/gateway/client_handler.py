@@ -46,6 +46,9 @@ class ClientHandler:
             self._enviar_config(client_socket, client_id, datos_ya_enviados)
 
         if datos_ya_enviados:
+            saved_session = estado.get("session_id")
+            if saved_session:
+                self.state.registrar_sesion(client_id, saved_session)
             if len(queries_ya_entregadas) >= len(self._obtener_lista_queries()):
                 logger.info(f"Cliente {client_id}: todas las queries ya entregadas, enviando FIN_DE_REGISTROS")
                 try:
@@ -145,9 +148,9 @@ class ClientHandler:
             for i in range(1, total_workers + 1):
                 colas_bancos[i] = middleware.MessageMiddlewareQueueRabbitMQ(self.config.mom_host, f"{prefix}_{i}")
 
-        if self.state.tiene_estado_persistido(client_id):
-            logger.info(f"Cliente {client_id} reconectando — enviando DISCONNECT para limpiar estado parcial")
-            self._enviar_disconnect(client_id, colas_tx, colas_bancos)
+        session_id = str(uuid.uuid4())[:8]
+        self.state.registrar_sesion(client_id, session_id)
+        logger.info(f"Cliente {client_id} sesión {session_id} iniciada")
 
         eof_enviado = False
         try:
@@ -179,7 +182,7 @@ class ClientHandler:
                     eof_enviado = True
                     logger.info(f"EOF enviado para {client_id}")
 
-                    self.state.actualizar_estado_cliente(client_id, {"datos_enviados": True})
+                    self.state.actualizar_estado_cliente(client_id, {"datos_enviados": True, "session_id": session_id})
                     break
 
         except socket.error:
