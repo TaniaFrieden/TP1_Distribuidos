@@ -10,7 +10,8 @@ from datetime import datetime
 # Nota: "gateway" y "rabbitmq" son servicios de infraestructura base para que el test unitario de workers
 # pueda correr o reconectar, no son workers stateless. Los watchdogs y actuadores controlan el ciclo de vida.
 # Excluimos estos servicios clave de "--todos" para evitar que el test falle por indisponibilidad de RabbitMQ o Gateway muerto permanente.
-SERVICIOS_CRITICOS = ["client", "rabbitmq", "watchdog", "actuador"]
+SERVICIOS_CRITICOS = ["client", "rabbitmq", "actuador"]
+SERVICIOS_OPCIONALES = ["gateway", "watchdog"]
 
 def log(msg):
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -139,6 +140,13 @@ if __name__ == "__main__":
         segundos_fijos = nums[0]
         espera_inicial = float(nums[0])
         
+    if "--incluir" in args:
+        idx = args.index("--incluir")
+        args.pop(idx)
+        while idx < len(args) and not args[idx].startswith("--"):
+            SERVICIOS_OPCIONALES.remove(args.pop(idx))
+    SERVICIOS_CRITICOS.extend(SERVICIOS_OPCIONALES)
+
     # Si se especificó espera_inicial y vienen flags inmediatas (--todos o --etapa), esperamos ese tiempo fijo
     if espera_inicial > 0 and ("--todos" in args or "--etapa" in args):
         log(f"Esperando {segundos_fijos}s antes del crash...")
