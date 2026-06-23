@@ -195,7 +195,7 @@ class TestToleranciaCaidasBug:
              patch("common.middleware.FanoutQueueRabbitMQ"), \
              patch("common.middleware.FanoutExchangeRabbitMQ"), \
              patch("persistencia_conteo.VOLUMEN_DIR", str(tmp_path)), \
-             patch("base.coordinacion.hooks.VOLUMEN_DIR", str(tmp_path)), \
+             patch("common.crash_hook.VOLUMEN_DIR", str(tmp_path)), \
              patch("common.dedup_filter.VOLUMEN_DIR", str(tmp_path)), \
              patch("os._exit", side_effect=simulacion_exit):
             

@@ -1,81 +1,52 @@
-import os
-from common.logger import obtener_logger
-from common.persistencia import VOLUMEN_DIR
-
-logger = obtener_logger(__name__)
+from common.crash_hook import CrashHook
+from common import crash_points as CP
 
 HOOK_PRE_FINISHED = "pre_finished"
 HOOK_POST_FLUSH = "post_flush"
 
-ENV_CRASH_ANTES_FINISHED = "CRASH_BEFORE_FINISHED_CONFIRMATION"
-ENV_CRASH_DESPUES_FLUSH = "CRASH_AFTER_FLUSH"
-ENV_CRASH_DESPUES_PERSISTIR = "CRASH_AFTER_PERSIST"
-ENV_CRASH_PRE_BARRERA = "CRASH_PRE_BARRERA"
-
-BANDERA_CRASH_FLUSH = "crash_flush_done"
-BANDERA_CRASH_PERSISTIR = "crash_once_done"
+_hook = CrashHook()
 
 
 def crear_hook_crash_pre_finished(prefijo_nodo, id_nodo):
-    if os.environ.get(ENV_CRASH_ANTES_FINISHED) != "true":
+    if not _is_enabled(CP.BEFORE_FINISHED_CONFIRMATION):
         return None
-    bandera = os.path.join(
-        VOLUMEN_DIR,
-        f"{prefijo_nodo}_{id_nodo}_crash_before_finished_done",
-    )
 
     def hook():
-        if not os.path.exists(bandera):
-            open(bandera, "w").close()
-            logger.warning(
-                "CRASH_BEFORE_FINISHED_CONFIRMATION activado "
-                "— muriendo ANTES de enviar WORKER_FINALIZADO"
-            )
-            os._exit(1)
+        _hook.verificar(CP.BEFORE_FINISHED_CONFIRMATION, f"pre-finished {prefijo_nodo}_{id_nodo}")
 
     return hook
 
 
 def crear_hook_crash_despues_flush():
-    if os.environ.get(ENV_CRASH_DESPUES_FLUSH) != "true":
+    if not _is_enabled(CP.AFTER_FLUSH):
         return None
-    bandera = os.path.join(VOLUMEN_DIR, BANDERA_CRASH_FLUSH)
 
     def hook():
-        if not os.path.exists(bandera):
-            open(bandera, "w").close()
-            logger.warning(
-                "CRASH_AFTER_FLUSH — muriendo después del envío, "
-                "antes de barrier_completada"
-            )
-            os._exit(1)
+        _hook.verificar(CP.AFTER_FLUSH, "post-flush")
 
     return hook
 
 
 def crear_hook_crash_despues_persistir():
-    if os.environ.get(ENV_CRASH_DESPUES_PERSISTIR) != "true":
+    if not _is_enabled(CP.AFTER_PERSIST):
         return None
-    bandera = os.path.join(VOLUMEN_DIR, BANDERA_CRASH_PERSISTIR)
 
     def hook():
-        if not os.path.exists(bandera):
-            open(bandera, "w").close()
-            logger.warning("CRASH_AFTER_PERSIST activado — muriendo antes del ack()")
-            os._exit(1)
+        _hook.verificar(CP.AFTER_PERSIST, "post-persist")
 
     return hook
 
 
 def crear_hook_crash_pre_barrera(prefijo_nodo: str):
-    if os.environ.get(ENV_CRASH_PRE_BARRERA) != "true":
+    if not _is_enabled(CP.PRE_BARRERA):
         return None
-    bandera = os.path.join(VOLUMEN_DIR, f"{prefijo_nodo}_crash_pre_barrera_done")
 
     def hook():
-        if not os.path.exists(bandera):
-            open(bandera, "w").close()
-            logger.warning("CRASH_PRE_BARRERA activado — muriendo antes de persistir flush_iniciado")
-            os._exit(1)
+        _hook.verificar(CP.PRE_BARRERA, f"pre-barrera {prefijo_nodo}")
 
     return hook
+
+
+def _is_enabled(env_var):
+    import os
+    return os.environ.get(env_var) == "true"

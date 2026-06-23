@@ -25,7 +25,7 @@ MOM_HOST ?= localhost
 INPUT_QUEUE ?= input_queue
 OUTPUT_QUEUE ?= output_queue
 
-.PHONY: help venv install test test-worker-base clean free-ports client run-clients test-server gateway start down docker-logs iterar solucionar generar log generar-sample caos test-todos test-etapa test-cliente test-gateway test-gateway-resultados test-persistencia test-crash-flush test-caos-secuencial
+.PHONY: help venv install test test-worker-base clean free-ports client run-clients test-server gateway start down docker-logs iterar solucionar generar log generar-sample caos test-todos test-etapa test-cliente test-gateway test-gateway-resultados test-persistencia test-crash-flush test-caos-secuencial test-crash-watchdog-hooks
 
 help:
 	@echo "Targets disponibles:"
@@ -56,6 +56,7 @@ help:
 	@echo "  make test-crash-caso6 [cant_cli] - Test del Caso 6 (pre-confirmación)"
 	@echo "  make test-crash-caso7 [cant_cli] - Test del Caso 7 (pre-barrera)"
 	@echo "  make test-crash-leader [cant_cli]- Test de Caída del Líder en Elección"
+	@echo "  make test-crash-watchdog-hooks   - Tests de crash hooks del watchdog (topología, detección, elección)"
 	@echo "  make test-stress-caos [iter] [cant_cli] - Stress test de caídas masivas en bucle"
 	@echo "  make test-stress-crash [iter]    - Stress test de casos de frontera en bucle"
 	@echo "  make test-todos                  - Corre toda la suite del sistema (unitarios + crash + caos)"
@@ -305,6 +306,10 @@ test-crash-gateway-hooks:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
 	bash scripts/tests/test_crash_gateway_hooks.sh $$ARGS
 
+test-crash-watchdog-hooks:
+	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
+	bash scripts/tests/test_crash_watchdog_hooks.sh $$ARGS
+
 # --- STRESS TESTING (BUCLES) ---
 test-stress-caos:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
@@ -339,67 +344,71 @@ test-todos:
 	@echo "========================================================="
 	@$(MAKE) test-unitarios
 	@echo "========================================================="
-	@echo "=== 2. Ejecutando test de caídas en frío (caso 6) ==="
+	@echo "=== 2. Ejecutando tests de crash hooks del watchdog ==="
+	@echo "========================================================="
+	@$(MAKE) test-crash-watchdog-hooks 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
+	@echo "========================================================="
+	@echo "=== 3. Ejecutando test de caídas en frío (caso 6) ==="
 	@echo "========================================================="
 	@$(MAKE) test-crash-caso6 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
 	@echo "========================================================="
-	@echo "=== 3. Ejecutando test de caídas en frío (caso 7) ==="
+	@echo "=== 4. Ejecutando test de caídas en frío (caso 7) ==="
 	@echo "========================================================="
 	@$(MAKE) test-crash-caso7 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
 	@echo "========================================================="
-	@echo "=== 4. Ejecutando test de caída de líder de elección ==="
+	@echo "=== 5. Ejecutando test de caída de líder de elección ==="
 	@echo "========================================================="
 	@$(MAKE) test-crash-leader 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
 	@echo "========================================================="
-	@echo "=== 5. Ejecutando test crash flush (caso 8) ==="
+	@echo "=== 6. Ejecutando test crash flush (caso 8) ==="
 	@echo "========================================================="
 	@$(_full_clean)
 	@$(MAKE) test-crash-flush counter $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
 	@echo "========================================================="
-	@echo "=== 6-12. Ejecutando tests de caos (entorno compartido) ==="
+	@echo "=== 7-13. Ejecutando tests de caos (entorno compartido) ==="
 	@echo "========================================================="
 	@$(_full_clean)
 	@$(_start_env)
-	@echo "--- 6. Caos etapa: q2_agregador_shard ---"
+	@echo "--- 7. Caos etapa: q2_agregador_shard ---"
 	@$(MAKE) test-caos-etapa q2_agregador_shard 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL) 70
 	@$(_light_clean)
 	@$(_start_env)
-	@echo "--- 7. Caos etapa: q4_sumador ---"
+	@echo "--- 8. Caos etapa: q4_sumador ---"
 	@$(MAKE) test-caos-etapa q4_sumador 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL) 70
 	@$(_light_clean)
 	@$(_start_env)
-	@echo "--- 8. Caos etapa: q3_format_shard ---"
+	@echo "--- 9. Caos etapa: q3_format_shard ---"
 	@$(MAKE) test-caos-etapa q3_format_shard 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL) 70
 	@$(_light_clean)
 	@$(_start_env)
-	@echo "--- 9. Caos cliente ---"
+	@echo "--- 10. Caos cliente ---"
 	@$(MAKE) test-caos-cliente 2 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
 	@$(_light_clean)
 	@$(_start_env)
-	@echo "--- 10. Caos gateway ---"
+	@echo "--- 11. Caos gateway ---"
 	@$(MAKE) test-caos-gateway 2 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
 	@$(_light_clean)
 	@$(_start_env)
-	@echo "--- 11. Caos aleatorio ---"
+	@echo "--- 12. Caos aleatorio ---"
 	@$(MAKE) test-caos-aleatorio 70 2
 	@$(_full_clean)
 	@$(_start_env)
-	@echo "--- 12. Caos total (todos los workers) ---"
+	@echo "--- 13. Caos total (todos los workers) ---"
 	@$(MAKE) test-caos-todos 2 $(TEST_TX) $(TEST_ACC) $(TEST_SOL) 75
 	@echo "========================================================="
-	@echo "=== 13. Ejecutando tests de crash del gateway (hooks) ==="
+	@echo "=== 14. Ejecutando tests de crash del gateway (hooks) ==="
 	@echo "========================================================="
 	@$(MAKE) test-crash-gateway-hooks 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
 	@echo "========================================================="
-	@echo "=== 14. Ejecutando test caos gateway con resultados ==="
+	@echo "=== 15. Ejecutando test caos gateway con resultados ==="
 	@echo "========================================================="
 	@$(MAKE) test-caos-gateway-resultados $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
 	@echo "========================================================="
-	@echo "=== 15. Ejecutando stress test crash (2 iteraciones) ==="
+	@echo "=== 16. Ejecutando stress test crash (2 iteraciones) ==="
 	@echo "========================================================="
 	@$(MAKE) test-stress-crash 2 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
 	@echo "========================================================="
-	@echo "=== 16. Ejecutando stress test caos (2 iteraciones) ==="
+	@echo "=== 17. Ejecutando stress test caos (2 iteraciones) ==="
 	@echo "========================================================="
 	@$(_light_clean)
 	@$(MAKE) test-stress-caos 2 2 $(TEST_TX) $(TEST_ACC) $(TEST_SOL) 70

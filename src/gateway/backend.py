@@ -1,4 +1,3 @@
-import os
 import hashlib
 import json
 import re
@@ -6,12 +5,14 @@ import threading
 import uuid
 from queue import Queue
 from common.logger import obtener_logger
+from common.crash_hook import CrashHook
 from common import message_protocol, middleware
 from common.constantes_protocolo import (
     CABECERA, ESQUEMA, PAYLOAD, ID_CLIENTE, ID_SOLICITUD, LOTES,
     CLAVE_QUERY, CLAVE_RESULTADO, CLAVE_EOF_REPORTE, CLAVE_COLUMNAS,
 )
 from config import GatewayConfig
+from common import crash_points as CP
 
 logger = obtener_logger(__name__)
 
@@ -25,6 +26,7 @@ class BackendListener:
     def __init__(self, config: GatewayConfig, state):
         self.config = config
         self.state = state
+        self._hook = CrashHook()
         self._processed_hashes = {}  # {client_id: set(request_ids)}
         self._q4_cuentas = {}        # {client_id: set of (bank, account)}
         self._eof_counts = {}        # {client_id: {cola_nombre: eofs_recibidos}}
@@ -286,7 +288,7 @@ class BackendListener:
 
     def _finalizar_cliente(self, client_id, sock, lock):
         """Envía FIN_DE_REGISTROS y libera todo el estado en memoria y disco del cliente."""
-        self._verificar_crash_downstream(client_id, "finalize", "before_fin", "CRASH_GATEWAY_BEFORE_FINALIZE")
+        self._hook.verificar(CP.GW_BEFORE_FINALIZE, f"before-finalize {client_id}")
         with lock:
             message_protocol.external.enviar_mensaje(
                 sock, message_protocol.external.TipoMensaje.FIN_DE_REGISTROS
@@ -315,7 +317,7 @@ class BackendListener:
                 return nack()
             columns_hint = ["Bank", "Account"]
 
-        self._verificar_crash_downstream(client_id, f"eof_{query_id}", "before_send", "CRASH_GATEWAY_DOWNSTREAM_BEFORE_SEND")
+        self._hook.verificar(CP.GW_DOWNSTREAM_BEFORE_SEND, f"before-send-eof {client_id}")
 
         payload = {CLAVE_QUERY: query_id, CLAVE_RESULTADO: {CLAVE_EOF_REPORTE: True}}
         if columns_hint:
@@ -325,16 +327,16 @@ class BackendListener:
             return nack()
 
         logger.info(f"EOF completo confirmado para {cola_nombre} a {client_id} ({recibidos}/{esperados})")
-        self._verificar_crash_downstream(client_id, f"query_{query_id}", "before_persist_query", "CRASH_GATEWAY_BEFORE_PERSIST_QUERY")
+        self._hook.verificar(CP.GW_BEFORE_PERSIST_QUERY, f"before-persist-query {client_id}")
         eof_status.add(cola_nombre)
         self._persistir_estado(client_id)
-        self._verificar_crash_downstream(client_id, f"query_{query_id}", "after_persist_query", "CRASH_GATEWAY_AFTER_PERSIST_QUERY")
+        self._hook.verificar(CP.GW_AFTER_PERSIST_QUERY, f"after-persist-query {client_id}")
 
         if len(eof_status) == self.config.num_queries:
             logger.info(f"Todas las queries finalizadas para {client_id}")
             self._finalizar_cliente(client_id, sock, lock)
 
-        self._verificar_crash_downstream(client_id, f"eof_{query_id}", "before_ack", "CRASH_GATEWAY_DOWNSTREAM_BEFORE_ACK")
+        self._hook.verificar(CP.GW_DOWNSTREAM_BEFORE_ACK, f"before-ack-eof {client_id}")
         ack()
 
     # --- Q4 ---
@@ -373,14 +375,3 @@ class BackendListener:
             if not self._enviar_reporte_con_ack(client_id, sock, lock, payload_str):
                 return False
         return True
-
-    def _verificar_crash_downstream(self, client_id, identificador, tipo_caida, env_var):
-        if os.environ.get(env_var) == "true":
-            from common.persistencia import VOLUMEN_DIR
-            bandera = os.path.join(VOLUMEN_DIR, f"gateway_crash_{env_var}_done")
-            if not os.path.exists(bandera):
-                os.makedirs(os.path.dirname(bandera), exist_ok=True)
-                with open(bandera, "w") as f:
-                    f.write("1")
-                logger.warning(f"CRASH GATEWAY DOWNSTREAM: {env_var} ({tipo_caida}) para {client_id}")
-                os._exit(1)

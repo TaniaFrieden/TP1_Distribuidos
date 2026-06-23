@@ -84,7 +84,7 @@ class TestEOFRaceCondition:
              patch.object(common.persistencia.PersistidorEstado, "__init__", patched_init), \
              patch("common.persistencia.VOLUMEN_DIR", str(tmp_path)), \
              patch("persistencia_conteo.VOLUMEN_DIR", str(tmp_path)), \
-             patch("base.coordinacion.hooks.VOLUMEN_DIR", str(tmp_path)), \
+             patch("common.crash_hook.VOLUMEN_DIR", str(tmp_path)), \
              patch("common.dedup_filter.VOLUMEN_DIR", str(tmp_path)):
 
             from contador import CounterWorker
@@ -111,7 +111,7 @@ class TestEOFRaceCondition:
              patch.object(common.persistencia.PersistidorEstado, "__init__", patched_init), \
              patch("common.persistencia.VOLUMEN_DIR", str(tmp_path)), \
              patch("persistencia_conteo.VOLUMEN_DIR", str(tmp_path)), \
-             patch("base.coordinacion.hooks.VOLUMEN_DIR", str(tmp_path)), \
+             patch("common.crash_hook.VOLUMEN_DIR", str(tmp_path)), \
              patch("common.dedup_filter.VOLUMEN_DIR", str(tmp_path)):
 
             w2 = CounterWorker()
