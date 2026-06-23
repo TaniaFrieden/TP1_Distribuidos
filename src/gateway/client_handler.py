@@ -145,6 +145,10 @@ class ClientHandler:
             for i in range(1, total_workers + 1):
                 colas_bancos[i] = middleware.MessageMiddlewareQueueRabbitMQ(self.config.mom_host, f"{prefix}_{i}")
 
+        if self.state.tiene_estado_persistido(client_id):
+            logger.info(f"Cliente {client_id} reconectando — enviando DISCONNECT para limpiar estado parcial")
+            self._enviar_disconnect(client_id, colas_tx, colas_bancos)
+
         eof_enviado = False
         try:
             while True:
@@ -175,10 +179,7 @@ class ClientHandler:
                     eof_enviado = True
                     logger.info(f"EOF enviado para {client_id}")
 
-                    # Persiste que los datos fueron enviados al sistema
-                    estado = self.state.cargar_estado_cliente(client_id)
-                    estado["datos_enviados"] = True
-                    self.state.guardar_estado_cliente(client_id, estado)
+                    self.state.actualizar_estado_cliente(client_id, {"datos_enviados": True})
                     break
 
         except socket.error:
@@ -270,7 +271,7 @@ class ClientHandler:
         env_var = "CRASH_GATEWAY_UPSTREAM_BEFORE_ACK"
         if os.environ.get(env_var) == "true":
             from common.persistencia import VOLUMEN_DIR
-            bandera = os.path.join(VOLUMEN_DIR, f"gateway_crash_upstream_{client_id}_{tipo_lote}_done")
+            bandera = os.path.join(VOLUMEN_DIR, f"gateway_crash_{env_var}_done")
             if not os.path.exists(bandera):
                 os.makedirs(os.path.dirname(bandera), exist_ok=True)
                 with open(bandera, "w") as f:

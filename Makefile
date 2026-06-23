@@ -306,6 +306,10 @@ test-crash-leader:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
 	bash scripts/tests/test_crash_leader.sh $$ARGS
 
+test-crash-gateway-hooks:
+	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
+	bash scripts/tests/test_crash_gateway_hooks.sh $$ARGS
+
 # --- STRESS TESTING (BUCLES) ---
 test-stress-caos:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \

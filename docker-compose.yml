@@ -29,6 +29,10 @@ services:
       HTTP_HOST: 0.0.0.0
       HTTP_PORT: '8080'
       BANK_QUEUE: '{"queue_shard_prefix": "q2_raw_banks", "total_workers": 3, "hash_field": "Bank ID"}'
+      CRASH_GATEWAY_UPSTREAM_BEFORE_ACK: ${CRASH_GATEWAY_UPSTREAM_BEFORE_ACK:-false}
+      CRASH_GATEWAY_DOWNSTREAM_BEFORE_SEND: ${CRASH_GATEWAY_DOWNSTREAM_BEFORE_SEND:-false}
+      CRASH_GATEWAY_DOWNSTREAM_BEFORE_ACK: ${CRASH_GATEWAY_DOWNSTREAM_BEFORE_ACK:-false}
+      CRASH_GATEWAY_BEFORE_FINALIZE: ${CRASH_GATEWAY_BEFORE_FINALIZE:-false}
   rabbitmq:
     image: rabbitmq:3-management
     container_name: rabbitmq

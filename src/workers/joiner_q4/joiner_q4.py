@@ -97,6 +97,10 @@ class JoinerQ4Worker(WorkerBase):
 
     def al_completar_cliente(self, client_id: str):
         """Emite resultados y limpia el estado del cliente al recibir EOF completo."""
+        if self.persistencia.esta_barrera_completada(client_id):
+            logger.info(f"[JoinerQ4] Flush ya completado para {client_id}, omitiendo re-emisión.")
+            return
+
         with self.acumulador.lock:
             self.persistencia.guardar(
                 client_id,
@@ -113,7 +117,6 @@ class JoinerQ4Worker(WorkerBase):
             self._hook_post_flush()
 
         self.persistencia.marcar_barrera_completada(client_id)
-        self.persistencia.borrar(client_id)
 
     def al_desconectar_cliente(self, client_id: str):
         """Descarta el estado del cliente sin emitir resultados."""

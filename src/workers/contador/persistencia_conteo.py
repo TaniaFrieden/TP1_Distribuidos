@@ -39,8 +39,7 @@ class PersistenciaConteo:
                 continue
 
             if estado.get(CLAVE_BARRERA_COMPLETADA, False):
-                persistidor.borrar()
-                logger.info(f"Barrera completada para client_id={client_id}. Limpiando remanente.")
+                logger.info(f"Barrera completada para client_id={client_id}. Omitiendo recuperación.")
                 continue
 
             conteos[client_id] = estado.get(CLAVE_CONTEO, 0)
@@ -64,7 +63,10 @@ class PersistenciaConteo:
 
     def marcar_completado(self, client_id: str):
         nombre = self._nombre_nodo(client_id)
-        persistidor = PersistidorEstado(nombre, base_dir=VOLUMEN_DIR)
-        persistidor.guardar({CLAVE_BARRERA_COMPLETADA: True})
-        persistidor.borrar()
+        PersistidorEstado(nombre, base_dir=VOLUMEN_DIR).guardar({CLAVE_BARRERA_COMPLETADA: True})
+
+    def esta_completado(self, client_id: str) -> bool:
+        nombre = self._nombre_nodo(client_id)
+        estado = PersistidorEstado(nombre, base_dir=VOLUMEN_DIR).cargar()
+        return estado.get(CLAVE_BARRERA_COMPLETADA, False)
 

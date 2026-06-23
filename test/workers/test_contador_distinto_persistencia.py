@@ -107,11 +107,11 @@ class TestGDCBarrierCompletada:
         assert "c1" not in w.acumulador._grupos
         assert "c1" not in w.acumulador._vistos
  
-    def test_estado_con_barrier_completada_se_borra_del_disco(self, tmp_path):
+    def test_estado_con_barrier_completada_se_mantiene_en_disco(self, tmp_path):
         _escribir_estado(tmp_path, "c1", {"grupos": {}, CLAVE_IDS_PROCESADOS: [], CLAVE_BARRERA_COMPLETADA: True})
         _crear_worker(tmp_path)
         filepath = tmp_path / _nombre_nodo("c1") / "estado.json"
-        assert not filepath.exists()
+        assert filepath.exists()
  
     def test_estado_sin_barrier_completada_si_se_carga(self, tmp_path):
         grupos = {("b1", "a1"): {("b2", "a2")}}

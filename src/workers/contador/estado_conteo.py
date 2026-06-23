@@ -51,3 +51,6 @@ class EstadoConteo:
     def marcar_completado(self, client_id: str):
         self._persistencia.marcar_completado(client_id)
 
+    def ya_completado(self, client_id: str) -> bool:
+        return self._persistencia.esta_completado(client_id)
+

@@ -179,6 +179,10 @@ def generar_compose():
         env['MOM_VHOST'] = '/'
         if bank_queue_config is not None:
             env['BANK_QUEUE'] = _serializar_valor_env(bank_queue_config)
+        env['CRASH_GATEWAY_UPSTREAM_BEFORE_ACK'] = '${CRASH_GATEWAY_UPSTREAM_BEFORE_ACK:-false}'
+        env['CRASH_GATEWAY_DOWNSTREAM_BEFORE_SEND'] = '${CRASH_GATEWAY_DOWNSTREAM_BEFORE_SEND:-false}'
+        env['CRASH_GATEWAY_DOWNSTREAM_BEFORE_ACK'] = '${CRASH_GATEWAY_DOWNSTREAM_BEFORE_ACK:-false}'
+        env['CRASH_GATEWAY_BEFORE_FINALIZE'] = '${CRASH_GATEWAY_BEFORE_FINALIZE:-false}'
         compose_data['services']['gateway']['volumes'] = [
             './logs:/app/logs',
             './volume/gateway:/app/volumen',

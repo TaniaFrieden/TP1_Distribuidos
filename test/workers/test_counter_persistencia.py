@@ -79,11 +79,11 @@ class TestCounterBarrierCompletada:
         w = _crear_worker(tmp_path)
         assert "c1" not in w.estado._conteos
 
-    def test_estado_con_barrier_completada_se_borra_del_disco(self, tmp_path):
+    def test_estado_con_barrier_completada_se_mantiene_en_disco(self, tmp_path):
         _escribir_estado(tmp_path, "c1", {"count": 100, "barrera_completada": True})
         _crear_worker(tmp_path)
         filepath = tmp_path / "counter_1_c1" / "estado.json"
-        assert not filepath.exists()
+        assert filepath.exists()
 
     def test_estado_sin_barrier_completada_si_se_carga(self, tmp_path):
         _escribir_estado(tmp_path, "c1", {"count": 7, "barrera_completada": False})

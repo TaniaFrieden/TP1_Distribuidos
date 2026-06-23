@@ -136,12 +136,13 @@ class BackendListener:
         _, _, eof_status = self.state.obtener_cliente(client_id)
         queries_entregadas = list(eof_status) if eof_status else []
 
-        estado = self.state.cargar_estado_cliente(client_id)
-        estado["q4_cuentas"] = [list(par) for par in q4_snapshot]
-        estado["queries_entregadas"] = queries_entregadas
+        actualizaciones = {
+            "q4_cuentas": [list(par) for par in q4_snapshot],
+            "queries_entregadas": queries_entregadas,
+        }
         if eof_counts_snapshot is not None:
-            estado["eof_counts_recibidos"] = eof_counts_snapshot
-        self.state.guardar_estado_cliente(client_id, estado)
+            actualizaciones["eof_counts_recibidos"] = eof_counts_snapshot
+        self.state.actualizar_estado_cliente(client_id, actualizaciones)
 
     # --- ACK de resultados ---
 
@@ -161,7 +162,6 @@ class BackendListener:
 
         evento = self.state.registrar_ack_esperado(client_id, batch_id)
         try:
-            self._verificar_crash_downstream(client_id, batch_id, "before_send", "CRASH_GATEWAY_DOWNSTREAM_BEFORE_SEND")
             with lock:
                 message_protocol.external.enviar_mensaje(
                     sock, message_protocol.external.TipoMensaje.REPORTE, payload_con_id
@@ -214,14 +214,12 @@ class BackendListener:
                 self.state.remover_cliente(client_id)
                 nack()
                 return
-        self._verificar_crash_downstream(client_id, request_id, "before_ack", "CRASH_GATEWAY_DOWNSTREAM_BEFORE_ACK")
         ack()
 
     def _procesar_registro_simple(self, client_id, query_id, sock, lock, request_id, transaccion, ack, nack):
         transaccion[CLAVE_EOF_REPORTE] = False
         payload_str = json.dumps({CLAVE_QUERY: query_id, CLAVE_RESULTADO: transaccion})
         if self._enviar_reporte_con_ack(client_id, sock, lock, payload_str):
-            self._verificar_crash_downstream(client_id, request_id, "before_ack", "CRASH_GATEWAY_DOWNSTREAM_BEFORE_ACK")
             ack()
         else:
             with self._lock:
@@ -285,6 +283,7 @@ class BackendListener:
 
     def _finalizar_cliente(self, client_id, sock, lock):
         """Envía FIN_DE_REGISTROS y libera todo el estado en memoria y disco del cliente."""
+        self._verificar_crash_downstream(client_id, "finalize", "before_fin", "CRASH_GATEWAY_BEFORE_FINALIZE")
         with lock:
             message_protocol.external.enviar_mensaje(
                 sock, message_protocol.external.TipoMensaje.FIN_DE_REGISTROS
@@ -312,6 +311,8 @@ class BackendListener:
                 logger.warning(f"No se pudieron entregar cuentas Q4 a {client_id}, reencolando EOF")
                 return nack()
             columns_hint = ["Bank", "Account"]
+
+        self._verificar_crash_downstream(client_id, f"eof_{query_id}", "before_send", "CRASH_GATEWAY_DOWNSTREAM_BEFORE_SEND")
 
         payload = {CLAVE_QUERY: query_id, CLAVE_RESULTADO: {CLAVE_EOF_REPORTE: True}}
         if columns_hint:
@@ -371,7 +372,7 @@ class BackendListener:
     def _verificar_crash_downstream(self, client_id, identificador, tipo_caida, env_var):
         if os.environ.get(env_var) == "true":
             from common.persistencia import VOLUMEN_DIR
-            bandera = os.path.join(VOLUMEN_DIR, f"gateway_crash_downstream_{client_id}_{identificador}_{tipo_caida}_done")
+            bandera = os.path.join(VOLUMEN_DIR, f"gateway_crash_{env_var}_done")
             if not os.path.exists(bandera):
                 os.makedirs(os.path.dirname(bandera), exist_ok=True)
                 with open(bandera, "w") as f:

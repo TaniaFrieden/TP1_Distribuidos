@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# Suite de tests de tolerancia a fallos del gateway.
+# Cada caso inyecta un crash en un punto crítico distinto del pipeline.
+#
+# Uso:
+#   bash scripts/tests/test_crash_gateway_hooks.sh [cant_clientes] [tx] [acc] [soluciones]
+#
+set -e
+source scripts/tests/test_helpers.sh
+
+CANT_CLIENTES=${1:-1}
+TX=${2:-${TEST_TX:-trans_sample}}
+ACC=${3:-${TEST_ACC:-LI-Small_accounts}}
+SOLUCIONES=${4:-${TEST_SOL:-sample}}
+
+CASOS=(
+    "CRASH_GATEWAY_UPSTREAM_BEFORE_ACK|Upstream: crash después de publicar a RabbitMQ, antes de ACK al cliente"
+    "CRASH_GATEWAY_DOWNSTREAM_BEFORE_SEND|Downstream: crash antes de enviar resultado al cliente"
+    "CRASH_GATEWAY_DOWNSTREAM_BEFORE_ACK|Downstream: crash después de enviar resultado, antes de ACK a RabbitMQ"
+    "CRASH_GATEWAY_BEFORE_FINALIZE|Downstream: crash con todas las queries entregadas, antes de FIN_DE_REGISTROS"
+)
+
+TOTAL=${#CASOS[@]}
+PASARON=0
+
+for i in "${!CASOS[@]}"; do
+    IFS='|' read -r ENV_VAR DESCRIPCION <<< "${CASOS[$i]}"
+    NUM=$((i + 1))
+
+    echo ""
+    echo "========================================================="
+    echo "=== Caso $NUM/$TOTAL: $DESCRIPCION ==="
+    echo "=== (env: $ENV_VAR=true) ==="
+    echo "========================================================="
+
+    make down 2>/dev/null || true
+    docker run --rm -v "$(pwd)/volume:/vol" -v "$(pwd)/output:/out" -v "$(pwd)/logs:/lg" \
+        alpine sh -c "rm -rf /vol/* /out/*/ /out/client_id*.txt /lg/client_*.txt" 2>/dev/null || true
+
+    echo "=== Levantando sistema con inyección de falla ==="
+    eval "$ENV_VAR=true make start"
+    esperar_sistema_listo
+
+    echo "=== Lanzando $CANT_CLIENTES cliente(s) ==="
+    lanzar_clientes "$CANT_CLIENTES" "$TX" "$ACC"
+
+    echo "=== Esperando finalización ==="
+    esperar_clientes
+
+    echo "=== Comparando resultados ==="
+    if comparar_resultados "$SOLUCIONES"; then
+        echo "=== CASO $NUM OK ==="
+        PASARON=$((PASARON + 1))
+    else
+        echo "========================================================="
+        echo "FALLO en caso $NUM: $DESCRIPCION"
+        echo "========================================================="
+        exit 1
+    fi
+done
+
+echo ""
+echo "========================================================="
+echo "  $PASARON/$TOTAL casos de gateway pasaron exitosamente"
+echo "========================================================="

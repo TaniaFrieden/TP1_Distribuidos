@@ -16,7 +16,7 @@ from sender import enviar_archivo
 CLIENT_ID_SUFFIX = os.getenv('CLIENT_ID_SUFFIX', '')
 CLIENT_ID_FILE = f"client_id_{CLIENT_ID_SUFFIX}.txt" if CLIENT_ID_SUFFIX else "client_id.txt"
 ENVIO_COMPLETO_FILE = "envio_completo.txt"
-INTENTOS_RECONEXION = 20
+INTENTOS_RECONEXION = 40
 ESPERA_RECONEXION_SEG = 3
 
 
@@ -26,17 +26,16 @@ def main():
 
     client_id = _cargar_o_generar_client_id()
 
-    for intento in range(INTENTOS_RECONEXION):
-        if intento > 0:
-            logging.info(f"Reconectando en {ESPERA_RECONEXION_SEG}s (intento {intento + 1}/{INTENTOS_RECONEXION})...")
-            time.sleep(ESPERA_RECONEXION_SEG)
-
+    intentos_restantes = INTENTOS_RECONEXION
+    while intentos_restantes > 0:
+        intentos_restantes -= 1
         resultado = _ejecutar_sesion(client_id, inicio_cliente)
         if resultado == "completado":
             break
-        if resultado == "reintentar":
-            continue
-        break
+        if resultado == "conectado_pero_fallo":
+            intentos_restantes = INTENTOS_RECONEXION
+        logging.info(f"Reconectando en {ESPERA_RECONEXION_SEG}s ({intentos_restantes} intentos restantes)...")
+        time.sleep(ESPERA_RECONEXION_SEG)
 
     return 0
 
@@ -87,7 +86,7 @@ def _ejecutar_sesion(client_id, inicio_cliente):
             logging.warning("Envío interrumpido por error de red, reconectando...")
             _cerrar_socket(sock)
             hilo_receptor.join(timeout=2)
-            return "reintentar"
+            return "conectado_pero_fallo"
 
         try:
             _enviar_fin_registros(sock, socket_lock, client_id)
@@ -96,13 +95,13 @@ def _ejecutar_sesion(client_id, inicio_cliente):
             logging.warning(f"Error enviando fin de registros: {e}, reconectando...")
             _cerrar_socket(sock)
             hilo_receptor.join(timeout=2)
-            return "reintentar"
+            return "conectado_pero_fallo"
     else:
         logging.info("Datos ya enviados en sesión anterior, esperando resultados...")
 
     hilo_receptor.join()
     _cerrar_socket(sock)
-    return "completado" if evento_completado.is_set() else "reintentar"
+    return "completado" if evento_completado.is_set() else "conectado_pero_fallo"
 
 
 # --- Persistencia del client_id y estado de envío ---

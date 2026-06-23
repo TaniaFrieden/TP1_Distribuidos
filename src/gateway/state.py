@@ -7,6 +7,7 @@ GATEWAY_VOLUMEN_DIR = "/app/volumen"
 
 class GatewayState:
     def __init__(self):
+        self._estado_locks = {}
         self.clientes_conectados = {}
         self.clientes_locks = {}
         self.clientes_eof_status = {}
@@ -106,16 +107,33 @@ class GatewayState:
     def _persistidor(self, client_id):
         return PersistidorEstado(f"gateway_resultados_{client_id}", GATEWAY_VOLUMEN_DIR)
 
+    def _estado_lock(self, client_id):
+        with self.state_lock:
+            if client_id not in self._estado_locks:
+                self._estado_locks[client_id] = threading.Lock()
+            return self._estado_locks[client_id]
+
     def tiene_estado_persistido(self, client_id):
-        return bool(self._persistidor(client_id).cargar())
+        with self._estado_lock(client_id):
+            return bool(self._persistidor(client_id).cargar())
 
     def cargar_estado_cliente(self, client_id):
-        return self._persistidor(client_id).cargar()
+        with self._estado_lock(client_id):
+            return self._persistidor(client_id).cargar()
 
     def guardar_estado_cliente(self, client_id, estado):
-        self._persistidor(client_id).guardar(estado)
+        with self._estado_lock(client_id):
+            self._persistidor(client_id).guardar(estado)
+
+    def actualizar_estado_cliente(self, client_id, actualizaciones: dict):
+        with self._estado_lock(client_id):
+            estado = self._persistidor(client_id).cargar()
+            estado.update(actualizaciones)
+            self._persistidor(client_id).guardar(estado)
 
     def limpiar_estado_cliente(self, client_id):
-        self._persistidor(client_id).borrar()
+        with self._estado_lock(client_id):
+            self._persistidor(client_id).borrar()
         with self.state_lock:
+            self._estado_locks.pop(client_id, None)
             self._eventos_reconexion.pop(client_id, None)

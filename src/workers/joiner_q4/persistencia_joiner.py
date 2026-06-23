@@ -66,8 +66,7 @@ class PersistenciaJoiner:
                 continue
 
             if estado.get(CLAVE_BARRERA_COMPLETADA, False):
-                persistidor.borrar()
-                logger.info(f"[PersistenciaJoiner] Barrera completada detectada para client_id={client_id}. Limpiando remanente.")
+                logger.info(f"[PersistenciaJoiner] Barrera completada detectada para client_id={client_id}. Omitiendo recuperación.")
                 continue
 
             scatter = {k: [tuple(a) for a in v] for k, v in estado.get(CLAVE_SCATTER, {}).items()}
@@ -89,3 +88,7 @@ class PersistenciaJoiner:
     def marcar_barrera_completada(self, client_id: str):
         """Marca en disco que la barrera fue completada para este cliente."""
         PersistidorEstado(self._nombre_carpeta(client_id), base_dir=self._base_dir).guardar({CLAVE_BARRERA_COMPLETADA: True})
+
+    def esta_barrera_completada(self, client_id: str) -> bool:
+        estado = PersistidorEstado(self._nombre_carpeta(client_id), base_dir=self._base_dir).cargar()
+        return estado.get(CLAVE_BARRERA_COMPLETADA, False)

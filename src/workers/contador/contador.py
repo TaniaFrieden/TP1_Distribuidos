@@ -53,6 +53,10 @@ class CounterWorker(WorkerBase):
             nack()
 
     def al_completar_cliente(self, client_id: str):
+        if self.estado.ya_completado(client_id):
+            logger.info(f"Flush ya completado para {client_id}, omitiendo re-emisión.")
+            return
+
         conteo = self.estado.obtener_y_limpiar(client_id)
         resultado = construir_resultado_conteo(client_id, conteo)
         self._enviar(ParseadorMensajes.serializar(resultado), payload=resultado)
