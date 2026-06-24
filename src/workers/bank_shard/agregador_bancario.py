@@ -1,6 +1,8 @@
 import threading
 from base.worker_base import WorkerBase
 from base.coordinacion.hooks import crear_hook_crash_pre_barrera
+from common.crash_hook import CrashHook
+from common import crash_points as CP
 from common.logger import Logger, obtener_logger
 from common.constantes_protocolo import CABECERA, ESQUEMA, PAYLOAD, LOTES, ID_SOLICITUD
 from common.message_protocol.internal import ParseadorMensajes
@@ -52,6 +54,7 @@ class AgregadorBancarioWorker(WorkerBase):
         self._barreras_para_iniciar: list[tuple[str, bytes]] = []
 
         self._hook_pre_barrera = crear_hook_crash_pre_barrera(self._config.prefijo_nodo)
+        self._crash_hook = CrashHook()
 
         self._recuperar_estado()
         logger.info("AgregadorBancario inicializado.")
@@ -147,6 +150,8 @@ class AgregadorBancarioWorker(WorkerBase):
                 self._acks_pendientes.setdefault(client_id, []).append(ack)
                 self._mensajes_desde_flush[client_id] = self._mensajes_desde_flush.get(client_id, 0) + 1
 
+                self._crash_hook.verificar(CP.AGREGADOR_PENDING_ACKS, f"pending-acks {client_id}")
+
                 if self._mensajes_desde_flush[client_id] >= INTERVALO_PERSISTENCIA:
                     self._mensajes_desde_flush[client_id] = 0
                     self._persistir_estado(client_id)
@@ -240,6 +245,10 @@ class AgregadorBancarioWorker(WorkerBase):
     def al_iniciar_post_arranque(self):
         for client_id, eof_mensaje in self._barreras_para_iniciar:
             logger.info(f"Iniciando barrera diferida para {client_id} post-recovery.")
+            # Limpiar vuelos residuales de mensajes re-entregados por RabbitMQ
+            # para evitar deadlock: el flush espera vuelos=0, pero los acks
+            # pendientes (que llaman descontar) solo se ejecutan durante el flush.
+            self.contador_vuelos.limpiar(client_id)
             self.coordinador.iniciar_barrera(client_id, eof_mensaje)
         self._barreras_para_iniciar.clear()
 

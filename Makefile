@@ -32,6 +32,7 @@ help:
 	@echo "  make test-crash-worker-pre-confirm [cli] - Crash worker pre-confirmación"
 	@echo "  make test-crash-worker-pre-barrera [cli] - Crash worker pre-barrera"
 	@echo "  make test-crash-worker-post-flush [etapa]- Crash worker post-flush"
+	@echo "  make test-crash-agregador-pending-acks   - Crash agregador con acks pendientes"
 	@echo "  make test-crash-gateway [cli]            - Crash gateway (10 hooks)"
 	@echo "  make test-crash-watchdog [cli]           - Crash watchdog (4 hooks)"
 	@echo ""

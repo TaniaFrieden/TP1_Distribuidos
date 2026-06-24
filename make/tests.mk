@@ -14,6 +14,7 @@ test-server:
 
 # ─── CRASH HOOKS (determinísticos, 1 crash inyectado) ───
 .PHONY: test-crash-worker-pre-confirm test-crash-worker-pre-barrera test-crash-worker-post-flush
+.PHONY: test-crash-agregador-pending-acks
 .PHONY: test-crash-gateway test-crash-watchdog
 
 test-crash-worker-pre-confirm:
@@ -27,6 +28,10 @@ test-crash-worker-pre-barrera:
 test-crash-worker-post-flush:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
 	bash scripts/tests/test_crash_worker_post_flush.sh $$ARGS
+
+test-crash-agregador-pending-acks:
+	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
+	bash scripts/tests/test_crash_agregador_pending_acks.sh $$ARGS
 
 test-crash-gateway:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
@@ -115,7 +120,7 @@ test-todos-multi:
 	$(_light_clean); \
 	$(_start_env); \
 	echo "--- 4/6. Caos total ($$N clientes) ---"; \
-	$(MAKE) test-caos-total $$N $(TEST_TX) $(TEST_ACC) $(TEST_SOL) 75; \
+	$(MAKE) test-caos-total $$N 75 $(TEST_TX) $(TEST_ACC) $(TEST_SOL); \
 	$(_light_clean); \
 	$(_start_env); \
 	echo "--- 5/6. Caos gateway con resultados ($$N clientes) ---"; \
@@ -123,7 +128,7 @@ test-todos-multi:
 	$(_light_clean); \
 	$(_start_env); \
 	echo "--- 6/6. Stress caos (2 iter, $$N clientes) ---"; \
-	$(MAKE) test-stress-caos 2 $$N $(TEST_TX) $(TEST_ACC) $(TEST_SOL) 70; \
+	$(MAKE) test-stress-caos 2 $$N 70 $(TEST_TX) $(TEST_ACC) $(TEST_SOL); \
 	echo "========================================================="; \
 	echo "  Todos los tests multicliente pasaron ($$N clientes)"; \
 	echo "========================================================="
@@ -152,7 +157,11 @@ test-todos:
 	@$(_full_clean)
 	@$(MAKE) test-crash-worker-post-flush counter 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
 	@echo "========================================================="
-	@echo "=== 6. Crash gateway (hooks) ==="
+	@echo "=== 6. Crash agregador pending-acks ==="
+	@echo "========================================================="
+	@$(MAKE) test-crash-agregador-pending-acks 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
+	@echo "========================================================="
+	@echo "=== 7. Crash gateway (hooks) ==="
 	@echo "========================================================="
 	@$(MAKE) test-crash-gateway 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
 	@echo "========================================================="
@@ -185,7 +194,7 @@ test-todos:
 	@$(_full_clean)
 	@$(_start_env)
 	@echo "--- 13. Caos total ---"
-	@$(MAKE) test-caos-total 2 $(TEST_TX) $(TEST_ACC) $(TEST_SOL) 75
+	@$(MAKE) test-caos-total 2 75 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
 	@echo "========================================================="
 	@echo "=== 14. Caos gateway con resultados ==="
 	@echo "========================================================="
@@ -198,7 +207,7 @@ test-todos:
 	@echo "=== 16. Stress caos (2 iteraciones) ==="
 	@echo "========================================================="
 	@$(_light_clean)
-	@$(MAKE) test-stress-caos 2 2 $(TEST_TX) $(TEST_ACC) $(TEST_SOL) 70
+	@$(MAKE) test-stress-caos 2 2 70 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
 	@echo "========================================================="
 	@echo "  Todos los tests pasaron exitosamente"
 	@echo "========================================================="
