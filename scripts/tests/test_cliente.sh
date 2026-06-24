@@ -31,11 +31,12 @@ for pid in "${PIDS[@]}"; do
 done
 
 # Borrar output de clientes que no completaron (el matado) para no comparar basura
+TOTAL_QUERIES=$(obtener_queries | wc -w)
 for dir in output/*/; do
     [ -d "$dir" ] || continue
     total_csvs=$(find "$dir" -maxdepth 1 -name 'q*_solucion.csv' 2>/dev/null | wc -l)
-    if [ "$total_csvs" -lt 5 ]; then
-        echo "=== Descartando cliente incompleto $(basename "$dir") ($total_csvs/5 queries) ==="
+    if [ "$total_csvs" -lt "$TOTAL_QUERIES" ]; then
+        echo "=== Descartando cliente incompleto $(basename "$dir") ($total_csvs/$TOTAL_QUERIES queries) ==="
         rm -rf "$dir"
     fi
 done

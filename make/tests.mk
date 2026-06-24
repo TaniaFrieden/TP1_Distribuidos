@@ -153,11 +153,17 @@ test-todos:
 	@echo "========================================================="
 	@echo "=== 3. Crash worker pre-confirmación ==="
 	@echo "========================================================="
-	@$(MAKE) test-crash-worker-pre-confirm 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL) Q5_COUNTER_01
+	@source scripts/tests/compose_helpers.sh; \
+	T=$$(listar_crash_targets | tail -1); \
+	echo "    target: $$T"; \
+	$(MAKE) test-crash-worker-pre-confirm 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL) $$T
 	@echo "========================================================="
 	@echo "=== 4. Crash worker pre-barrera ==="
 	@echo "========================================================="
-	@$(MAKE) test-crash-worker-pre-barrera 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL) Q5_FILTER_PERIOD_01
+	@source scripts/tests/compose_helpers.sh; \
+	T=$$(listar_crash_targets | head -1); \
+	echo "    target: $$T"; \
+	$(MAKE) test-crash-worker-pre-barrera 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL) $$T
 	@echo "========================================================="
 	@echo "=== 5. Crash worker post-flush ==="
 	@echo "========================================================="
@@ -172,46 +178,45 @@ test-todos:
 	@echo "========================================================="
 	@$(MAKE) test-crash-gateway 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
 	@echo "========================================================="
-	@echo "=== 7-12. Tests de caos ==="
+	@echo "=== Tests de caos por etapa ==="
 	@echo "========================================================="
 	@$(_full_clean)
-	@$(_start_env)
-	@echo "--- 7. Caos etapa: q2_agregador_shard ---"
-	@$(MAKE) test-caos-etapa q2_agregador_shard 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL) 5
+	@source scripts/tests/compose_helpers.sh; \
+	ETAPAS=$$(listar_etapas_workers); \
+	NUM=8; \
+	for ETAPA in $$ETAPAS; do \
+		$(_light_clean); \
+		$(_start_env); \
+		echo "--- $$NUM. Caos etapa: $$ETAPA ---"; \
+		$(MAKE) test-caos-etapa $$ETAPA 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL) 5; \
+		NUM=$$((NUM + 1)); \
+	done
 	@$(_light_clean)
 	@$(_start_env)
-	@echo "--- 8. Caos etapa: q4_sumador ---"
-	@$(MAKE) test-caos-etapa q4_sumador 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL) 5
-	@$(_light_clean)
-	@$(_start_env)
-	@echo "--- 9. Caos etapa: q3_format_shard ---"
-	@$(MAKE) test-caos-etapa q3_format_shard 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL) 5
-	@$(_light_clean)
-	@$(_start_env)
-	@echo "--- 10. Caos cliente ---"
+	@echo "--- Caos cliente ---"
 	@$(MAKE) test-caos-cliente 2 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
 	@$(_light_clean)
 	@$(_start_env)
-	@echo "--- 11. Caos gateway ---"
+	@echo "--- Caos gateway ---"
 	@$(MAKE) test-caos-gateway 2 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
 	@$(_light_clean)
 	@$(_start_env)
-	@echo "--- 12. Caos aleatorio ---"
+	@echo "--- Caos aleatorio ---"
 	@$(MAKE) test-caos-aleatorio 70 2
 	@$(_full_clean)
 	@$(_start_env)
-	@echo "--- 13. Caos total ---"
+	@echo "--- Caos total ---"
 	@$(MAKE) test-caos-total 2 5 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
 	@echo "========================================================="
-	@echo "=== 14. Caos gateway con resultados ==="
+	@echo "=== Caos gateway con resultados ==="
 	@echo "========================================================="
 	@$(MAKE) test-caos-gateway-resultados $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
 	@echo "========================================================="
-	@echo "=== 15. Stress crash (2 iteraciones) ==="
+	@echo "=== Stress crash (2 iteraciones) ==="
 	@echo "========================================================="
 	@$(MAKE) test-stress-crash 2 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
 	@echo "========================================================="
-	@echo "=== 16. Stress caos (2 iteraciones) ==="
+	@echo "=== Stress caos (2 iteraciones) ==="
 	@echo "========================================================="
 	@$(_light_clean)
 	@$(MAKE) test-stress-caos 2 2 5 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
