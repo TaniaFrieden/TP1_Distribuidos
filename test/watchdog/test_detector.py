@@ -77,14 +77,16 @@ class TestPublicarCaida(unittest.TestCase):
         self.assertEqual(enviado["etapa"], "gateway")
         self.assertEqual(enviado["instancia"], "1")
 
-    def test_elimina_de_ultimo_visto_tras_publicar(self):
+    def test_resetea_timestamp_tras_publicar(self):
         detector = crear_detector()
         detector._cola_caidas = MagicMock()
         detector._ultimo_visto[("gateway", "1")] = time.time() - 20
 
+        antes = time.time()
         detector._publicar_caida("gateway", "1")
 
-        self.assertNotIn(("gateway", "1"), detector._ultimo_visto)
+        self.assertIn(("gateway", "1"), detector._ultimo_visto)
+        self.assertGreaterEqual(detector._ultimo_visto[("gateway", "1")], antes)
 
     def test_crea_conexion_si_no_existe(self):
         detector = crear_detector()
@@ -261,34 +263,45 @@ class TestDetectorWorkerInvisible(unittest.TestCase):
 
         mock_pub.assert_called_once_with("q5_converter", "01")
 
-    def test_publicar_caida_borra_worker_de_ultimo_visto(self):
-        """Tras publicar caída, el worker desaparece de _ultimo_visto.
-        Si no vuelve a registrarse, no se vuelve a detectar."""
+    def test_publicar_caida_mantiene_worker_en_ultimo_visto(self):
+        """Tras publicar caída, el worker sigue en _ultimo_visto con
+        timestamp fresco para que el detector lo re-detecte si no
+        logra arrancar."""
         topologia = {"q5_converter": ["01"]}
         config = crear_config(etapas=["q5_converter"], timeout=0.1)
         detector = DetectorLatidos(config, topologia=topologia)
         detector._cola_caidas = MagicMock()
         detector._ultimo_visto[("q5_converter", "01")] = time.time() - 1
 
+        antes = time.time()
         detector._publicar_caida("q5_converter", "01")
 
-        self.assertNotIn(("q5_converter", "01"), detector._ultimo_visto)
-
-    def test_worker_reaparece_tras_caida_publicada(self):
-        """Tras publicar caída, si el worker manda heartbeat, vuelve
-        a ser monitoreado."""
-        topologia = {"q5_converter": ["01"]}
-        config = crear_config(etapas=["q5_converter"], timeout=0.1)
-        detector = DetectorLatidos(config, topologia=topologia)
-        detector._cola_caidas = MagicMock()
-        detector._ultimo_visto[("q5_converter", "01")] = time.time() - 1
-
-        detector._publicar_caida("q5_converter", "01")
-        self.assertNotIn(("q5_converter", "01"), detector._ultimo_visto)
-
-        ack = MagicMock()
-        detector._al_recibir_latido(crear_msg_latido("q5_converter", "01"), ack, None)
         self.assertIn(("q5_converter", "01"), detector._ultimo_visto)
+        self.assertGreaterEqual(
+            detector._ultimo_visto[("q5_converter", "01")], antes
+        )
+
+    def test_worker_que_muere_inmediatamente_se_re_detecta(self):
+        """Escenario del bug: el actuador reinicia el container pero
+        muere antes de enviar un heartbeat. El detector debe volver
+        a detectarlo como caído en el próximo ciclo."""
+        topologia = {"q1_minor_than_50": ["01"]}
+        config = crear_config(etapas=["q1_minor_than_50"], timeout=0.1)
+        detector = DetectorLatidos(config, topologia=topologia)
+        detector._cola_caidas = MagicMock()
+
+        # Primera caída
+        detector._ultimo_visto[("q1_minor_than_50", "01")] = time.time() - 1
+        detector._publicar_caida("q1_minor_than_50", "01")
+        self.assertEqual(detector._cola_caidas.send.call_count, 1)
+
+        # El container muere de nuevo sin enviar heartbeat.
+        # Simulamos que pasa el timeout.
+        detector._ultimo_visto[("q1_minor_than_50", "01")] = time.time() - 1
+
+        # Segundo ciclo de chequeo: debe re-detectar la caída
+        detector._publicar_caida("q1_minor_than_50", "01")
+        self.assertEqual(detector._cola_caidas.send.call_count, 2)
 
 
 class TestFormatoInstanciaConsistente(unittest.TestCase):

@@ -115,7 +115,7 @@ class DetectorLatidos:
                 )
             self._cola_caidas.send(json.dumps({"etapa": etapa, "instancia": instancia}).encode("utf-8"))
             with self._lock:
-                self._ultimo_visto.pop((etapa, instancia), None)
+                self._ultimo_visto[(etapa, instancia)] = time.time()
             self._logger.info(f"Evento de caída publicado: {etapa}/{instancia}")
         except Exception as e:
             self._logger.error(f"Error publicando caída de {etapa}/{instancia}: {e}", exc_info=True)
