@@ -76,40 +76,38 @@ make client OUTPUT_DIR=output/c2   # cada cliente en su propia terminal
 | `SERVER_PORT`      | `5678`        | Puerto del Gateway                  |
 | `BATCH_SIZE`       | `10000`       | Tamaño del batch de envío           |
 
-Ejemplo con parámetros posicionales (con los mismos atajos sin carpeta ni extensión):
+Ejemplo con parámetros posicionales:
 ```bash
 make client HI-Large_Trans_sample_30 HI-Large_accounts OUTPUT_DIR=output/prueba
 ```
 
 ## Validación de Soluciones
 
-Para validar el correcto funcionamiento de las queries contra datasets de prueba, se disponen de comandos para generar soluciones locales y contrastar iterativamente los resultados.
-
 ### Generar solución de referencia (Notebook)
+
 Ejecuta la lógica de pandas de referencia para crear los archivos CSV de soluciones esperadas.
 ```bash
-make solucionar <dataset> <dir>
+make solucionar <transacciones> <cuentas> <dir>
 ```
-* **`<dataset>`**: Nombre del archivo del dataset en la carpeta `datasets/` (no requiere indicar el directorio ni la extensión `.csv`).
-* **`<dir>`**: Carpeta de destino de soluciones bajo `solutions/` (no requiere escribir el prefijo `solutions/`). Si ya existe la carpeta de destino, se borra por completo y se vuelve a crear.
 
 *Ejemplo:*
 ```bash
-make solucionar HI-Large_Trans_sample_30 Hi-Large-30
+make solucionar HI-Large_Trans_sample_30 HI-Large_accounts Hi-Large-30
 ```
 
-### Iterar y comparar resultados del cliente
-Ejecuta el cliente iterativamente y contrasta sus resultados CSV con las soluciones de referencia de forma automatizada.
+### Iterar clientes y comparar resultados
+
+Corre N clientes de forma secuencial (sin caos) y compara cada resultado contra las soluciones de referencia.
 ```bash
-make iterar [iteraciones] [transacciones] [cuentas] [soluciones]
+make iterar [N] [tx] [acc] [sol]
 ```
-* **`[iteraciones]`**: Número de iteraciones a ejecutar (opcional, default `1`).
-* **`[transacciones]`**: Nombre del dataset de transacciones (opcional, busca en `datasets/` por defecto).
-* **`[cuentas]`**: Nombre del dataset de cuentas (opcional, busca en `datasets/` por defecto).
-* **`[soluciones]`**: Nombre de la carpeta de soluciones esperadas bajo `solutions/` (opcional, default `Hi-Large-30`).
+
+Todos los parámetros son opcionales — usa los defaults del Makefile (`TEST_TX`, `TEST_ACC`, `TEST_SOL`).
 
 *Ejemplo:*
 ```bash
+make iterar                    # 5 clientes con datasets por defecto
+make iterar 3                  # 3 clientes con datasets por defecto
 make iterar 5 HI-Large_Trans_sample_30 HI-Large_accounts Hi-Large-30
 ```
 
@@ -117,7 +115,7 @@ make iterar 5 HI-Large_Trans_sample_30 HI-Large_accounts Hi-Large-30
 
 El sistema cuenta con un mecanismo de tolerancia a fallos autocurativo y herramientas para simular caídas:
 
-### Componentes del Sistema (Objetos)
+### Componentes del Sistema
 * **Gateway**: Punto de entrada que recibe las transacciones y cuentas del cliente, distribuye batches a la cola de entrada de RabbitMQ, consolida los resultados de las queries en archivos temporales por cliente y realiza deduplicación de lotes duplicados mediante hash MD5.
 * **Workers**: Nodos de procesamiento del pipeline (filtros, conversores de monedas, proyecciones, agregadores y acumuladores) configurados de forma dinámica y con logs detallados de inicialización.
 * **Coordinador Distribuido**: Gestiona las barreras de sincronización EOF a nivel de etapa a través de colas de control dedicadas, garantizando una finalización ordenada incluso ante caídas de workers.
@@ -125,45 +123,41 @@ El sistema cuenta con un mecanismo de tolerancia a fallos autocurativo y herrami
 * **Actuador**: Escucha reportes del watchdog e interactúa con el daemon de Docker (`docker.sock`) para reiniciar automáticamente las réplicas caídas.
 
 ### Simulación de Caos (Chaos Monkey)
-Para validar la tolerancia a fallos, se dispone de un script Chaos Monkey que apaga de forma aleatoria contenedores de workers durante el procesamiento.
 
-#### Pruebas en dos terminales independientes (Recomendado)
-Para probar tolerancia a fallos de forma independiente en dos terminales mientras los clientes corren de manera secuencial:
+Para validar la tolerancia a fallos de forma manual en dos terminales:
 
-**Terminal 1 (Clientes Secuenciales):**
+**Terminal 1 (Clientes):**
 ```bash
-make test-secuencial [cant_clientes] # Por defecto 5
+make iterar 5
 ```
 
 **Terminal 2 (Chaos Monkey):**
 ```bash
-make tirar-nodos                   # Caos continuo aleatorio cada 10s
-make tirar-nodos [segundos]        # Caos continuo aleatorio con intervalo personalizado
-make tirar-nodos [seg] todos       # Loop continuo: mata todos los workers activos cada [seg] segundos
-make tirar-nodos [seg] etapa       # Loop continuo: mata una etapa al azar cada [seg] segundos
-make tirar-nodos [seg] etapa <p>   # Loop continuo: mata la etapa <p> específica cada [seg] segundos
-```
-
-#### Pruebas integradas
-Para ejecutar la simulación de caos continuo (Chaos Monkey) y clientes automatizados de manera conjunta:
-```bash
-make caos [min] [max] [cant_clientes] [--todos] [--etapa <pref>]
-```
-* **`[min]`** y **`[max]`**: Intervalo de tiempo al azar en segundos antes de apagar contenedores (opcional, default `10` y `20`).
-* **`[cant_clientes]`**: Cantidad de clientes a lanzar en paralelo para someter a estrés (opcional, default `3`).
-* **`--todos`**: Detiene de forma masiva e inmediata todos los workers de procesamiento.
-* **`--etapa <prefijo>`**: Detiene inmediatamente todos los nodos activos que pertenezcan a la etapa indicada (ej. `q4_sumador`).
-
-*Ejemplo:*
-```bash
-make caos 5 15 4              # 4 clientes, con Chaos Monkey cada 5 a 15 segundos
-make caos 5 5 2 --todos       # 2 clientes, espera 5 segundos y mata todos los workers activos
-make caos 2 8 3 --etapa counter # 3 clientes, tiempo al azar de 2-8s y mata etapa counter
+make tirar-nodos                   # aleatorio cada 10s
+make tirar-nodos 5                 # aleatorio cada 5s
+make tirar-nodos 5 todos           # mata todos los workers cada 5s
+make tirar-nodos 5 etapa           # mata una etapa al azar cada 5s
+make tirar-nodos 5 etapa counter   # mata etapa counter cada 5s
 ```
 
 ## Suite de Tests Automatizados
 
-Todos los tests end-to-end comparten tres variables de dataset que se definen una sola vez en el Makefile:
+### Estructura del Makefile
+
+El Makefile está modularizado en `make/`:
+
+| Archivo | Contenido |
+|---|---|
+| `make/config.mk` | Variables globales (python, docker compose, puertos) |
+| `make/datasets.mk` | Datasets y soluciones para tests (`TEST_TX`, `TEST_ACC`, `TEST_SOL`) |
+| `make/helpers.mk` | Helpers internos (`_full_clean`, `_light_clean`, `_start_env`) |
+| `make/utils.mk` | Utilidades (venv, install, clean, generar, solucionar) |
+| `make/run.mk` | Ejecución manual (start, down, client, gateway, tirar-nodos) |
+| `make/tests.mk` | Todos los targets de test |
+
+### Datasets de test
+
+Todos los tests usan tres variables que se definen en `make/datasets.mk`:
 
 | Variable   | Default             | Descripción                                    |
 |------------|---------------------|------------------------------------------------|
@@ -171,59 +165,82 @@ Todos los tests end-to-end comparten tres variables de dataset que se definen un
 | `TEST_ACC` | `LI-Small_accounts` | Archivo de cuentas (en `datasets/`)            |
 | `TEST_SOL` | `sample`            | Carpeta de soluciones esperadas (en `solutions/`) |
 
-Para cambiar el dataset de toda la suite basta con sobreescribir las variables:
+Para cambiar el dataset de toda la suite:
 ```bash
 make test-todos TEST_TX=LI-Small_Trans TEST_ACC=LI-Small_accounts TEST_SOL=LI-Small
 ```
 
-### 1. Suite Completa (Test Todos)
+### Crash Hooks (determinísticos)
+
+Inyectan un crash en un punto exacto del código. El worker/gateway muere una vez y se recupera.
+
 ```bash
-make test-todos
+make test-crash-worker-pre-confirm        # crash pre-confirmación de fin
+make test-crash-worker-pre-barrera        # crash pre-disparo de barrera
+make test-crash-worker-post-flush         # crash post-flush (default etapa: counter)
+make test-crash-worker-post-flush q4_sumador 2  # etapa y clientes custom
+make test-crash-gateway                   # 10 hooks del gateway
+make test-crash-watchdog                  # 4 hooks del watchdog
 ```
-Ejecuta secuencialmente las 15 etapas de validación del sistema. Se detiene al primer error.
+
+### Caos (kill externo durante operación)
+
+Matan contenedores externamente durante el procesamiento.
+
+```bash
+make test-caos-total 3              # mata todos los workers, 3 clientes
+make test-caos-aleatorio 70 2       # chaos monkey 70s, 2 clientes
+make test-caos-etapa q4_sumador 2   # mata etapa específica, 2 clientes
+make test-caos-gateway 2            # mata gateway, 2 clientes
+make test-caos-gateway-resultados   # mata gateway entregando resultados
+make test-caos-cliente 3            # mata un cliente a mitad de envío
+```
+
+### Suites
+
+```bash
+make test-unit                # tests unitarios y de persistencia
+make iterar 5                 # 5 clientes secuenciales sin caos
+make test-todos               # suite completa (unit + crash + caos)
+make test-todos-multi         # suite solo multicliente (default 3 clientes)
+make test-todos-multi 5       # suite multicliente con 5 clientes
+make test-stress-crash 10     # 10 iteraciones de crash hooks
+make test-stress-caos 5 3     # 5 iteraciones de caos, 3 clientes
+```
+
+### Suite Completa (`test-todos`)
+
+Ejecuta 16 pasos de validación. Se detiene al primer error.
 
 | # | Test | Descripción |
 |---|------|-------------|
-| 1 | `test-unitarios` | Tests unitarios y de persistencia en Python |
-| 2 | `test-crash-caso6` | Crash post-flush / pre-confirmación |
-| 3 | `test-crash-caso7` | Crash pre-disparo de barrera |
-| 4 | `test-crash-leader` | Caída del watchdog líder mid-election |
-| 5 | `test-crash-flush` | Crash post-flush / pre-barrera_completada (caso 8) |
-| 6 | `test-caos-todos` | Mata todos los workers simultáneamente |
-| 7 | `test-caos-aleatorio` | Chaos monkey aleatorio (5-15s) |
-| 8 | `test-caos-etapa` | Caída de etapa `q2_agregador_shard` |
-| 9 | `test-caos-etapa` | Caída de etapa `q4_sumador` |
-| 10 | `test-caos-etapa` | Caída de etapa `q3_format_shard` |
-| 11 | `test-caos-cliente` | Cliente cae a mitad de envío |
-| 12 | `test-caos-gateway` | Gateway cae en caliente |
-| 13 | `test-caos-gateway-resultados` | Gateway cae mientras el cliente recibe resultados |
-| 14 | `test-stress-crash` | Stress de casos de frontera (2 iteraciones) |
-| 15 | `test-stress-caos` | Stress de caídas masivas (2 iteraciones) |
+| 1 | `test-unit` | Tests unitarios y de persistencia |
+| 2 | `test-crash-watchdog` | Crash hooks del watchdog (4 puntos) |
+| 3 | `test-crash-worker-pre-confirm` | Crash worker pre-confirmación |
+| 4 | `test-crash-worker-pre-barrera` | Crash worker pre-barrera |
+| 5 | `test-crash-worker-post-flush` | Crash worker post-flush |
+| 6 | `test-crash-gateway` | Crash hooks del gateway (10 puntos) |
+| 7-9 | `test-caos-etapa` | Caída de etapas (q2_agregador, q4_sumador, q3_format) |
+| 10 | `test-caos-cliente` | Cliente cae a mitad de envío |
+| 11 | `test-caos-gateway` | Gateway cae en caliente |
+| 12 | `test-caos-aleatorio` | Chaos monkey aleatorio |
+| 13 | `test-caos-total` | Mata todos los workers de golpe |
+| 14 | `test-caos-gateway-resultados` | Gateway cae entregando resultados |
+| 15 | `test-stress-crash` | Stress de crash hooks (2 iter) |
+| 16 | `test-stress-caos` | Stress de caos (2 iter) |
 
-### 2. Tests Unitarios y de Persistencia
-```bash
-make test-unitarios
-```
+### Suite Multicliente (`test-todos-multi`)
 
-### 3. Tests de Caos en Docker
-* **`make test-caos-todos [cant_cli] [tx] [acc] [sol]`**: Mata todos los workers simultáneamente durante el procesamiento.
-* **`make test-caos-aleatorio [min] [max] [cant_cli]`**: Aplica fallas aleatorias continuas usando Chaos Monkey mientras los clientes transmiten datos.
-* **`make test-caos-etapa <pref> [cant_cli] [tx] [acc] [sol]`**: Corta una etapa de procesamiento entera.
-* **`make test-caos-cliente [cant_cli] [tx] [acc] [sol]`**: Simula la caída de un cliente a mitad de envío.
-* **`make test-caos-gateway [cant_cli] [tx] [acc] [sol]`**: Simula la caída en caliente del Gateway.
-* **`make test-caos-gateway-resultados [tx] [acc] [sol]`**: Simula la caída del Gateway mientras el cliente recibe resultados.
+Corre solo los tests de caos con N clientes simultáneos:
 
-### 4. Tests de Casos de Frontera (Inyección de Falla por Estado)
-* **`make test-crash-flush [etapa] [tx] [acc] [sol]`**: Valida el Caso 8 (crash tras flush de datos a disco, pre-barrera_completada).
-* **`make test-crash-caso6 [cant_cli] [tx] [acc] [sol]`**: Valida el Caso 6 (falla pre-confirmación del fin de dataset al cliente).
-* **`make test-crash-caso7 [cant_cli] [tx] [acc] [sol]`**: Valida el Caso 7 (falla pre-disparo de la barrera).
-* **`make test-crash-leader [cant_cli] [tx] [acc] [sol]`**: Valida tolerancia a caída del watchdog líder de elección.
-
-### 5. Tests de Stress (Bucles)
-* **`make test-stress-caos [iter] [cant_cli] [tx] [acc] [sol]`**: Itera en bucle el test de caídas masivas para detectar condiciones de carrera.
-* **`make test-stress-crash [iter] [cant_cli] [tx] [acc] [sol]`**: Itera en bucle los casos de frontera (caso6, caso7 y leader).
-
-Todos los parámetros de dataset son opcionales — si no se pasan, usan `TEST_TX`/`TEST_ACC`/`TEST_SOL` del entorno o los defaults del Makefile.
+| # | Test | Descripción |
+|---|------|-------------|
+| 1 | `test-caos-cliente` | Mata un cliente a mitad de envío |
+| 2 | `test-caos-gateway` | Mata gateway mid-operación |
+| 3 | `test-caos-aleatorio` | Chaos monkey 70s |
+| 4 | `test-caos-total` | Mata todos los workers de golpe |
+| 5 | `test-caos-gateway-resultados` | Mata gateway entregando resultados |
+| 6 | `test-stress-caos` | 2 iteraciones de caos |
 
 ## Limpiar todo
 
@@ -238,5 +255,5 @@ Detiene los contenedores, libera los puertos 5678, 5672 y 15672, y elimina cache
 ```bash
 make log gateway          # logs del gateway en tiempo real
 make log filter_usd_01    # logs de un worker específico
-make help                 # lista todos los targets disponibles con descripciones
+make help                 # lista todos los targets disponibles
 ```

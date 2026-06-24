@@ -52,6 +52,5 @@ help:
 	@echo "  make test-stress-crash [iter]    - Stress loop de crash hooks"
 	@echo "  make test-stress-caos [iter] [cli] - Stress loop de caos"
 
-# Ignorar argumentos pasados a targets dinámicos
 %:
 	@:

@@ -150,7 +150,7 @@ test-todos:
 	@echo "=== 5. Crash worker post-flush ==="
 	@echo "========================================================="
 	@$(_full_clean)
-	@$(MAKE) test-crash-worker-post-flush counter $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
+	@$(MAKE) test-crash-worker-post-flush counter 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
 	@echo "========================================================="
 	@echo "=== 6. Crash gateway (hooks) ==="
 	@echo "========================================================="

@@ -31,7 +31,12 @@ for caso in $CASOS_CLEAN; do
         echo ""
         echo ">>> ITERACIÓN $i / $ITERACIONES ($caso) <<<"
 
-        if ! make test-crash-$caso "$CANT_CLIENTES" "$TX" "$ACC" "$SOLUCIONES"; then
+        if [ "$caso" = "worker-post-flush" ]; then
+            ARGS="counter $CANT_CLIENTES $TX $ACC $SOLUCIONES"
+        else
+            ARGS="$CANT_CLIENTES $TX $ACC $SOLUCIONES"
+        fi
+        if ! make test-crash-$caso $ARGS; then
             echo "========================================================="
             echo "❌ ERROR: El test falló en la iteración $i para $caso"
             echo "Revisa los logs para ver qué ocurrió."
