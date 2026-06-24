@@ -115,7 +115,7 @@ test-todos-multi:
 	$(_light_clean); \
 	$(_start_env); \
 	echo "--- 4/6. Caos total ($$N clientes) ---"; \
-	$(MAKE) test-caos-total $$N $(TEST_TX) $(TEST_ACC) $(TEST_SOL) 75; \
+	$(MAKE) test-caos-total $$N 75 $(TEST_TX) $(TEST_ACC) $(TEST_SOL); \
 	$(_light_clean); \
 	$(_start_env); \
 	echo "--- 5/6. Caos gateway con resultados ($$N clientes) ---"; \
@@ -123,7 +123,7 @@ test-todos-multi:
 	$(_light_clean); \
 	$(_start_env); \
 	echo "--- 6/6. Stress caos (2 iter, $$N clientes) ---"; \
-	$(MAKE) test-stress-caos 2 $$N $(TEST_TX) $(TEST_ACC) $(TEST_SOL) 70; \
+	$(MAKE) test-stress-caos 2 $$N 70 $(TEST_TX) $(TEST_ACC) $(TEST_SOL); \
 	echo "========================================================="; \
 	echo "  Todos los tests multicliente pasaron ($$N clientes)"; \
 	echo "========================================================="
@@ -185,7 +185,7 @@ test-todos:
 	@$(_full_clean)
 	@$(_start_env)
 	@echo "--- 13. Caos total ---"
-	@$(MAKE) test-caos-total 2 $(TEST_TX) $(TEST_ACC) $(TEST_SOL) 75
+	@$(MAKE) test-caos-total 2 75 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
 	@echo "========================================================="
 	@echo "=== 14. Caos gateway con resultados ==="
 	@echo "========================================================="
@@ -198,7 +198,7 @@ test-todos:
 	@echo "=== 16. Stress caos (2 iteraciones) ==="
 	@echo "========================================================="
 	@$(_light_clean)
-	@$(MAKE) test-stress-caos 2 2 $(TEST_TX) $(TEST_ACC) $(TEST_SOL) 70
+	@$(MAKE) test-stress-caos 2 2 70 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
 	@echo "========================================================="
 	@echo "  Todos los tests pasaron exitosamente"
 	@echo "========================================================="

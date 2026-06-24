@@ -5,10 +5,10 @@ source scripts/tests/test_helpers.sh
 CANT_CLIENTES=${1:-3}
 ESPERA_ANTES_DE_MATAR=${2:-75}
 TX=${3:-${TEST_TX:-trans_sample}}
-SOLUCIONES=${4:-${TEST_SOL:-sample}}
+ACC=${4:-${TEST_ACC:-LI-Small_accounts}}
 SOLUCIONES=${5:-${TEST_SOL:-sample}}
 
-docker build -q -t client-image -f src/client/Dockerfile src >/dev/null 2>&1
+preparar_entorno
 
 lanzar_clientes "$CANT_CLIENTES" "$TX" "$ACC"
 
