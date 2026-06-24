@@ -18,7 +18,11 @@ from .constantes import CLAVE_IDS_PROCESADOS, CLAVE_PROCESADOS, CLAVE_EMITIDOS
 from .configuracion import ConfiguracionWorker
 from .enrutamiento import EnrutadorMensajes
 from .coordinacion import CoordinadorDistribuido, ManejadorCoordinacionEof, ContadorVuelos
-from .coordinacion.hooks import HOOK_PRE_FINISHED, crear_hook_crash_pre_finished
+from .coordinacion.hooks import (
+    HOOK_PRE_FINISHED, HOOK_BEFORE_EOF_FORWARD, HOOK_BEFORE_DATA_ACK,
+    crear_hook_crash_pre_finished, crear_hook_crash_before_eof_forward,
+    crear_hook_crash_before_data_ack,
+)
 from .latido import Latido
 
 from common.dedup_filter import DedupFilter
@@ -73,6 +77,10 @@ class WorkerBase(ABC):
             pre_flush_fn=self.al_completar_eof_local,
         )
         self._manejador_eof.coordinador = self.coordinador
+        hooks_coord = self._crear_hooks_coordinador()
+        self._manejador_eof._hooks = {
+            k: v for k, v in hooks_coord.items() if k == HOOK_BEFORE_EOF_FORWARD
+        }
 
         self._latido = Latido(
             self.configuracion.host_mom,
@@ -83,6 +91,8 @@ class WorkerBase(ABC):
             self.__class__.__name__,
         )
 
+        self._hooks_worker = self._crear_hooks_worker()
+
         logger.info(
             f"[{self.__class__.__name__}] Inicializando worker: "
             f"etapa={self.configuracion.prefijo_nodo}, "
@@ -91,6 +101,12 @@ class WorkerBase(ABC):
             f"input_queues={self.configuracion.colas_entrada}, "
             f"output_queues={self.configuracion.colas_salida}"
         )
+        if self._mensajes_procesados:
+            logger.info(
+                f"[{self.__class__.__name__}] Estado recuperado — "
+                f"procesados={dict(self._mensajes_procesados)}, "
+                f"emitidos={dict(self._mensajes_emitidos)}"
+            )
 
         self._registrar_senales()
 
@@ -337,6 +353,7 @@ class WorkerBase(ABC):
                 if isinstance(self._mensajes_emitidos, dict) and hasattr(self._hilo_local, "mensajes_emitidos_temporales"):
                     self._mensajes_emitidos[client_id] = self._mensajes_emitidos.get(client_id, 0) + self._hilo_local.mensajes_emitidos_temporales
                 self._persistir_conteos()
+            self._ejecutar_hook(HOOK_BEFORE_DATA_ACK)
             self.contador_vuelos.descontar(client_id)
             ack()
 
@@ -435,11 +452,20 @@ class WorkerBase(ABC):
             return self._mensajes_emitidos.get(client_id, 0)
         return 0
 
-    def _crear_hooks_coordinador(self):
-        hooks = {}
-        hook = crear_hook_crash_pre_finished(
-            self.configuracion.prefijo_nodo, self.configuracion.id_nodo,
-        )
+    def _ejecutar_hook(self, nombre):
+        hook = self._hooks_worker.get(nombre)
         if hook:
-            hooks[HOOK_PRE_FINISHED] = hook
-        return hooks
+            hook()
+
+    def _crear_hooks_coordinador(self):
+        p, i = self.configuracion.prefijo_nodo, self.configuracion.id_nodo
+        return {
+            HOOK_PRE_FINISHED: crear_hook_crash_pre_finished(p, i),
+            HOOK_BEFORE_EOF_FORWARD: crear_hook_crash_before_eof_forward(p, i),
+        }
+
+    def _crear_hooks_worker(self):
+        p, i = self.configuracion.prefijo_nodo, self.configuracion.id_nodo
+        return {
+            HOOK_BEFORE_DATA_ACK: crear_hook_crash_before_data_ack(p, i),
+        }

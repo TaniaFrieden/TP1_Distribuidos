@@ -99,17 +99,10 @@ def _generar_servicio(node, worker_config, workers_config, compose_data):
         else:
             env.setdefault('PREFETCH_COUNT', '50')
 
-        if worker_type == 'contador':
-            env['CRASH_AFTER_PERSIST'] = '${CRASH_AFTER_PERSIST:-false}'
-            
-        env['CRASH_BEFORE_FINISHED_CONFIRMATION'] = '${CRASH_BEFORE_FINISHED_CONFIRMATION:-false}'
-        env['CRASH_PRE_BARRERA'] = '${CRASH_PRE_BARRERA:-false}'
+        instance_var = worker_name.upper()
+        env['CRASH_HOOK'] = f'${{{instance_var}_CRASH:-}}'
 
-        env['CRASH_AFTER_FLUSH'] = '${CRASH_AFTER_FLUSH:-false}'
-
-        volumes = ['./logs:/app/logs']
-        if worker_type in ['bank_shard', 'format_shard', 'joiner_q4', 'counter', 'contador_distinto']:
-            volumes.append(f'./volume/{worker_name}:/app/volumen')
+        volumes = ['./logs:/app/logs', f'./volume/{worker_name}:/app/volumen']
 
         compose_data['services'][worker_name] = {
             'build': {'context': './src', 'dockerfile': base_config['dockerfile']},
@@ -179,16 +172,7 @@ def generar_compose():
         env['MOM_VHOST'] = '/'
         if bank_queue_config is not None:
             env['BANK_QUEUE'] = _serializar_valor_env(bank_queue_config)
-        env['CRASH_GATEWAY_UPSTREAM_BEFORE_ACK'] = '${CRASH_GATEWAY_UPSTREAM_BEFORE_ACK:-false}'
-        env['CRASH_GATEWAY_DOWNSTREAM_BEFORE_SEND'] = '${CRASH_GATEWAY_DOWNSTREAM_BEFORE_SEND:-false}'
-        env['CRASH_GATEWAY_DOWNSTREAM_BEFORE_ACK'] = '${CRASH_GATEWAY_DOWNSTREAM_BEFORE_ACK:-false}'
-        env['CRASH_GATEWAY_BEFORE_FINALIZE'] = '${CRASH_GATEWAY_BEFORE_FINALIZE:-false}'
-        env['CRASH_GATEWAY_BEFORE_PERSIST_CONNECTED'] = '${CRASH_GATEWAY_BEFORE_PERSIST_CONNECTED:-false}'
-        env['CRASH_GATEWAY_AFTER_PERSIST_CONNECTED'] = '${CRASH_GATEWAY_AFTER_PERSIST_CONNECTED:-false}'
-        env['CRASH_GATEWAY_BEFORE_PERSIST_DATOS_ENVIADOS'] = '${CRASH_GATEWAY_BEFORE_PERSIST_DATOS_ENVIADOS:-false}'
-        env['CRASH_GATEWAY_AFTER_PERSIST_DATOS_ENVIADOS'] = '${CRASH_GATEWAY_AFTER_PERSIST_DATOS_ENVIADOS:-false}'
-        env['CRASH_GATEWAY_BEFORE_PERSIST_QUERY'] = '${CRASH_GATEWAY_BEFORE_PERSIST_QUERY:-false}'
-        env['CRASH_GATEWAY_AFTER_PERSIST_QUERY'] = '${CRASH_GATEWAY_AFTER_PERSIST_QUERY:-false}'
+        env['CRASH_HOOK'] = '${GATEWAY_01_CRASH:-}'
         compose_data['services']['gateway']['volumes'] = [
             './logs:/app/logs',
             './volume/gateway:/app/volumen',
@@ -244,11 +228,7 @@ def generar_compose():
                 'SUSPECTED_DEAD_TTL': str(SUSPECTED_DEAD_TTL),
                 'LOG_LEVEL': 'INFO',
                 'LOG_FILE': f'/app/logs/watchdog_{wid}.txt',
-                'CRASH_LEADER_MID_ELECTION': '${CRASH_LEADER_MID_ELECTION:-false}',
-                'CRASH_WD_POST_TOPOLOGY_SAVE': '${CRASH_WD_POST_TOPOLOGY_SAVE:-false}',
-                'CRASH_WD_POST_TOPOLOGY_LOAD': '${CRASH_WD_POST_TOPOLOGY_LOAD:-false}',
-                'CRASH_WD_PRE_PUBLISH_CAIDA': '${CRASH_WD_PRE_PUBLISH_CAIDA:-false}',
-                'CRASH_WD_POST_LEADER_DECLARE': '${CRASH_WD_POST_LEADER_DECLARE:-false}',
+                'CRASH_HOOK': f'${{WATCHDOG_{wid}_CRASH:-}}',
             },
         }
 

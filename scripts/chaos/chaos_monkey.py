@@ -132,10 +132,12 @@ if __name__ == "__main__":
     while len(args) > 0 and args[0].isdigit():
         nums.append(int(args.pop(0)))
         
-    if len(nums) >= 1:
-        # Usamos los segundos fijos
+    if len(nums) == 1:
         segundos_fijos = nums[0]
         espera_inicial = float(nums[0])
+    elif len(nums) >= 2:
+        espera_inicial = float(nums[0])
+        segundos_fijos = nums[1]
         
     if "--incluir" in args:
         idx = args.index("--incluir")
@@ -144,7 +146,11 @@ if __name__ == "__main__":
             SERVICIOS_OPCIONALES.remove(args.pop(idx))
     SERVICIOS_CRITICOS.extend(SERVICIOS_OPCIONALES)
 
-    # No esperamos antes del primer kill: atacamos de inmediato y luego esperamos entre ciclos
+    # Espera inicial antes del primer kill (si se especificó un delay)
+    if espera_inicial > 0:
+        log(f"Esperando {espera_inicial}s antes del primer ataque...")
+        time.sleep(espera_inicial)
+
 
 
     try:

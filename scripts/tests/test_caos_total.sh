@@ -16,7 +16,7 @@ lanzar_clientes "$CANT_CLIENTES" "$TX" "$ACC"
 > logs/chaos_monkey_run.log
 
 # Usamos el Chaos Monkey unificado para esperar y luego matar todos los workers
-python3 scripts/chaos/chaos_monkey.py "$ESPERA_ANTES_DE_MATAR" --todos >> logs/chaos_monkey_run.log 2>&1 &
+python3 scripts/chaos/chaos_monkey.py "$ESPERA_ANTES_DE_MATAR" 75 --todos >> logs/chaos_monkey_run.log 2>&1 &
 CHAOS_PID=$!
 
 trap 'echo "=== Apagando Chaos Monkey... ==="; kill $CHAOS_PID 2>/dev/null || true' EXIT

@@ -345,14 +345,26 @@ class CoordinadorDistribuido:
             total_procesados = sum(w.get(CLAVE_PROCESADOS, 0) for w in ec.worker_conteos.values())
             total_emitidos = sum(w.get(CLAVE_EMITIDOS, 0) for w in ec.worker_conteos.values())
 
+            detalle_workers = {
+                wid: f"proc={c.get(CLAVE_PROCESADOS, 0)},emit={c.get(CLAVE_EMITIDOS, 0)}"
+                for wid, c in ec.worker_conteos.items()
+            }
+            logger.info(
+                f"Barrera consolidada para {client_id}: "
+                f"total_procesados={total_procesados}, total_emitidos={total_emitidos}, "
+                f"detalle={detalle_workers}"
+            )
+
             if msg_original:
                 try:
                     payload_dict = ParseadorMensajes.deserializar(msg_original)
                     total_esperado = payload_dict.get(CLAVE_TOTAL_MENSAJES_ENVIADOS)
                     if total_esperado is not None and total_procesados != total_esperado:
                         logger.warning(
-                            f"Barrera completa para {client_id} pero total procesados consolidado "
-                            f"({total_procesados}) difiere de total esperado ({total_esperado})."
+                            f"MISMATCH en barrera para {client_id}: "
+                            f"procesados_consolidado={total_procesados} vs esperado={total_esperado} "
+                            f"(diff={total_procesados - total_esperado}). "
+                            f"Detalle por worker: {detalle_workers}"
                         )
                 except Exception as e:
                     logger.warning(f"No se pudo verificar total_mensajes_enviados en la barrera: {e}")

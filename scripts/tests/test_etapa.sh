@@ -28,7 +28,7 @@ lanzar_clientes "$CANT_CLIENTES" "$TX" "$ACC"
 > logs/chaos_monkey_run.log
 
 # Usamos el Chaos Monkey unificado para esperar y matar la etapa
-python3 scripts/chaos/chaos_monkey.py $ESPERA_ARG --etapa "$PREFIX" >> logs/chaos_monkey_run.log 2>&1 &
+python3 scripts/chaos/chaos_monkey.py $ESPERA_ARG 75 --etapa "$PREFIX" >> logs/chaos_monkey_run.log 2>&1 &
 CHAOS_PID=$!
 
 trap limpiar_test_global EXIT

@@ -1,6 +1,7 @@
 import ctypes
 import gc
 from common.logger import obtener_logger
+from .hooks import HOOK_BEFORE_EOF_FORWARD
 
 logger = obtener_logger(__name__)
 
@@ -19,6 +20,7 @@ class ManejadorCoordinacionEof:
         self._eofs_pendientes_ack = {}
         self.obtener_cantidad_procesados_fn = obtener_cantidad_procesados_fn
         self._eof_pospuesto = {}
+        self._hooks = {}
 
     def procesar_eof(self, nombre_cola, client_id, mensaje_json, mensaje, ack):
         if self._interceptar_eof(nombre_cola, client_id, mensaje_json, mensaje):
@@ -53,9 +55,12 @@ class ManejadorCoordinacionEof:
 
     def al_completar_sincronizacion(self, client_id, mensaje_original, total_emitidos=None):
         if mensaje_original is None:
+            procesados = 0
+            if self.obtener_cantidad_procesados_fn:
+                procesados = self.obtener_cantidad_procesados_fn(client_id)
             logger.info(
                 f"[{self._nombre_clase}] Flusheando datos "
-                f"para client_id={client_id}."
+                f"para client_id={client_id} (procesados_local={procesados})."
             )
             self._al_completar_cliente(client_id)
             try:
@@ -64,10 +69,17 @@ class ManejadorCoordinacionEof:
             except Exception:
                 pass
         else:
+            procesados = 0
+            if self.obtener_cantidad_procesados_fn:
+                procesados = self.obtener_cantidad_procesados_fn(client_id)
             logger.info(
                 f"[{self._nombre_clase}] Barrera completa, "
-                f"reenviando EOF para client_id={client_id}."
+                f"reenviando EOF para client_id={client_id} "
+                f"(procesados_local={procesados}, total_emitidos_consolidado={total_emitidos})."
             )
+            hook = self._hooks.get(HOOK_BEFORE_EOF_FORWARD)
+            if hook:
+                hook()
             try:
                 from common.message_protocol.internal import ParseadorMensajes
                 if total_emitidos is not None:

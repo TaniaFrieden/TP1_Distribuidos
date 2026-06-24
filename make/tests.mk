@@ -88,6 +88,13 @@ test-caos-cliente:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
 	bash scripts/tests/test_cliente.sh $$ARGS
 
+# ─── PIPELINE CRASH HOOKS (todos los hooks con 1 y 2 clientes) ───
+.PHONY: test-crash-pipeline
+
+test-crash-pipeline:
+	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
+	bash scripts/tests/test_crash_hooks_pipeline.sh $$ARGS
+
 # ─── SUITES (corren muchos juntos) ───
 .PHONY: test-todos test-todos-multi test-stress-crash test-stress-caos
 
@@ -120,7 +127,7 @@ test-todos-multi:
 	$(_light_clean); \
 	$(_start_env); \
 	echo "--- 4/6. Caos total ($$N clientes) ---"; \
-	$(MAKE) test-caos-total $$N 75 $(TEST_TX) $(TEST_ACC) $(TEST_SOL); \
+	$(MAKE) test-caos-total $$N 5 $(TEST_TX) $(TEST_ACC) $(TEST_SOL); \
 	$(_light_clean); \
 	$(_start_env); \
 	echo "--- 5/6. Caos gateway con resultados ($$N clientes) ---"; \
@@ -128,7 +135,7 @@ test-todos-multi:
 	$(_light_clean); \
 	$(_start_env); \
 	echo "--- 6/6. Stress caos (2 iter, $$N clientes) ---"; \
-	$(MAKE) test-stress-caos 2 $$N 70 $(TEST_TX) $(TEST_ACC) $(TEST_SOL); \
+	$(MAKE) test-stress-caos 2 $$N 5 $(TEST_TX) $(TEST_ACC) $(TEST_SOL); \
 	echo "========================================================="; \
 	echo "  Todos los tests multicliente pasaron ($$N clientes)"; \
 	echo "========================================================="
@@ -170,15 +177,15 @@ test-todos:
 	@$(_full_clean)
 	@$(_start_env)
 	@echo "--- 7. Caos etapa: q2_agregador_shard ---"
-	@$(MAKE) test-caos-etapa q2_agregador_shard 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL) 70
+	@$(MAKE) test-caos-etapa q2_agregador_shard 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL) 5
 	@$(_light_clean)
 	@$(_start_env)
 	@echo "--- 8. Caos etapa: q4_sumador ---"
-	@$(MAKE) test-caos-etapa q4_sumador 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL) 70
+	@$(MAKE) test-caos-etapa q4_sumador 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL) 5
 	@$(_light_clean)
 	@$(_start_env)
 	@echo "--- 9. Caos etapa: q3_format_shard ---"
-	@$(MAKE) test-caos-etapa q3_format_shard 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL) 70
+	@$(MAKE) test-caos-etapa q3_format_shard 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL) 5
 	@$(_light_clean)
 	@$(_start_env)
 	@echo "--- 10. Caos cliente ---"
@@ -194,7 +201,7 @@ test-todos:
 	@$(_full_clean)
 	@$(_start_env)
 	@echo "--- 13. Caos total ---"
-	@$(MAKE) test-caos-total 2 75 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
+	@$(MAKE) test-caos-total 2 5 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
 	@echo "========================================================="
 	@echo "=== 14. Caos gateway con resultados ==="
 	@echo "========================================================="
@@ -207,7 +214,7 @@ test-todos:
 	@echo "=== 16. Stress caos (2 iteraciones) ==="
 	@echo "========================================================="
 	@$(_light_clean)
-	@$(MAKE) test-stress-caos 2 2 70 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
+	@$(MAKE) test-stress-caos 2 2 5 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
 	@echo "========================================================="
 	@echo "  Todos los tests pasaron exitosamente"
 	@echo "========================================================="
