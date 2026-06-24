@@ -1,16 +1,10 @@
-# Tests end-to-end: unitarios, caos, crash, stress, suites
+# Tests end-to-end: unitarios, crash hooks, caos, suites
 
-.PHONY: test test-worker-base test-server test-unitarios
-.PHONY: test-caos-todos test-caos-aleatorio test-caos-secuencial test-secuencial
-.PHONY: test-caos-etapa test-caos-cliente test-caos-gateway test-caos-gateway-resultados
-.PHONY: test-crash-flush test-crash-caso6 test-crash-caso7 test-crash-leader
-.PHONY: test-crash-gateway-hooks test-crash-watchdog-hooks
-.PHONY: test-stress-caos test-stress-crash
-.PHONY: test-todos test-todos-multi
+# ─── UNITARIOS ───
+.PHONY: test-unit test-worker-base test-server
 
-# --- UNIT TESTS ---
-test:
-	./scripts/run_local_tests.sh
+test-unit:
+	./scripts/tests/run_local_tests.sh
 
 test-worker-base:
 	$(PYTEST) test/common/worker_base/test_worker_base.py -q
@@ -18,13 +12,46 @@ test-worker-base:
 test-server:
 	PYTHONPATH=src $(PYTHON) scripts/test_server.py
 
-test-unitarios:
-	./scripts/tests/run_local_tests.sh
+# ─── CRASH HOOKS (determinísticos, 1 crash inyectado) ───
+.PHONY: test-crash-worker-pre-confirm test-crash-worker-pre-barrera test-crash-worker-post-flush
+.PHONY: test-crash-gateway test-crash-watchdog
 
-# --- CAOS / FALLAS END-TO-END ---
-test-caos-todos:
+test-crash-worker-pre-confirm:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
-	bash scripts/tests/test_todos.sh $$ARGS
+	bash scripts/tests/test_crash_worker_pre_confirm.sh $$ARGS
+
+test-crash-worker-pre-barrera:
+	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
+	bash scripts/tests/test_crash_worker_pre_barrera.sh $$ARGS
+
+test-crash-worker-post-flush:
+	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
+	bash scripts/tests/test_crash_worker_post_flush.sh $$ARGS
+
+test-crash-gateway:
+	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
+	bash scripts/tests/test_crash_gateway.sh $$ARGS
+
+test-crash-watchdog:
+	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
+	bash scripts/tests/test_crash_watchdog.sh $$ARGS
+
+# ─── CAOS (kill externo durante operación) ───
+.PHONY: test-caos-etapa test-caos-total test-caos-aleatorio test-caos-secuencial test-secuencial
+.PHONY: test-caos-gateway test-caos-gateway-resultados test-caos-cliente
+
+test-caos-etapa:
+	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
+	if [ -z "$$ARGS" ]; then \
+		echo "Error: Debes especificar el prefix de la etapa."; \
+		echo "Uso: make test-caos-etapa <prefix> [cant_clientes] [tx] [acc] [soluciones] [espera|random]"; \
+		exit 1; \
+	fi; \
+	bash scripts/tests/test_etapa.sh $$ARGS
+
+test-caos-total:
+	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
+	bash scripts/tests/test_caos_total.sh $$ARGS
 
 test-caos-aleatorio:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
@@ -39,19 +66,6 @@ test-secuencial:
 	CANT=$${CANT:-5}; \
 	SEQUENTIAL=1 SEQUENTIAL_SOL="$(TEST_SOL)" CANT="$$CANT" bash -c 'source scripts/tests/test_helpers.sh && lanzar_clientes "$$CANT" $(TEST_TX) $(TEST_ACC)'
 
-test-caos-etapa:
-	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
-	if [ -z "$$ARGS" ]; then \
-		echo "Error: Debes especificar el prefix de la etapa."; \
-		echo "Uso: make test-caos-etapa <prefix> [cant_clientes] [tx] [acc] [soluciones] [espera|random]"; \
-		exit 1; \
-	fi; \
-	bash scripts/tests/test_etapa.sh $$ARGS
-
-test-caos-cliente:
-	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
-	bash scripts/tests/test_cliente.sh $$ARGS
-
 test-caos-gateway:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
 	bash scripts/tests/test_gateway.sh $$ARGS
@@ -60,41 +74,21 @@ test-caos-gateway-resultados:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
 	bash scripts/tests/test_crash_gateway_resultados.sh $$ARGS
 
-# --- CASOS DE FRONTERA / CRITICAL CORNER CASES ---
-test-crash-flush:
+test-caos-cliente:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
-	bash scripts/tests/test_crash_flush.sh $$ARGS
+	bash scripts/tests/test_cliente.sh $$ARGS
 
-test-crash-caso6:
-	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
-	bash scripts/tests/test_crash_caso6.sh $$ARGS
-
-test-crash-caso7:
-	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
-	bash scripts/tests/test_crash_caso7.sh $$ARGS
-
-test-crash-leader:
-	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
-	bash scripts/tests/test_crash_leader.sh $$ARGS
-
-test-crash-gateway-hooks:
-	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
-	bash scripts/tests/test_crash_gateway_hooks.sh $$ARGS
-
-test-crash-watchdog-hooks:
-	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
-	bash scripts/tests/test_crash_watchdog_hooks.sh $$ARGS
-
-# --- STRESS TESTING (BUCLES) ---
-test-stress-caos:
-	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
-	bash scripts/tests/test_stress_todos.sh $$ARGS
+# ─── SUITES (corren muchos juntos) ───
+.PHONY: test-todos test-todos-multi test-stress-crash test-stress-caos
 
 test-stress-crash:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
 	bash scripts/tests/test_stress_crash.sh $$ARGS
 
-# --- TEST TODOS MULTI (solo tests multicliente) ---
+test-stress-caos:
+	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
+	bash scripts/tests/test_stress_todos.sh $$ARGS
+
 test-todos-multi:
 	@N="$(filter-out $@,$(MAKECMDGOALS))"; \
 	N=$${N:-3}; \
@@ -115,8 +109,8 @@ test-todos-multi:
 	$(MAKE) test-caos-aleatorio 70 $$N; \
 	$(_light_clean); \
 	$(_start_env); \
-	echo "--- 4/6. Caos todos los workers ($$N clientes) ---"; \
-	$(MAKE) test-caos-todos $$N $(TEST_TX) $(TEST_ACC) $(TEST_SOL) 75; \
+	echo "--- 4/6. Caos total ($$N clientes) ---"; \
+	$(MAKE) test-caos-total $$N $(TEST_TX) $(TEST_ACC) $(TEST_SOL) 75; \
 	$(_light_clean); \
 	$(_start_env); \
 	echo "--- 5/6. Caos gateway con resultados ($$N clientes) ---"; \
@@ -129,36 +123,35 @@ test-todos-multi:
 	echo "  Todos los tests multicliente pasaron ($$N clientes)"; \
 	echo "========================================================="
 
-# --- TEST TODOS ---
 test-todos:
 	@$(_full_clean)
 	@echo "========================================================="
-	@echo "=== 1. Ejecutando tests unitarios y de persistencia ==="
+	@echo "=== 1. Tests unitarios ==="
 	@echo "========================================================="
-	@$(MAKE) test-unitarios
+	@$(MAKE) test-unit
 	@echo "========================================================="
-	@echo "=== 2. Ejecutando tests de crash hooks del watchdog ==="
+	@echo "=== 2. Crash watchdog (hooks) ==="
 	@echo "========================================================="
-	@$(MAKE) test-crash-watchdog-hooks 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
+	@$(MAKE) test-crash-watchdog 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
 	@echo "========================================================="
-	@echo "=== 3. Ejecutando test de caidas en frio (caso 6) ==="
+	@echo "=== 3. Crash worker pre-confirmación ==="
 	@echo "========================================================="
-	@$(MAKE) test-crash-caso6 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
+	@$(MAKE) test-crash-worker-pre-confirm 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
 	@echo "========================================================="
-	@echo "=== 4. Ejecutando test de caidas en frio (caso 7) ==="
+	@echo "=== 4. Crash worker pre-barrera ==="
 	@echo "========================================================="
-	@$(MAKE) test-crash-caso7 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
+	@$(MAKE) test-crash-worker-pre-barrera 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
 	@echo "========================================================="
-	@echo "=== 5. Ejecutando test de caida de lider de eleccion ==="
-	@echo "========================================================="
-	@$(MAKE) test-crash-leader 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
-	@echo "========================================================="
-	@echo "=== 6. Ejecutando test crash flush (caso 8) ==="
+	@echo "=== 5. Crash worker post-flush ==="
 	@echo "========================================================="
 	@$(_full_clean)
-	@$(MAKE) test-crash-flush counter $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
+	@$(MAKE) test-crash-worker-post-flush counter $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
 	@echo "========================================================="
-	@echo "=== 7-13. Ejecutando tests de caos (entorno compartido) ==="
+	@echo "=== 6. Crash gateway (hooks) ==="
+	@echo "========================================================="
+	@$(MAKE) test-crash-gateway 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
+	@echo "========================================================="
+	@echo "=== 7-12. Tests de caos ==="
 	@echo "========================================================="
 	@$(_full_clean)
 	@$(_start_env)
@@ -186,25 +179,21 @@ test-todos:
 	@$(MAKE) test-caos-aleatorio 70 2
 	@$(_full_clean)
 	@$(_start_env)
-	@echo "--- 13. Caos total (todos los workers) ---"
-	@$(MAKE) test-caos-todos 2 $(TEST_TX) $(TEST_ACC) $(TEST_SOL) 75
+	@echo "--- 13. Caos total ---"
+	@$(MAKE) test-caos-total 2 $(TEST_TX) $(TEST_ACC) $(TEST_SOL) 75
 	@echo "========================================================="
-	@echo "=== 14. Ejecutando tests de crash del gateway (hooks) ==="
-	@echo "========================================================="
-	@$(MAKE) test-crash-gateway-hooks 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
-	@echo "========================================================="
-	@echo "=== 15. Ejecutando test caos gateway con resultados ==="
+	@echo "=== 14. Caos gateway con resultados ==="
 	@echo "========================================================="
 	@$(MAKE) test-caos-gateway-resultados $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
 	@echo "========================================================="
-	@echo "=== 16. Ejecutando stress test crash (2 iteraciones) ==="
+	@echo "=== 15. Stress crash (2 iteraciones) ==="
 	@echo "========================================================="
 	@$(MAKE) test-stress-crash 2 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
 	@echo "========================================================="
-	@echo "=== 17. Ejecutando stress test caos (2 iteraciones) ==="
+	@echo "=== 16. Stress caos (2 iteraciones) ==="
 	@echo "========================================================="
 	@$(_light_clean)
 	@$(MAKE) test-stress-caos 2 2 $(TEST_TX) $(TEST_ACC) $(TEST_SOL) 70
 	@echo "========================================================="
-	@echo "  Todos los tests del sistema pasaron exitosamente"
+	@echo "  Todos los tests pasaron exitosamente"
 	@echo "========================================================="
