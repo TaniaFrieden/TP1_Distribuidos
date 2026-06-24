@@ -19,8 +19,10 @@ from .configuracion import ConfiguracionWorker
 from .enrutamiento import EnrutadorMensajes
 from .coordinacion import CoordinadorDistribuido, ManejadorCoordinacionEof, ContadorVuelos
 from .coordinacion.hooks import (
-    HOOK_PRE_FINISHED, HOOK_BEFORE_EOF_FORWARD, HOOK_BEFORE_DATA_ACK,
-    crear_hook_crash_pre_finished, crear_hook_crash_before_eof_forward,
+    HOOK_PRE_BARRERA, HOOK_PRE_FINISHED, HOOK_POST_FLUSH,
+    HOOK_BEFORE_EOF_FORWARD, HOOK_BEFORE_DATA_ACK,
+    crear_hook_crash_pre_barrera, crear_hook_crash_pre_finished,
+    crear_hook_crash_despues_flush, crear_hook_crash_before_eof_forward,
     crear_hook_crash_before_data_ack,
 )
 from .latido import Latido
@@ -460,7 +462,9 @@ class WorkerBase(ABC):
     def _crear_hooks_coordinador(self):
         p, i = self.configuracion.prefijo_nodo, self.configuracion.id_nodo
         return {
+            HOOK_PRE_BARRERA: crear_hook_crash_pre_barrera(p),
             HOOK_PRE_FINISHED: crear_hook_crash_pre_finished(p, i),
+            HOOK_POST_FLUSH: crear_hook_crash_despues_flush(),
             HOOK_BEFORE_EOF_FORWARD: crear_hook_crash_before_eof_forward(p, i),
         }
 

@@ -180,7 +180,7 @@ class TestToleranciaCaidasBug:
         # y mockeamos os._exit para que en vez de matar el proceso del test lance una excepción simulación.
         env_con_crash = {
             **BASE_ENV,
-            "CRASH_AFTER_PERSIST": "true",
+            "CRASH_HOOK": "CRASH_AFTER_PERSIST",
         }
 
         class SimularCrashException(Exception):

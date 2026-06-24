@@ -9,11 +9,13 @@ VOLUMEN_DIR = os.getenv("CRASH_HOOK_VOLUMEN", "/app/volumen")
 class CrashHook:
     def __init__(self, volumen_dir=VOLUMEN_DIR):
         self._volumen_dir = volumen_dir
+
+    def _hooks_activos(self):
         raw = os.environ.get("CRASH_HOOK", "")
-        self._hooks = set(h.strip() for h in raw.split(",") if h.strip())
+        return set(h.strip() for h in raw.split(",") if h.strip())
 
     def verificar(self, env_var, descripcion=""):
-        if env_var not in self._hooks:
+        if env_var not in self._hooks_activos():
             return
         crashes_dir = os.path.join(self._volumen_dir, "crashes")
         bandera = os.path.join(crashes_dir, env_var)

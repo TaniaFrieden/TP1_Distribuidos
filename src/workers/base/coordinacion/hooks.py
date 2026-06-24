@@ -1,6 +1,7 @@
 from common.crash_hook import CrashHook
 from common import crash_points as CP
 
+HOOK_PRE_BARRERA = "pre_barrera"
 HOOK_PRE_FINISHED = "pre_finished"
 HOOK_POST_FLUSH = "post_flush"
 HOOK_BEFORE_EOF_FORWARD = "before_eof_forward"

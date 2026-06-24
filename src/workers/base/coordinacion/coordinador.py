@@ -16,7 +16,7 @@ from base.constantes import (
     CLAVE_TOTAL_MENSAJES_ENVIADOS,
 )
 from .estado_cliente import EstadoClienteCoordinacion
-from .hooks import HOOK_PRE_FINISHED
+from .hooks import HOOK_PRE_BARRERA, HOOK_PRE_FINISHED, HOOK_POST_FLUSH
 from .mensajes_control import msg_eof_recibido, msg_worker_finalizado, msg_barrera_completa
 from .persistencia import PersistenciaCoordinacion
 from .transporte import TransporteControl
@@ -139,6 +139,7 @@ class CoordinadorDistribuido:
                 ejecutar_flush = True
                 originador_para_flush = ec.originador
             else:
+                self._ejecutar_hook(HOOK_PRE_BARRERA)
                 ec.originador = self._config.id_nodo
                 ec.barrera_activa = True
                 ec.workers_confirmados.clear()
@@ -195,6 +196,7 @@ class CoordinadorDistribuido:
                 f"Flusheando datos locales."
             )
             self._al_completar_sincronizacion(client_id, None)
+            self._ejecutar_hook(HOOK_POST_FLUSH)
             with self._coordinacion_lock:
                 ec = self._obtener(client_id)
                 ec.flush_en_progreso = False

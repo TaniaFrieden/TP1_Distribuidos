@@ -98,21 +98,19 @@ def test_gateway_upstream_crash_hook(tmp_path):
 
     # Preparar el archivo bandera y volumen
     env = {
-        "CRASH_GATEWAY_UPSTREAM_BEFORE_ACK": "true",
+        "CRASH_HOOK": "CRASH_GATEWAY_UPSTREAM_BEFORE_ACK",
     }
-    
+
     with patch.dict("os.environ", env), \
          patch("common.persistencia.VOLUMEN_DIR", str(tmp_path)), \
          patch("os._exit") as mock_exit:
-         
+
         handler._hook = CrashHook(volumen_dir=str(tmp_path))
         handler._hook.verificar(CP.GW_UPSTREAM_BEFORE_ACK, "upstream client-1")
-        
-        # Debe haber llamado a os._exit(1)
+
         mock_exit.assert_called_once_with(1)
-        
-        # El archivo de bandera debe haberse creado
-        bandera = tmp_path / "crash_CRASH_GATEWAY_UPSTREAM_BEFORE_ACK_done"
+
+        bandera = tmp_path / "crashes" / "CRASH_GATEWAY_UPSTREAM_BEFORE_ACK"
         assert bandera.exists()
 
 def test_gateway_downstream_crash_hook(tmp_path):
@@ -122,16 +120,16 @@ def test_gateway_downstream_crash_hook(tmp_path):
     listener = BackendListener(config, state)
 
     env = {
-        "CRASH_GATEWAY_DOWNSTREAM_BEFORE_SEND": "true",
+        "CRASH_HOOK": "CRASH_GATEWAY_DOWNSTREAM_BEFORE_SEND",
     }
-    
+
     with patch.dict("os.environ", env), \
          patch("common.persistencia.VOLUMEN_DIR", str(tmp_path)), \
          patch("os._exit") as mock_exit:
-         
+
         listener._hook = CrashHook(volumen_dir=str(tmp_path))
         listener._hook.verificar(CP.GW_DOWNSTREAM_BEFORE_SEND, "before-send-eof client-1")
-        
+
         mock_exit.assert_called_once_with(1)
-        bandera = tmp_path / "crash_CRASH_GATEWAY_DOWNSTREAM_BEFORE_SEND_done"
+        bandera = tmp_path / "crashes" / "CRASH_GATEWAY_DOWNSTREAM_BEFORE_SEND"
         assert bandera.exists()
