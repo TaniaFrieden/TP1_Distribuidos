@@ -62,9 +62,6 @@ def run_chaos_monkey(segundos=10, filtros=None, matar_todos=False):
 
     try:
         while True:
-            log(f"\nSiguiente ataque en {segundos:.1f} segundos...")
-            time.sleep(segundos)
-
             contenedores = []
             for _ in range(3):
                 try:
@@ -92,10 +89,7 @@ def run_chaos_monkey(segundos=10, filtros=None, matar_todos=False):
 
             if not workers:
                 log("No se encontraron workers activos para derribar.")
-                continue
-
-            # Si es por etapa (filtros especificados), matamos todos los de esa etapa de una.
-            if filtros:
+            elif filtros:
                 log(f"[Chaos Monkey] ATACANDO etapa con filtros: {filtros}. Matando a todos sus nodos activos...")
                 for victima in workers:
                     try:
@@ -115,6 +109,9 @@ def run_chaos_monkey(segundos=10, filtros=None, matar_todos=False):
                     log(f"[Chaos Monkey] '{victima.name}' fue derribado exitosamente.")
                 except Exception as e:
                     log(f"[Chaos Monkey] Error derribando a '{victima.name}': {e}")
+
+            log(f"\nSiguiente ataque en {segundos:.1f} segundos...")
+            time.sleep(segundos)
 
     except KeyboardInterrupt:
         log("\n=== Chaos Monkey Finalizado ===")
@@ -147,10 +144,7 @@ if __name__ == "__main__":
             SERVICIOS_OPCIONALES.remove(args.pop(idx))
     SERVICIOS_CRITICOS.extend(SERVICIOS_OPCIONALES)
 
-    # Si se especificó espera_inicial y vienen flags inmediatas (--todos o --etapa), esperamos ese tiempo fijo
-    if espera_inicial > 0 and ("--todos" in args or "--etapa" in args):
-        log(f"Esperando {segundos_fijos}s antes del crash...")
-        time.sleep(espera_inicial)
+    # No esperamos antes del primer kill: atacamos de inmediato y luego esperamos entre ciclos
 
 
     try:

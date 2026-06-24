@@ -8,7 +8,7 @@ TX=${3:-${TEST_TX:-trans_sample}}
 ACC=${4:-${TEST_ACC:-LI-Small_accounts}}
 SOLUCIONES=${5:-${TEST_SOL:-sample}}
 
-docker build -q -t client-image -f src/client/Dockerfile src >/dev/null 2>&1
+preparar_entorno
 
 lanzar_clientes "$CANT_CLIENTES" "$TX" "$ACC"
 

@@ -2,14 +2,14 @@
 _kill_zombies = docker rm -f $$(docker ps -a -q --filter "name=client_") 2>/dev/null; true
 
 _full_clean = { $(_kill_zombies); $(DOCKER_COMPOSE) down -v --remove-orphans; \
-	docker run --rm -v "$$(pwd)/volume:/vol" -v "$$(pwd)/output:/out" -v "$$(pwd)/logs:/lg" \
-		alpine sh -c "rm -rf /vol/* /out/*/ /out/client_id*.txt /lg/*.txt /lg/*.log && chmod -R 777 /vol /out /lg"; } > logs/run_clean_full.log 2>&1
+	docker run --rm -v "$$(pwd)/volume:/vol" -v "$$(pwd)/output:/out" \
+		alpine sh -c "rm -rf /vol/* /out/*/ /out/client_id*.txt && chmod -R 777 /vol /out"; } > logs/run_clean_full.log 2>&1
 
-_light_clean = { $(DOCKER_COMPOSE) down -v --remove-orphans; \
-	docker run --rm -v "$$(pwd)/volume:/vol" -v "$$(pwd)/output:/out" -v "$$(pwd)/logs:/lg" \
-		alpine sh -c "rm -rf /vol/* /out/*/ /out/client_id*.txt /lg/client_*.txt /lg/chaos_monkey_run.log && chmod -R 777 /vol /out /lg"; } > logs/run_clean_light.log 2>&1
+_light_clean = { $(DOCKER_COMPOSE) down --remove-orphans; \
+	docker run --rm -v "$$(pwd)/output:/out" \
+		alpine sh -c "rm -rf /out/*/ /out/client_id*.txt && chmod -R 777 /out"; } > logs/run_clean_light.log 2>&1
 
-_start_env = { $(DOCKER_COMPOSE) up -d --build && \
+_start_env = { $(DOCKER_COMPOSE) up -d && \
 	ESPERADOS=$$($(DOCKER_COMPOSE) config --services | wc -l); \
 	for i in $$(seq 1 60); do \
 		CORRIENDO=$$($(DOCKER_COMPOSE) ps --status running --format '{{.Name}}' | wc -l); \

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-ITERACIONES=${1:-20}
+ITERACIONES=${1:-50}
 CANT_CLIENTES=${2:-2}
 ESPERA_ANTES_DE_MATAR=${3:-75}
 TX=${4:-${TEST_TX:-trans_sample}}
@@ -16,7 +16,7 @@ for i in $(seq 1 "$ITERACIONES"); do
     echo ""
     echo ">>> ITERACIÓN $i / $ITERACIONES <<<"
 
-    if ! bash scripts/tests/test_caos_total.sh "$CANT_CLIENTES" "$TX" "$ACC" "$SOLUCIONES" "$ESPERA_ANTES_DE_MATAR"; then
+    if ! bash scripts/tests/test_caos_total.sh "$CANT_CLIENTES" "$ESPERA_ANTES_DE_MATAR" "$TX" "$ACC" "$SOLUCIONES"; then
         echo "========================================================="
         echo "❌ ERROR: El test falló en la iteración $i"
         echo "Revisa los logs para ver qué ocurrió."
