@@ -1,6 +1,6 @@
 # Utilidades: venv, install, clean, generacion de datos, etc.
 
-.PHONY: venv install clean free-ports generar generar-sample solucionar iterar
+.PHONY: venv install clean free-ports generar generar-sample solucionar
 
 venv:
 	python3 -m venv .venv
@@ -73,13 +73,3 @@ solucionar:
 		$(PYTHON) scripts/utils/ejecutar_solucion_notebook.py $$ARGS; \
 	fi
 
-iterar:
-	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
-	if [ -z "$$ARGS" ]; then \
-		echo "Error: Debes especificar al menos el numero de iteraciones."; \
-		echo "Uso: make iterar [iteraciones] [transacciones] [cuentas] [soluciones]"; \
-		echo "Ejemplo: make iterar 5 HI-Large_Trans_sample_30 HI-Large_accounts Hi-Large-30"; \
-		exit 1; \
-	else \
-		PYTHONPATH=src $(PYTHON) scripts/utils/iterar_queries.py $$ARGS; \
-	fi

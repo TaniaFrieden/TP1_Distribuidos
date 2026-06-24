@@ -37,7 +37,7 @@ test-crash-watchdog:
 	bash scripts/tests/test_crash_watchdog.sh $$ARGS
 
 # ─── CAOS (kill externo durante operación) ───
-.PHONY: test-caos-etapa test-caos-total test-caos-aleatorio test-caos-secuencial test-secuencial
+.PHONY: iterar test-caos-etapa test-caos-total test-caos-aleatorio test-caos-secuencial
 .PHONY: test-caos-gateway test-caos-gateway-resultados test-caos-cliente
 
 test-caos-etapa:
@@ -61,10 +61,15 @@ test-caos-secuencial:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
 	SEQUENTIAL=1 SEQUENTIAL_SOL="$${TEST_SOL:-sample}" bash scripts/tests/test_caos_continuo.sh $$ARGS
 
-test-secuencial:
-	@CANT="$(filter-out $@,$(MAKECMDGOALS))"; \
-	CANT=$${CANT:-5}; \
-	SEQUENTIAL=1 SEQUENTIAL_SOL="$(TEST_SOL)" CANT="$$CANT" bash -c 'source scripts/tests/test_helpers.sh && lanzar_clientes "$$CANT" $(TEST_TX) $(TEST_ACC)'
+iterar:
+	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
+	set -- $$ARGS; \
+	CANT=$${1:-5}; \
+	TX=$${2:-$(TEST_TX)}; \
+	ACC=$${3:-$(TEST_ACC)}; \
+	SOL=$${4:-$(TEST_SOL)}; \
+	export SEQUENTIAL=1 SEQUENTIAL_SOL="$$SOL"; \
+	source scripts/tests/test_helpers.sh && lanzar_clientes "$$CANT" "$$TX" "$$ACC"
 
 test-caos-gateway:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
