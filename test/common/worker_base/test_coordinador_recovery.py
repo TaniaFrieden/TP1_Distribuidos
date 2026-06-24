@@ -5,7 +5,9 @@ Cubren:
   - Caso 5: coordinator recibe WORKER_FINISHED tardío tras recovery
   - Caso 6: coordinator reenvía WORKER_FINISHED tras recovery (flush completado)
   - Recovery de barrera completa pendiente de difusión
+  - Race condition: pre_flush_fn no se ejecuta con flush en progreso
 """
+import threading
 import pytest
 from unittest.mock import MagicMock, patch
 from types import SimpleNamespace
@@ -344,3 +346,99 @@ class TestCrashYRecoveryEndToEnd:
             assert "c1" in coord2._clientes
 
             coord2.cerrar()
+
+
+# ──────────────────────────────────────────────────────────────────
+# Race condition: pre_flush_fn con flush en progreso
+#   Reproduce el bug donde un rebroadcast dispara otra llamada
+#   a _ejecutar_flush_y_notificar mientras el flush está corriendo.
+#   El pre_flush_fn (al_completar_eof_local) se ejecutaba ANTES
+#   del check de flush_en_progreso, sobreescribiendo el estado
+#   con datos vacíos.
+# ──────────────────────────────────────────────────────────────────
+
+class TestPreFlushNoSeEjecutaConFlushEnProgreso:
+
+    def test_pre_flush_fn_no_se_llama_si_flush_en_progreso(self, tmp_path):
+        """El rebroadcast lanza _ejecutar_flush_y_notificar mientras
+        el flush está en progreso. pre_flush_fn NO debe ejecutarse
+        en la segunda llamada."""
+        config = _crear_config(id_nodo=0, total_workers=1)
+        pre_flush_calls = []
+        flush_en_progreso = threading.Event()
+        flush_continuar = threading.Event()
+
+        def pre_flush_fn(client_id):
+            pre_flush_calls.append(client_id)
+
+        def al_completar_lento(client_id, msg, **kwargs):
+            if msg is None:
+                flush_en_progreso.set()
+                flush_continuar.wait(timeout=5)
+
+        with patch("workers.base.coordinacion.coordinador.TransporteControl") as mock_trans, \
+             patch("workers.base.coordinacion.persistencia.PersistidorEstado") as mock_pe:
+            mock_pe.return_value.directory = str(tmp_path / "coordinator_test_0")
+            mock_pe.return_value.guardar = MagicMock()
+            mock_pe.return_value.cargar = MagicMock(return_value={})
+            mock_trans.return_value.enviar = MagicMock()
+
+            coord = CoordinadorDistribuido(
+                config,
+                al_completar_sincronizacion=al_completar_lento,
+                al_completar_barrera=MagicMock(),
+                contador_vuelos=ContadorVuelos(),
+                pre_flush_fn=pre_flush_fn,
+            )
+
+            coord.iniciar_barrera("c1", b'{"client_id": "c1"}')
+
+            t1 = threading.Thread(
+                target=coord._ejecutar_flush_y_notificar,
+                args=("c1", 0),
+            )
+            t1.start()
+            flush_en_progreso.wait(timeout=5)
+
+            assert len(pre_flush_calls) == 1
+
+            coord._ejecutar_flush_y_notificar("c1", 0)
+
+            assert len(pre_flush_calls) == 1, (
+                "pre_flush_fn fue llamado durante flush en progreso, "
+                "sobreescribiendo el estado con datos vacíos"
+            )
+
+            flush_continuar.set()
+            t1.join(timeout=5)
+            coord.cerrar()
+
+    def test_pre_flush_fn_si_se_llama_en_primer_flush(self, tmp_path):
+        """Verifica que pre_flush_fn SÍ se ejecuta en el flush normal."""
+        config = _crear_config(id_nodo=0, total_workers=1)
+        pre_flush_calls = []
+
+        def pre_flush_fn(client_id):
+            pre_flush_calls.append(client_id)
+
+        with patch("workers.base.coordinacion.coordinador.TransporteControl") as mock_trans, \
+             patch("workers.base.coordinacion.persistencia.PersistidorEstado") as mock_pe:
+            mock_pe.return_value.directory = str(tmp_path / "coordinator_test_0")
+            mock_pe.return_value.guardar = MagicMock()
+            mock_pe.return_value.cargar = MagicMock(return_value={})
+            mock_trans.return_value.enviar = MagicMock()
+
+            coord = CoordinadorDistribuido(
+                config,
+                al_completar_sincronizacion=MagicMock(),
+                al_completar_barrera=MagicMock(),
+                contador_vuelos=ContadorVuelos(),
+                pre_flush_fn=pre_flush_fn,
+            )
+
+            coord.iniciar_barrera("c1", b'{"client_id": "c1"}')
+            coord._ejecutar_flush_y_notificar("c1", 0)
+
+            assert len(pre_flush_calls) == 1
+            assert pre_flush_calls[0] == "c1"
+            coord.cerrar()

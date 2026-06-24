@@ -162,8 +162,6 @@ class CoordinadorDistribuido:
         ).start()
 
     def _ejecutar_flush_y_notificar(self, client_id, originador):
-        if self._pre_flush_fn:
-            self._pre_flush_fn(client_id)
         logger.info(
             f"EOF local y de control recibidos para {client_id}. "
             f"Esperando vuelos a cero antes de flush."
@@ -190,6 +188,8 @@ class CoordinadorDistribuido:
                 ec.flush_en_progreso = True
 
         if debe_flushear:
+            if self._pre_flush_fn:
+                self._pre_flush_fn(client_id)
             logger.info(
                 f"Vuelos en cero para client_id={client_id}. "
                 f"Flusheando datos locales."
