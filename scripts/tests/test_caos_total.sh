@@ -3,10 +3,10 @@ set -e
 source scripts/tests/test_helpers.sh
 
 CANT_CLIENTES=${1:-3}
-TX=${2:-${TEST_TX:-trans_sample}}
-ACC=${3:-${TEST_ACC:-LI-Small_accounts}}
+ESPERA_ANTES_DE_MATAR=${2:-75}
+TX=${3:-${TEST_TX:-trans_sample}}
 SOLUCIONES=${4:-${TEST_SOL:-sample}}
-ESPERA_ANTES_DE_MATAR=${5:-5}
+SOLUCIONES=${5:-${TEST_SOL:-sample}}
 
 docker build -q -t client-image -f src/client/Dockerfile src >/dev/null 2>&1
 

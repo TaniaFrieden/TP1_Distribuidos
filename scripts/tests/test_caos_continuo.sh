@@ -2,7 +2,7 @@
 set -e
 source scripts/tests/test_helpers.sh
 
-SEGUNDOS_CAOS=10
+SEGUNDOS_CAOS=60
 CANT_CLIENTES=3
 TX="${TEST_TX:-LI-Small_Trans}"
 ACC="${TEST_ACC:-LI-Small_accounts}"

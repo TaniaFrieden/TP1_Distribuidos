@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 set -e
 
-ITERACIONES=${1:-20}
+ITERACIONES=${1:-50}
 CANT_CLIENTES=${2:-2}
 TX=${3:-${TEST_TX:-trans_sample}}
 ACC=${4:-${TEST_ACC:-LI-Small_accounts}}
 SOLUCIONES=${5:-${TEST_SOL:-sample}}
-ESPERA_ANTES_DE_MATAR=${6:-5}
+ESPERA_ANTES_DE_MATAR=${6:-60}
 
 echo "========================================================="
 echo "=== Iniciando Stress Test: $ITERACIONES iteraciones de test_todos ($CANT_CLIENTES clientes) ==="
