@@ -48,8 +48,8 @@ for i in "${!CASOS[@]}"; do
     timeout 10s docker run --rm -v "$(pwd)/volume:/vol" -v "$(pwd)/output:/out" -v "$(pwd)/logs:/lg" \
         alpine sh -c "rm -rf /vol/* /out/*/ /out/client_id*.txt /lg/client_*.txt" 2>/dev/null || true
 
-    echo "=== Levantando sistema con inyección de falla ==="
-    eval "$ENV_VAR=true make start"
+    echo "=== Levantando sistema con GATEWAY_01_CRASH=$ENV_VAR ==="
+    GATEWAY_01_CRASH="$ENV_VAR" make start
     esperar_sistema_listo
 
     echo "=== Lanzando $CANT_CLIENTES cliente(s) ==="

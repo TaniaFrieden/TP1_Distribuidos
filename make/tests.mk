@@ -153,11 +153,11 @@ test-todos:
 	@echo "========================================================="
 	@echo "=== 3. Crash worker pre-confirmación ==="
 	@echo "========================================================="
-	@$(MAKE) test-crash-worker-pre-confirm 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
+	@$(MAKE) test-crash-worker-pre-confirm 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL) Q5_COUNTER_01
 	@echo "========================================================="
 	@echo "=== 4. Crash worker pre-barrera ==="
 	@echo "========================================================="
-	@$(MAKE) test-crash-worker-pre-barrera 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL)
+	@$(MAKE) test-crash-worker-pre-barrera 1 $(TEST_TX) $(TEST_ACC) $(TEST_SOL) Q5_FILTER_PERIOD_01
 	@echo "========================================================="
 	@echo "=== 5. Crash worker post-flush ==="
 	@echo "========================================================="
