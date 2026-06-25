@@ -48,8 +48,15 @@ class ManejadorCoordinacionEof:
                 f"Iniciando barrera distribuida."
             )
             self._al_completar_eof_local(client_id)
-            self.coordinador.iniciar_barrera(client_id, mensaje)
+            resultado = self.coordinador.iniciar_barrera(client_id, mensaje)
             self.coordinador.limpiar_eof_local(client_id)
+            if resultado is False:
+                acks = self._eofs_pendientes_ack.pop(client_id, [])
+                for ack_cb in acks:
+                    try:
+                        ack_cb()
+                    except Exception:
+                        pass
 
 
 

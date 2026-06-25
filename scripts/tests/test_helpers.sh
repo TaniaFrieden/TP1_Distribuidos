@@ -2,6 +2,22 @@
 
 DOCKER_COMPOSE="${DOCKER_COMPOSE:-docker compose}"
 
+limpiar_y_arrancar() {
+    local clients
+    clients=$(docker ps -a -q --filter "name=client_")
+    if [ -n "$clients" ]; then
+        timeout 10s docker rm -f $clients 2>/dev/null || true
+    fi
+    timeout 10s docker run --rm -v "$(pwd)/output:/out" -v "$(pwd)/logs:/lg" \
+        alpine sh -c "rm -rf /out/*/ /out/client_id*.txt /lg/client_*.txt /lg/client_stdout_*.txt" 2>/dev/null || true
+    make down 2>/dev/null || true
+    sleep 2
+    timeout 10s docker run --rm -v "$(pwd)/volume:/vol" \
+        alpine sh -c "rm -rf /vol/*" 2>/dev/null || true
+    make start
+    esperar_sistema_listo
+}
+
 preparar_entorno() {
     local clients
     clients=$(docker ps -a -q --filter "name=client_")

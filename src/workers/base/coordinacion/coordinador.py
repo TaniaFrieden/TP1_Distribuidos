@@ -129,6 +129,14 @@ class CoordinadorDistribuido:
 
         with self._coordinacion_lock:
             ec = self._obtener(client_id)
+
+            if ec.finalizado:
+                logger.info(
+                    f"EOF duplicado para client_id={client_id} ya finalizado. "
+                    f"Ignorando barrera."
+                )
+                return False
+
             ec.eof_local_completo = True
 
             if ec.originador is not None and self._config.tiene_cola_sharded:
@@ -407,7 +415,7 @@ class CoordinadorDistribuido:
             with self._coordinacion_lock:
                 clientes = [
                     cid for cid, ec in self._clientes.items()
-                    if ec.barrera_activa
+                    if ec.barrera_activa and not ec.finalizado
                 ]
             for client_id in clientes:
                 logger.info(
