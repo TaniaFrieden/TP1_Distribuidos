@@ -5,7 +5,7 @@ import time
 import unittest
 from unittest.mock import MagicMock, patch
 
-from watchdog.eleccion_anillo import EleccionAnillo
+from eleccion_anillo import EleccionAnillo
 
 
 def crear_config(id_watchdog=1, cantidad_watchdogs=3):
@@ -28,12 +28,12 @@ def crear_eleccion(id_watchdog=1, cantidad_watchdogs=3, tmp_path=None, al_regist
     al_perder_liderazgo = MagicMock()
     al_caer_standby = MagicMock()
     patches = [
-        patch("watchdog.eleccion_anillo.PersistidorEstado"),
+        patch("eleccion_anillo.PersistidorEstado"),
     ]
     if tmp_path is not None:
         from common.persistencia import PersistidorEstado
         patches = [
-            patch("watchdog.eleccion_anillo.PersistidorEstado",
+            patch("eleccion_anillo.PersistidorEstado",
                   lambda name: PersistidorEstado(name, base_dir=str(tmp_path))),
         ]
     for p in patches:
@@ -130,7 +130,7 @@ class TestDeclararLider(unittest.TestCase):
     def test_llama_al_ser_lider_con_nodos_caidos(self):
         eleccion, al_ser_lider, *_ = crear_eleccion(id_watchdog=3)
         eleccion._ids_sospechados_caidos[1] = time.time()
-        with patch("watchdog.eleccion_anillo.threading.Thread"):
+        with patch("eleccion_anillo.threading.Thread"):
             eleccion._declarar_lider()
         al_ser_lider.assert_called_once()
         ids_caidos = al_ser_lider.call_args[0][0]
@@ -138,14 +138,14 @@ class TestDeclararLider(unittest.TestCase):
 
     def test_idempotente_si_ya_es_lider(self):
         eleccion, al_ser_lider, *_ = crear_eleccion(id_watchdog=3)
-        with patch("watchdog.eleccion_anillo.threading.Thread"):
+        with patch("eleccion_anillo.threading.Thread"):
             eleccion._declarar_lider()
             eleccion._declarar_lider()
         al_ser_lider.assert_called_once()
 
     def test_envia_coordinador_al_siguiente(self):
         eleccion, *_ = crear_eleccion(id_watchdog=3)
-        with patch("watchdog.eleccion_anillo.threading.Thread"):
+        with patch("eleccion_anillo.threading.Thread"):
             eleccion._declarar_lider()
         eleccion._enviar_a.assert_called_once()
         _, payload = eleccion._enviar_a.call_args[0]
@@ -155,7 +155,7 @@ class TestDeclararLider(unittest.TestCase):
     def test_excluye_nodos_caidos_con_ttl_expirado(self):
         eleccion, al_ser_lider, *_ = crear_eleccion(id_watchdog=3)
         eleccion._ids_sospechados_caidos[1] = time.time() - 61
-        with patch("watchdog.eleccion_anillo.threading.Thread"):
+        with patch("eleccion_anillo.threading.Thread"):
             eleccion._declarar_lider()
         ids_caidos = al_ser_lider.call_args[0][0]
         self.assertNotIn(1, ids_caidos)
@@ -402,7 +402,7 @@ class TestRetryConsumidores(unittest.TestCase):
             mock_cola.start_consuming = MagicMock(side_effect=lambda cb: eleccion._evento_parada.set())
             return mock_cola
 
-        with patch("watchdog.eleccion_anillo.MessageMiddlewareQueueRabbitMQ", side_effect=mock_constructor):
+        with patch("eleccion_anillo.MessageMiddlewareQueueRabbitMQ", side_effect=mock_constructor):
             eleccion._consumir_anillo()
 
         self.assertEqual(len(intentos), 3)
@@ -419,7 +419,7 @@ class TestRetryConsumidores(unittest.TestCase):
             mock_cola.start_consuming = MagicMock(side_effect=lambda cb: eleccion._evento_parada.set())
             return mock_cola
 
-        with patch("watchdog.eleccion_anillo.FanoutQueueRabbitMQ", side_effect=mock_constructor):
+        with patch("eleccion_anillo.FanoutQueueRabbitMQ", side_effect=mock_constructor):
             eleccion._consumir_latido_lider()
 
         self.assertEqual(len(intentos), 2)
@@ -432,7 +432,7 @@ class TestRetryConsumidores(unittest.TestCase):
 
         eleccion._evento_parada.set()
 
-        with patch("watchdog.eleccion_anillo.MessageMiddlewareQueueRabbitMQ", side_effect=mock_constructor):
+        with patch("eleccion_anillo.MessageMiddlewareQueueRabbitMQ", side_effect=mock_constructor):
             eleccion._consumir_anillo()
 
     def test_consumir_registro_topologia_reintenta_tras_error(self):
@@ -447,7 +447,7 @@ class TestRetryConsumidores(unittest.TestCase):
             mock_cola.start_consuming = MagicMock(side_effect=lambda cb: eleccion._evento_parada.set())
             return mock_cola
 
-        with patch("watchdog.eleccion_anillo.FanoutQueueRabbitMQ", side_effect=mock_constructor):
+        with patch("eleccion_anillo.FanoutQueueRabbitMQ", side_effect=mock_constructor):
             eleccion._consumir_registro_topologia()
 
         self.assertEqual(len(intentos), 2)
@@ -461,7 +461,7 @@ class TestTopologiaEndToEnd(unittest.TestCase):
         """Simula el flujo: eleccion guarda topología → reinicia →
         la topología cargada de disco se pasa al detector."""
         import tempfile
-        from watchdog.detector import DetectorLatidos
+        from detector import DetectorLatidos
 
         with tempfile.TemporaryDirectory() as tmp:
             eleccion1, *_ = crear_eleccion(id_watchdog=1, tmp_path=tmp)
@@ -558,7 +558,7 @@ class TestCallbackRegistroNodo(unittest.TestCase):
             mock_cola.start_consuming = capturar_cb
             return mock_cola
 
-        with patch("watchdog.eleccion_anillo.FanoutQueueRabbitMQ", side_effect=mock_constructor):
+        with patch("eleccion_anillo.FanoutQueueRabbitMQ", side_effect=mock_constructor):
             eleccion._consumir_registro_topologia()
 
         return ack
