@@ -46,7 +46,7 @@ sleep 10
 
 # ---------- 1. Lanzar cliente ----------
 lanzar_clientes 1 "$TX" "$ACC"
-LOG="logs/client_stdout_1.txt"
+LOG=$(ls -t logs/client_*.txt 2>/dev/null | head -1)
 
 # ---------- 2. Esperar primer resultado ----------
 echo "=== Esperando que el cliente complete al menos una query (max ${TIMEOUT_RESULTADO}s)... ==="

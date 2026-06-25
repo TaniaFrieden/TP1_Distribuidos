@@ -3,9 +3,9 @@ set -e
 source scripts/tests/test_helpers.sh
 
 CANT_CLIENTES=${1:-3}
-TX=${2:-LI-Small_Trans}
-ACC=${3:-LI-Small_accounts}
-SOLUCIONES=${4:-small}
+TX=${2:-${TEST_TX:-LI-Small_Trans}}
+ACC=${3:-${TEST_ACC:-LI-Small_accounts}}
+SOLUCIONES=${4:-${TEST_SOL:-small}}
 
 SECCION_INICIO=0
 TEST_INICIO=$SECONDS

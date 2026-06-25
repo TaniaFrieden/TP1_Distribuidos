@@ -9,7 +9,7 @@ limpiar_y_arrancar() {
         timeout 10s docker rm -f $clients 2>/dev/null || true
     fi
     timeout 10s docker run --rm -v "$(pwd)/output:/out" -v "$(pwd)/logs:/lg" \
-        alpine sh -c "rm -rf /out/*/ /out/client_id*.txt /lg/client_*.txt /lg/client_stdout_*.txt" 2>/dev/null || true
+        alpine sh -c "rm -rf /out/*/ /out/client_id*.txt /lg/client_*.txt" 2>/dev/null || true
     make down 2>/dev/null || true
     sleep 2
     timeout 10s docker run --rm -v "$(pwd)/volume:/vol" \
@@ -25,7 +25,7 @@ preparar_entorno() {
         timeout 10s docker rm -f $clients 2>/dev/null || true
     fi
     timeout 10s docker run --rm -v "$(pwd)/output:/out" -v "$(pwd)/logs:/lg" \
-        alpine sh -c "rm -rf /out/*/ /out/client_id*.txt /lg/client_*.txt /lg/client_stdout_*.txt" 2>/dev/null || true
+        alpine sh -c "rm -rf /out/*/ /out/client_id*.txt /lg/client_*.txt" 2>/dev/null || true
     trap 'jobs -p | xargs -r kill 2>/dev/null; true' EXIT
     local esperados corriendo
     esperados=$($DOCKER_COMPOSE config --services 2>/dev/null | wc -l)
@@ -71,7 +71,7 @@ lanzar_clientes() {
     local acc=$3
     PIDS=()
     timeout 10s docker run --rm -v "$(pwd)/output:/cleanup_out" -v "$(pwd)/logs:/cleanup_logs" \
-        alpine sh -c "rm -rf /cleanup_out/*/ /cleanup_out/client_id_*.txt /cleanup_logs/client_stdout_*.txt" 2>/dev/null \
+        alpine sh -c "rm -rf /cleanup_out/*/ /cleanup_out/client_id_*.txt" 2>/dev/null \
         || { rm -rf output/*/ output/client_id_*.txt 2>/dev/null || true; }
     for i in $(seq 1 "$cant"); do
         if [ "${SEQUENTIAL:-0}" = "1" ]; then
@@ -80,7 +80,7 @@ lanzar_clientes() {
             fi
             echo "=== Cliente $i/$cant iniciando ==="
             ( export CLIENT_ID_SUFFIX=$i; make client TRANSACTIONS_FILE="$tx" ACCOUNTS_FILE="$acc" OUTPUT_DIR="output" \
-                > "logs/client_stdout_$i.txt" )
+                > /dev/null )
             if [ -n "${SEQUENTIAL_SOL:-}" ]; then
                 if ! comparar_ultimo_cliente "$SEQUENTIAL_SOL"; then
                     echo "=== FALLO en cliente $i/$cant. Abortando. ==="
@@ -90,7 +90,7 @@ lanzar_clientes() {
             echo "=== Cliente $i/$cant finalizado exitosamente ==="
         else
             ( export CLIENT_ID_SUFFIX=$i PROGRESS_BAR=0; make client TRANSACTIONS_FILE="$tx" ACCOUNTS_FILE="$acc" OUTPUT_DIR="output" \
-                > "logs/client_stdout_$i.txt" 2>/dev/null ) &
+                > /dev/null 2>/dev/null ) &
             PIDS+=($!)
         fi
     done
@@ -126,7 +126,7 @@ esperar_clientes() {
         "$total" "$total" "$(( (SECONDS - inicio) / 60 ))" "$(( (SECONDS - inicio) % 60 ))" >&2
 
     for pid in "${PIDS[@]}"; do
-        wait "$pid" || echo "[WARN] Proceso $pid (cliente) terminó con error. Ver logs/client_stdout_*.txt"
+        wait "$pid" || echo "[WARN] Proceso $pid (cliente) terminó con error."
     done
 }
 

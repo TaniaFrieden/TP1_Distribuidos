@@ -67,11 +67,11 @@ class Receptor:
         columnas_hint = data.get(CLAVE_COLUMNAS)
 
         if q_id is None or q_id in self._queries_terminadas:
-            logging.warning(f"[RECV] Q{q_id} ya terminada, descartando batch_id={batch_id}")
+            logging.debug(f"[RECV] Q{q_id} ya terminada, descartando batch_id={batch_id}")
             return batch_id
 
         if batch_id and batch_id in self._batch_ids_vistos.get(q_id, set()):
-            logging.warning(f"[RECV] Q{q_id} batch_id={batch_id} ya visto, descartando")
+            logging.debug(f"[RECV] Q{q_id} batch_id={batch_id} ya visto, descartando")
             return batch_id
 
         if q_id not in self._tiempos:
@@ -113,10 +113,16 @@ class Receptor:
 
     def _abrir_archivo(self, q_id):
         ruta = os.path.join(self._directorio, ARCHIVO_SOLUCION.format(q_id=q_id))
-        if os.path.exists(ruta) and os.path.getsize(ruta) > 0:
-            self._archivos[q_id] = open(ruta, "a", encoding="utf-8")
-            self._cabeceras[q_id] = True
-        else:
+        try:
+            if os.path.exists(ruta) and os.path.getsize(ruta) > 0:
+                self._archivos[q_id] = open(ruta, "a", encoding="utf-8")
+                self._cabeceras[q_id] = True
+            else:
+                self._archivos[q_id] = open(ruta, "w", encoding="utf-8")
+                self._cabeceras[q_id] = False
+        except OSError as e:
+            logging.error(f"No se pudo abrir archivo {ruta}: {e}")
+            os.makedirs(os.path.dirname(ruta), exist_ok=True)
             self._archivos[q_id] = open(ruta, "w", encoding="utf-8")
             self._cabeceras[q_id] = False
 

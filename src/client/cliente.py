@@ -136,8 +136,12 @@ class Cliente:
 
 def main():
     Logger.configurar("client")
-    cliente = Cliente()
-    cliente.ejecutar()
+    try:
+        cliente = Cliente()
+        cliente.ejecutar()
+    except KeyboardInterrupt:
+        logging.info("Cliente interrumpido por el usuario.")
+        return 130
     return 0
 
 

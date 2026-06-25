@@ -40,7 +40,7 @@ limpiar_entorno() {
     sleep 1
     timeout 10s docker run --rm \
         -v "$(pwd)/volume:/vol" -v "$(pwd)/output:/out" -v "$(pwd)/logs:/lg" \
-        alpine sh -c "rm -rf /vol/* /out/*/ /out/client_id*.txt /lg/client_*.txt /lg/client_stdout_*.txt /lg/q5_*.txt /lg/shared_*.txt /lg/chaos_monkey_run.log" \
+        alpine sh -c "rm -rf /vol/* /out/*/ /out/client_id*.txt /lg/client_*.txt /lg/q5_*.txt /lg/shared_*.txt /lg/chaos_monkey_run.log" \
         2>/dev/null || true
 }
 
