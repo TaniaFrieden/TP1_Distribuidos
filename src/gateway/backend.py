@@ -101,18 +101,18 @@ class BackendListener:
 
     def _obtener_socket_o_esperar(self, client_id, ack, nack):
         """
-        Retorna (sock, lock, eof_status) si el cliente está conectado.
+        Retorna (results_sock, results_lock, eof_status) si el cliente tiene socket de resultados.
         Si no está pero tiene estado persistido, espera hasta TIMEOUT_RECONEXION segundos.
         Se ejecuta en el hilo worker del cliente, no en el hilo de pika.
         """
-        sock, lock, eof_status = self.state.obtener_cliente(client_id)
+        sock, lock, eof_status = self.state.obtener_socket_resultados(client_id)
         if sock:
             return sock, lock, eof_status
 
         if self.state.tiene_estado_persistido(client_id):
             logger.info(f"Cliente {client_id} no conectado, esperando reconexión (hasta {self.TIMEOUT_RECONEXION}s)...")
-            self.state.esperar_cliente(client_id, timeout=self.TIMEOUT_RECONEXION)
-            sock, lock, eof_status = self.state.obtener_cliente(client_id)
+            self.state.esperar_socket_resultados(client_id, timeout=self.TIMEOUT_RECONEXION)
+            sock, lock, eof_status = self.state.obtener_socket_resultados(client_id)
             if sock:
                 return sock, lock, eof_status
             logger.warning(f"Timeout esperando reconexión de {client_id}, devolviendo mensaje a la cola")

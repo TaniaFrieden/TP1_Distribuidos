@@ -20,7 +20,7 @@ def main():
     
     try:
         from obtener_queries import obtener_queries_desde_compose
-        from comparar_datasets import comparar_csv_sin_orden
+        from comparar_datasets import comparar_csv_sin_orden, comparar_cliente
         from titular import imprimir_titulo
     except ImportError as e:
         print(f"Error al importar módulos auxiliares desde scripts/: {e}")
@@ -101,19 +101,19 @@ def main():
             client_output_dir = run_dir
         directorio_anterior = run_dir
 
-        for query in queries:
-            actual_csv = client_output_dir / f"q{query}_solucion.csv"
-            expected_csv = project_root / expected_template.format(q=query)
-
-            son_iguales, mensaje = comparar_csv_sin_orden(actual_csv, expected_csv)
-            if son_iguales:
-                print(f"\nComparando CSVs para Query {query}: Iguales")
-            else:
-                fallas_por_query[query] += 1
-                print(f"\nComparando CSVs para Query {query}: Diferentes")
-                print(mensaje)
-                print("\n[ERROR CRÍTICO] Discrepancia detectada en Query {}. Abortando para preservar logs y estado del sistema.".format(query))
-                sys.exit(1)
+        soluciones_dir = str((project_root / expected_template.format(q=0)).parent)
+        ok = comparar_cliente(
+            client_output_dir.name, str(client_output_dir), soluciones_dir, queries
+        )
+        if not ok:
+            for query in queries:
+                actual_csv = client_output_dir / f"q{query}_solucion.csv"
+                expected_csv = project_root / expected_template.format(q=query)
+                igual, _ = comparar_csv_sin_orden(actual_csv, expected_csv)
+                if not igual:
+                    fallas_por_query[query] += 1
+            print("\n[ERROR] Discrepancia detectada. Abortando para preservar logs y estado.")
+            sys.exit(1)
 
     imprimir_titulo("Resumen")
     print(f"\nResumen de fallas por query después de {cantidad_iteraciones} iteraciones:")

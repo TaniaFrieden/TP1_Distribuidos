@@ -7,4 +7,4 @@ ENV PYTHONPATH=/app
 COPY common ./common
 COPY client ./client
 
-ENTRYPOINT ["python3", "client/client.py"]
+ENTRYPOINT ["python3", "client/cliente.py"]

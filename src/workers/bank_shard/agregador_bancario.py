@@ -125,6 +125,27 @@ class AgregadorBancarioWorker(WorkerBase):
                         f"bank={bank_eof}/{self._config.total_bank_upstream})."
                     )
 
+        self._sincronizar_dedup_con_estado(estados)
+
+    def _sincronizar_dedup_con_estado(self, estados: dict):
+        hubo_cambio = False
+        for client_id in estados:
+            if client_id not in self._ids_procesados:
+                continue
+            ids_validos = self._ids_procesados[client_id]
+            ids_dedup = self.filtro_dedup._seen.get(client_id, set())
+            extra = ids_dedup - ids_validos
+            if extra:
+                logger.warning(
+                    f"[Recuperación] DedupFilter adelantado para {client_id}: "
+                    f"{len(extra)} IDs no están en ids_procesados. "
+                    f"Eliminando para permitir reprocesamiento."
+                )
+                self.filtro_dedup._seen[client_id] = ids_dedup & ids_validos
+                hubo_cambio = True
+        if hubo_cambio:
+            self.filtro_dedup._persistir()
+
     # ── Procesamiento de datos ──
 
     def procesar_payload(self, nombre_cola: str, client_id: str, payload: dict,

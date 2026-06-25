@@ -18,6 +18,7 @@ class TipoMensaje:
     CONFIG_QUERIES = 8
     HELLO = 9  # El cliente lo envía primero con su client_id para soportar reconexión
     ACK_RESULTADO = 10  # El cliente confirma recepción de un batch de resultados (contiene batch_id)
+    HELLO_RESULTS = 11  # El cliente abre una segunda conexión para recibir resultados
 
 
 def _recibir_tamanio(socket, size):
@@ -99,6 +100,7 @@ MANEJADORES_RECEPCION = {
     TipoMensaje.CONFIG_QUERIES: _recibir_reporte,
     TipoMensaje.HELLO: _recibir_reporte,
     TipoMensaje.ACK_RESULTADO: _recibir_reporte,
+    TipoMensaje.HELLO_RESULTS: _recibir_reporte,
 }
 
 
@@ -142,6 +144,7 @@ MANEJADORES_ENVIO = {
     TipoMensaje.CONFIG_QUERIES: _enviar_reporte,
     TipoMensaje.HELLO: _enviar_reporte,
     TipoMensaje.ACK_RESULTADO: _enviar_reporte,
+    TipoMensaje.HELLO_RESULTS: _enviar_reporte,
 }
 
 

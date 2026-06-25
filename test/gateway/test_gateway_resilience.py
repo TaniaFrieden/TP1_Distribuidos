@@ -84,10 +84,11 @@ class DummyState:
 
 def test_client_id_from_env(tmp_path):
     """Verifica que el cliente priorice la variable de entorno CLIENT_ID."""
-    import client.client as client_mod
-    env = {"CLIENT_ID": "test-env-id-123", "OUTPUT_DIR": str(tmp_path)}
+    from persistencia import PersistenciaCliente
+    env = {"CLIENT_ID": "test-env-id-123"}
     with patch.dict("os.environ", env):
-        cid = client_mod._cargar_o_generar_client_id()
+        persistencia = PersistenciaCliente(str(tmp_path))
+        cid = persistencia.cargar_o_generar_id()
         assert cid == "test-env-id-123"
 
 def test_gateway_upstream_crash_hook(tmp_path):

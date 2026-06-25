@@ -29,6 +29,7 @@ _ERRORES_TRANSIENTES = tuple(filter(None, [
     ConnectionRefusedError,
     pika.exceptions.AMQPConnectionError,
     getattr(pika.exceptions, "AMQPConnectionWorkflowFailed", None),
+    getattr(pika.adapters.utils.connection_workflow, "AMQPConnectorException", None),
 ]))
 
 logger = obtener_logger(__name__)

@@ -9,7 +9,7 @@ from state import GatewayState
 from backend import BackendListener
 from client_handler import ClientHandler
 from common.logger import Logger, obtener_logger
-from common import middleware
+from common import middleware, message_protocol
 
 logger = obtener_logger(__name__)
 
@@ -89,17 +89,50 @@ def main():
     try:
         while state.servidor_corriendo:
             client_sock, _ = server_socket.accept()
-            hilo_cliente = threading.Thread(
-                target=client_handler.atender,
-                args=(client_sock,),
+            hilo = threading.Thread(
+                target=_despachar_conexion,
+                args=(client_sock, client_handler, state),
                 daemon=True
             )
-            hilo_cliente.start()
+            hilo.start()
     except Exception:
         pass
     finally:
         evento_cierre.set()
         server_socket.close()
+
+
+def _despachar_conexion(sock, client_handler, state):
+    try:
+        tipo_mensaje, payload = message_protocol.external.recibir_mensaje(sock)
+    except Exception as e:
+        logger.error(f"Error leyendo primer mensaje de conexión: {e}")
+        sock.close()
+        return
+
+    if tipo_mensaje == message_protocol.external.TipoMensaje.HELLO:
+        data = json.loads(payload)
+        client_id = data.get("client_id", "").strip()
+        if not client_id:
+            logger.warning("HELLO sin client_id, cerrando conexión")
+            sock.close()
+            return
+        client_handler.atender(sock, client_id)
+
+    elif tipo_mensaje == message_protocol.external.TipoMensaje.HELLO_RESULTS:
+        data = json.loads(payload)
+        client_id = data.get("client_id", "").strip()
+        if not client_id:
+            logger.warning("HELLO_RESULTS sin client_id, cerrando conexión")
+            sock.close()
+            return
+        logger.info(f"Socket de resultados conectado para {client_id}")
+        state.registrar_socket_resultados(client_id, sock)
+        client_handler.leer_acks_resultados(client_id, sock)
+
+    else:
+        logger.warning(f"Tipo de mensaje inesperado en conexión: {tipo_mensaje}")
+        sock.close()
 
 
 if __name__ == "__main__":
