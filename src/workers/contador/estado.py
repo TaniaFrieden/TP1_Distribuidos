@@ -1,16 +1,5 @@
 import threading
-from common.constantes_protocolo import CABECERA, CANTIDAD, LOTES, PAYLOAD
-from persistencia_conteo import PersistenciaConteo
-
-
-def calcular_cantidad(payload: dict) -> int:
-    if LOTES in payload:
-        return sum(
-            int(lote[CABECERA].get(CANTIDAD, len(lote[PAYLOAD])))
-            for lote in payload[LOTES]
-        )
-    return 1
-
+from persistencia import PersistenciaConteo
 
 
 class EstadoConteo:
@@ -21,10 +10,6 @@ class EstadoConteo:
         self._lock = threading.Lock()
 
     def incrementar(self, client_id: str, cantidad: int, request_id: str | None) -> bool:
-        """
-        Incrementa el conteo para un cliente si el request_id no fue procesado aún.
-        Retorna True si el mensaje ya había sido procesado (duplicado), False en caso contrario.
-        """
         with self._lock:
             if request_id:
                 if client_id not in self._ids_procesados:
@@ -53,4 +38,3 @@ class EstadoConteo:
 
     def ya_completado(self, client_id: str) -> bool:
         return self._persistencia.esta_completado(client_id)
-

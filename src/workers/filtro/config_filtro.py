@@ -4,7 +4,7 @@ from common.constantes_protocolo import (
     ENV_OPERADOR_FILTRO,
     ENV_VALOR_FILTRO,
 )
-from operadores import OP_IGUAL
+from constantes import OP_IGUAL
 
 class ConfigFiltro:
     def __init__(self):

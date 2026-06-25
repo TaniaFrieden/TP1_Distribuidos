@@ -1,20 +1,5 @@
-MAPA_DIVISAS = {
-    "US Dollar":         "USD",
-    "Euro":              "EUR",
-    "UK Pound":          "GBP",
-    "Yen":               "JPY",
-    "Australian Dollar": "AUD",
-    "Bitcoin":           "BTC",
-    "Brazil Real":       "BRL",
-    "Canadian Dollar":   "CAD",
-    "Mexican Peso":      "MXN",
-    "Ruble":             "RUB",
-    "Rupee":             "INR",
-    "Saudi Riyal":       "SAR",
-    "Shekel":            "ILS",
-    "Swiss Franc":       "CHF",
-    "Yuan":              "CNY",
-}
+from constantes import MAPA_DIVISAS
+
 
 class ConversorMoneda:
     def __init__(self, cotizaciones: dict):

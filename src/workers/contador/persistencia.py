@@ -1,7 +1,7 @@
 import os
 from common.logger import obtener_logger
 from common.persistencia import PersistidorEstado, VOLUMEN_DIR
-from constantes import PREFIJO_COUNTER, CLAVE_CONTEO, CLAVE_BARRERA_COMPLETADA, CLAVE_IDS_PROCESADOS
+from constantes import PREFIJO_CONTADOR, CLAVE_CONTEO, CLAVE_BARRERA_COMPLETADA, CLAVE_IDS_PROCESADOS
 
 logger = obtener_logger(__name__)
 
@@ -12,7 +12,7 @@ class PersistenciaConteo:
         self._id_nodo = id_nodo
 
     def _nombre_nodo(self, client_id: str) -> str:
-        return f"{PREFIJO_COUNTER}_{self._id_nodo}_{client_id}"
+        return f"{PREFIJO_CONTADOR}_{self._id_nodo}_{client_id}"
 
     def recuperar_estado(self) -> tuple[dict[str, int], dict[str, set[str]]]:
         conteos: dict[str, int] = {}
@@ -22,7 +22,7 @@ class PersistenciaConteo:
             logger.info(f"Directorio {VOLUMEN_DIR} no existe. Arrancando limpio.")
             return conteos, ids_procesados
 
-        prefijo = f"{PREFIJO_COUNTER}_{self._id_nodo}_"
+        prefijo = f"{PREFIJO_CONTADOR}_{self._id_nodo}_"
         carpetas = [c for c in os.listdir(VOLUMEN_DIR) if c.startswith(prefijo)]
 
         if not carpetas:
@@ -39,12 +39,12 @@ class PersistenciaConteo:
                 continue
 
             if estado.get(CLAVE_BARRERA_COMPLETADA, False):
-                logger.info(f"Barrera completada para client_id={client_id}. Omitiendo recuperación.")
+                logger.info(f"Barrera completada para client_id={client_id}. Omitiendo.")
                 continue
 
             conteos[client_id] = estado.get(CLAVE_CONTEO, 0)
             ids_procesados[client_id] = set(estado.get(CLAVE_IDS_PROCESADOS, []))
-            logger.info(f"Recuperado estado para client_id={client_id}: count={conteos[client_id]}, ids_count={len(ids_procesados[client_id])}")
+            logger.info(f"Recuperado client_id={client_id}: count={conteos[client_id]}, ids={len(ids_procesados[client_id])}")
 
         return conteos, ids_procesados
 
@@ -62,11 +62,12 @@ class PersistenciaConteo:
         ).borrar()
 
     def marcar_completado(self, client_id: str):
-        nombre = self._nombre_nodo(client_id)
-        PersistidorEstado(nombre, base_dir=VOLUMEN_DIR).guardar({CLAVE_BARRERA_COMPLETADA: True})
+        PersistidorEstado(
+            self._nombre_nodo(client_id), base_dir=VOLUMEN_DIR
+        ).guardar({CLAVE_BARRERA_COMPLETADA: True})
 
     def esta_completado(self, client_id: str) -> bool:
-        nombre = self._nombre_nodo(client_id)
-        estado = PersistidorEstado(nombre, base_dir=VOLUMEN_DIR).cargar()
+        estado = PersistidorEstado(
+            self._nombre_nodo(client_id), base_dir=VOLUMEN_DIR
+        ).cargar()
         return estado.get(CLAVE_BARRERA_COMPLETADA, False)
-

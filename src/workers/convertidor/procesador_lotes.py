@@ -10,6 +10,7 @@ from common.constantes_protocolo import (
     COL_MONTO_PAGADO,
 )
 from conversor_moneda import ConversorMoneda
+from constantes import UMBRAL_MONTO_USD
 
 class IndicesLote:
     def __init__(self, esquema: list):
@@ -62,7 +63,7 @@ class ProcesadorLotesConvertidor:
                 monto = float(amt_val)
                 
                 monto_usd = self.conversor.convertir_a_usd(monto, iso, fecha)
-                if monto_usd is not None and monto_usd < 1.0:
+                if monto_usd is not None and monto_usd < UMBRAL_MONTO_USD:
                     registros_filtrados.append(record_values)
             except (ValueError, KeyError, IndexError):
                 continue
@@ -77,4 +78,4 @@ class ProcesadorLotesConvertidor:
         monto = float(transaccion.get(COL_MONTO_PAGADO, 0))
         monto_usd = self.conversor.convertir_a_usd(monto, iso, fecha)
 
-        return monto_usd is not None and monto_usd < 1.0
+        return monto_usd is not None and monto_usd < UMBRAL_MONTO_USD

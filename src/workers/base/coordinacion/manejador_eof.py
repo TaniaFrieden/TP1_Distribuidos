@@ -1,6 +1,7 @@
 import ctypes
 import gc
 from common.logger import obtener_logger
+from common.message_protocol.internal import ParseadorMensajes
 from .hooks import HOOK_BEFORE_EOF_FORWARD
 
 logger = obtener_logger(__name__)
@@ -88,7 +89,6 @@ class ManejadorCoordinacionEof:
             if hook:
                 hook()
             try:
-                from common.message_protocol.internal import ParseadorMensajes
                 if total_emitidos is not None:
                     payload = ParseadorMensajes.deserializar(mensaje_original)
                     payload["total_mensajes_enviados"] = total_emitidos

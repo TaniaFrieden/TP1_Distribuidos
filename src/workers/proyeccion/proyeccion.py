@@ -10,16 +10,6 @@ logger = obtener_logger(__name__)
 
 
 class WorkerProyeccion(WorkerBase):
-    """
-    Worker genérico de proyección de campos.
-
-    Filtra cada registro conservando solo los campos listados en CAMPOS.
-    Opcionalmente convierte a entero los campos en INT_FIELDS.
-
-    Variables de entorno:
-      CAMPOS      campos a conservar, separados por coma
-      INT_FIELDS  campos a convertir a entero, separados por coma (opcional)
-    """
 
     def __init__(self):
         super().__init__()
@@ -55,8 +45,6 @@ class WorkerProyeccion(WorkerBase):
             nack()
 
     def al_completar_cliente(self, client_id: str):
-        # Cada worker envía su propio EOF por su propia conexión TCP, garantizando
-        # que sus datos lleguen a RabbitMQ antes que este EOF (ordering por conexión).
         eof_sintetico = json.dumps({
             ID_CLIENTE: client_id,
             FIN_DE_ARCHIVO: True,

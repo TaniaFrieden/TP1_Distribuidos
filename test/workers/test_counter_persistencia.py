@@ -1,11 +1,3 @@
-"""
-Tests de persistencia para CounterWorker
-=========================================
-Cubren:
-  - Caso 1: recovery del estado desde disco al reiniciarse
-  - Caso 8: barrier_completada previene re-flush tras caída
-  - Conteo correcto de batches y persistencia
-"""
 import json
 import os
 import pytest
@@ -35,14 +27,10 @@ def _crear_worker(tmp_path, extra_env=None):
          patch("common.middleware.MessageMiddlewareQueueRabbitMQ"), \
          patch("common.middleware.FanoutQueueRabbitMQ"), \
          patch("common.middleware.FanoutExchangeRabbitMQ"), \
-         patch("persistencia_conteo.VOLUMEN_DIR", str(tmp_path)):
-        w = mod.CounterWorker()
+         patch("persistencia.VOLUMEN_DIR", str(tmp_path)):
+        w = mod.WorkerContador()
     return w
 
-
-# ──────────────────────────────────────────────────────────────────
-# Caso 1 — Recovery de estado desde disco
-# ──────────────────────────────────────────────────────────────────
 
 class TestCounterRecovery:
 
@@ -68,10 +56,6 @@ class TestCounterRecovery:
         assert "c1" not in w.estado._conteos
 
 
-# ──────────────────────────────────────────────────────────────────
-# Caso 8 — barrier_completada previene re-flush
-# ──────────────────────────────────────────────────────────────────
-
 class TestCounterBarrierCompletada:
 
     def test_estado_con_barrier_completada_no_se_carga_en_memoria(self, tmp_path):
@@ -91,10 +75,6 @@ class TestCounterBarrierCompletada:
         assert w.estado._conteos["c1"] == 7
 
 
-# ──────────────────────────────────────────────────────────────────
-# Conteo correcto y persistencia
-# ──────────────────────────────────────────────────────────────────
-
 class TestCounterConteo:
 
     def test_incrementa_conteo_con_batches(self, tmp_path):
@@ -106,10 +86,10 @@ class TestCounterConteo:
             "request_id": "req-nuevo",
             "batches": [{"header": {"schema": [], "client_id": "c1", "count": 3}, "payload": [[], [], []]}],
         }
-        with patch("persistencia_conteo.VOLUMEN_DIR", str(tmp_path)):
+        with patch("persistencia.VOLUMEN_DIR", str(tmp_path)):
             w.procesar_payload("q5_in", "c1", payload, json.dumps(payload).encode(), MagicMock(), MagicMock())
 
-        assert w.estado._conteos["c1"] == 8  # 5 + 3
+        assert w.estado._conteos["c1"] == 8
         estado = PersistidorEstado("counter_1_c1", base_dir=str(tmp_path)).cargar()
         assert estado["count"] == 8
 
@@ -117,7 +97,7 @@ class TestCounterConteo:
         w = _crear_worker(tmp_path)
 
         payload = {"client_id": "c1", "request_id": "req-1"}
-        with patch("persistencia_conteo.VOLUMEN_DIR", str(tmp_path)):
+        with patch("persistencia.VOLUMEN_DIR", str(tmp_path)):
             w.procesar_payload("q5_in", "c1", payload, json.dumps(payload).encode(), MagicMock(), MagicMock())
 
         assert w.estado._conteos["c1"] == 1
