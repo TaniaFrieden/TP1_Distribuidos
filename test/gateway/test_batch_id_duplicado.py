@@ -60,6 +60,7 @@ def _crear_receptor(tmpdir):
         client_id="test",
         evento_completado=threading.Event(),
         persistencia=mock_persistencia,
+        progreso=MagicMock(),
     )
 
 

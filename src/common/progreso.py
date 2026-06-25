@@ -19,39 +19,24 @@ def _prefijo():
     return f"[C{_ETIQUETA}] " if _ETIQUETA else ""
 
 
-class ProgresoEnvio:
-    """Barras de progreso para el envío de archivos."""
+class Progreso:
+    """Progreso unificado de envío y recepción en una sola línea."""
 
     def __init__(self):
         self._lock = threading.Lock()
-        self._estado = {}
-        self._lineas_escritas = 0
-
-    def actualizar(self, nombre, enviados, total):
-        if not _HABILITADO:
-            return
-        with self._lock:
-            self._estado[nombre] = (enviados, total)
-            if self._lineas_escritas > 0:
-                sys.stderr.write(f"\033[{self._lineas_escritas}A")
-            for nom, (env, tot) in sorted(self._estado.items()):
-                pct = env / tot * 100 if tot > 0 else 100
-                ancho = 25
-                lleno = int(ancho * env / tot) if tot > 0 else ancho
-                barra = "█" * lleno + "░" * (ancho - lleno)
-                sys.stderr.write(f"\033[2K  {_prefijo()}{barra} {pct:5.1f}% {nom}\n")
-            self._lineas_escritas = len(self._estado)
-            sys.stderr.flush()
-
-
-class ProgresoRecepcion:
-    """Spinner y estado de queries recibidas."""
-
-    def __init__(self):
+        self._envios = {}
         self._idx_spinner = 0
         self._filas_por_query = {}
         self._valor_query = {}
         self._queries_completas = set()
+        self._lineas_escritas = 0
+
+    def actualizar_envio(self, nombre, enviados, total):
+        if not _HABILITADO:
+            return
+        with self._lock:
+            self._envios[nombre] = (enviados, total)
+            self._renderizar()
 
     def registrar_fila(self, q_id, valor=None):
         self._filas_por_query[q_id] = self._filas_por_query.get(q_id, 0) + 1
@@ -65,20 +50,41 @@ class ProgresoRecepcion:
     def mostrar(self):
         if not _HABILITADO:
             return
-        self._idx_spinner = (self._idx_spinner + 1) % len(_SPINNER)
-        partes = []
-        for q_id in sorted(self._filas_por_query.keys()):
-            filas = self._filas_por_query[q_id]
-            display = f"={self._valor_query[q_id]}" if q_id in self._valor_query else f"{filas:,}"
-            marca = "✔" if q_id in self._queries_completas else _SPINNER[self._idx_spinner]
-            partes.append(f"Q{q_id}: {marca} {display}")
-        linea = f"\r  {_prefijo()}Recibiendo: {' | '.join(partes)}"
-        ancho = _ancho_terminal()
-        if len(linea) > ancho:
-            linea = linea[:ancho]
-        sys.stderr.write(f"\033[2K{linea}")
-        sys.stderr.flush()
+        with self._lock:
+            self._renderizar()
 
     def finalizar(self):
-        sys.stderr.write("\n")
+        if not _HABILITADO:
+            return
+        with self._lock:
+            self._renderizar()
+            self._lineas_escritas = 0
+
+    def _renderizar(self):
+        self._idx_spinner = (self._idx_spinner + 1) % len(_SPINNER)
+        if self._lineas_escritas > 0:
+            sys.stderr.write(f"\033[{self._lineas_escritas}A")
+        lineas = 0
+        prefijo = _prefijo()
+        for nom, (env, tot) in sorted(self._envios.items()):
+            pct = env / tot * 100 if tot > 0 else 100
+            ancho = 25
+            lleno = int(ancho * env / tot) if tot > 0 else ancho
+            barra = "█" * lleno + "░" * (ancho - lleno)
+            sys.stderr.write(f"\033[2K  {prefijo}{barra} {pct:5.1f}% {nom}\n")
+            lineas += 1
+        if self._filas_por_query:
+            partes = []
+            for q_id in sorted(self._filas_por_query.keys()):
+                filas = self._filas_por_query[q_id]
+                display = f"={self._valor_query[q_id]}" if q_id in self._valor_query else f"{filas:,}"
+                marca = "✔" if q_id in self._queries_completas else _SPINNER[self._idx_spinner]
+                partes.append(f"Q{q_id}: {marca} {display}")
+            linea = f"  {prefijo}Recibiendo: {' | '.join(partes)}"
+            ancho = _ancho_terminal()
+            if len(linea) > ancho:
+                linea = linea[:ancho]
+            sys.stderr.write(f"\033[2K{linea}\n")
+            lineas += 1
+        self._lineas_escritas = lineas
         sys.stderr.flush()

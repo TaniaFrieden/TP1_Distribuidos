@@ -12,6 +12,7 @@ from constantes import (
     INTENTOS_RECONEXION, ESPERA_RECONEXION_SEG,
     RESULTADO_COMPLETADO, RESULTADO_REINTENTAR, RESULTADO_FALLO_CONEXION,
 )
+from common.progreso import Progreso
 from persistencia import PersistenciaCliente
 from enviador import Enviador
 from receptor import Receptor
@@ -77,17 +78,18 @@ class Cliente:
 
         shutdown = threading.Event()
         completado = threading.Event()
+        progreso = Progreso()
 
         receptor = Receptor(
             results_conn, queries, inicio, self._client_id,
-            completado, self._persistencia,
+            completado, self._persistencia, progreso,
         )
         hilo_receptor = threading.Thread(target=receptor.escuchar, daemon=True)
         hilo_receptor.start()
 
         if not omitir_envio:
             send_lock = threading.Lock()
-            enviador = Enviador(data_conn, self._client_id, send_lock, shutdown)
+            enviador = Enviador(data_conn, self._client_id, send_lock, shutdown, progreso)
             enviador.enviar_archivos(ARCHIVOS_A_ENVIAR)
 
             if shutdown.is_set():
@@ -108,7 +110,7 @@ class Cliente:
                 hilo_receptor.join(timeout=2)
                 return RESULTADO_FALLO_CONEXION
         else:
-            logging.info("Datos ya enviados en sesión anterior, esperando resultados...")
+            pass
 
         data_conn.cerrar()
         hilo_receptor.join()
@@ -126,9 +128,9 @@ class Cliente:
         config = json.loads(respuesta)
         queries = config.get("queries", [])
         omitir_envio = config.get("omitir_envio", False)
-        logging.info(
-            f"Conectado. ID: {self._client_id} | Queries: {queries} | Omitir envío: {omitir_envio}"
-        )
+        logging.info(f"Conectado al gateway. ID: {self._client_id} | Queries: {queries}")
+        if omitir_envio:
+            logging.info("El gateway confirmó que los datos ya fueron recibidos, esperando resultados...")
         return queries, omitir_envio
 
 

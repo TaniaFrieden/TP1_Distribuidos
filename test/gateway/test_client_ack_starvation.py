@@ -42,7 +42,7 @@ class TestDosSocketsIndependientes(unittest.TestCase):
         mock_conexion = MagicMock()
         mock_conexion.enviar.side_effect = lambda *a, **kw: envios.append(1)
 
-        enviador = Enviador(mock_conexion, "client1", lock, shutdown)
+        enviador = Enviador(mock_conexion, "client1", lock, shutdown, MagicMock())
 
         registros = [["a", "b"]] * 15
         headers = ["c1", "c2"]
@@ -65,6 +65,7 @@ class TestDosSocketsIndependientes(unittest.TestCase):
             client_id="test",
             evento_completado=threading.Event(),
             persistencia=mock_persistencia,
+            progreso=MagicMock(),
         )
 
         receptor._enviar_ack("batch123")
@@ -80,7 +81,7 @@ class TestDosSocketsIndependientes(unittest.TestCase):
         envios = []
         send_conn.enviar.side_effect = lambda *a, **kw: envios.append(time.monotonic())
 
-        enviador = Enviador(send_conn, "client1", lock, shutdown)
+        enviador = Enviador(send_conn, "client1", lock, shutdown, MagicMock())
 
         mock_persistencia = MagicMock()
         mock_persistencia.directorio_cliente.return_value = "/tmp/test"
@@ -94,6 +95,7 @@ class TestDosSocketsIndependientes(unittest.TestCase):
             client_id="test",
             evento_completado=threading.Event(),
             persistencia=mock_persistencia,
+            progreso=MagicMock(),
         )
 
         ack_done = threading.Event()

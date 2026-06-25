@@ -3,18 +3,15 @@ import logging
 import threading
 from common.message_protocol.external import TipoMensaje
 from config import LOTE_SIZE
-from common.progreso import ProgresoEnvio
-
-
 class Enviador:
     """Envía archivos CSV al gateway en lotes, en paralelo."""
 
-    def __init__(self, conexion, client_id, lock_escritura, shutdown):
+    def __init__(self, conexion, client_id, lock_escritura, shutdown, progreso):
         self._conexion = conexion
         self._client_id = client_id
         self._lock = lock_escritura
         self._shutdown = shutdown
-        self._progreso = ProgresoEnvio()
+        self._progreso = progreso
 
     def enviar_archivos(self, archivos_con_tipo):
         """Envía múltiples archivos en paralelo. Cada elemento es (ruta, tipo_mensaje)."""
@@ -59,13 +56,13 @@ class Enviador:
                 self._enviar_con_prioridad_ack(tipo_mensaje, headers, lote)
                 enviados += len(lote)
                 if total > 0:
-                    self._progreso.actualizar(nombre, enviados, total)
+                    self._progreso.actualizar_envio(nombre, enviados, total)
                 lote = []
         if lote and not self._shutdown.is_set():
             self._enviar_con_prioridad_ack(tipo_mensaje, headers, lote)
             enviados += len(lote)
             if total > 0:
-                self._progreso.actualizar(nombre, enviados, total)
+                self._progreso.actualizar_envio(nombre, enviados, total)
 
     def _enviar_con_prioridad_ack(self, tipo_mensaje, headers, lote):
         with self._lock:

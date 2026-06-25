@@ -5,20 +5,17 @@ import time
 from common.message_protocol.external import TipoMensaje
 from common.constantes_protocolo import CLAVE_QUERY, CLAVE_RESULTADO, CLAVE_EOF_REPORTE, CLAVE_COLUMNAS
 from constantes import ARCHIVO_SOLUCION
-from common.progreso import ProgresoRecepcion
-
-
 class Receptor:
     """Escucha y procesa los resultados enviados por el gateway."""
 
     def __init__(self, conexion, queries, inicio, client_id,
-                 evento_completado, persistencia):
+                 evento_completado, persistencia, progreso):
         self._conexion = conexion
         self._inicio = inicio
         self._client_id = client_id
         self._completado = evento_completado
         self._persistencia = persistencia
-        self._progreso = ProgresoRecepcion()
+        self._progreso = progreso
 
         self._directorio = persistencia.directorio_cliente(client_id)
         self._queries_terminadas = persistencia.cargar_queries_completadas(client_id)
@@ -85,8 +82,6 @@ class Receptor:
 
         items = resultado if isinstance(resultado, list) else [resultado]
         datos_escritos = False
-        logging.info(f"[RECV] Q{q_id} batch_id={batch_id}: {len(items)} items")
-
         for item in items:
             es_eof = self._es_eof(item)
 
@@ -141,7 +136,6 @@ class Receptor:
         self._archivos[q_id].flush()
 
     def _cerrar_archivo(self, q_id):
-        logging.info(f"Resultados de Query {q_id} recibidos por completo.")
         if q_id in self._archivos:
             self._archivos[q_id].close()
             del self._archivos[q_id]

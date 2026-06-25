@@ -19,7 +19,6 @@ class PersistenciaCliente:
     def cargar_o_generar_id(self, sufijo=""):
         env_id = os.environ.get("CLIENT_ID")
         if env_id:
-            logging.info(f"Usando client_id de variable de entorno: {env_id}")
             return env_id
 
         nombre_archivo = f"client_id_{sufijo}.txt" if sufijo else "client_id.txt"
@@ -30,13 +29,11 @@ class PersistenciaCliente:
             with open(ruta, "r") as f:
                 cid = f.read().strip()
             if cid:
-                logging.info(f"Usando client_id persistido: {cid}")
                 return cid
 
         cid = str(uuid.uuid4())
         with open(ruta, "w") as f:
             f.write(cid)
-        logging.info(f"Nuevo client_id generado: {cid}")
         return cid
 
     def directorio_cliente(self, client_id):
