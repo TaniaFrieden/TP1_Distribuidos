@@ -29,12 +29,7 @@ class ClientHandler:
         self.state = state
         self._hook = CrashHook()
 
-    def atender(self, client_socket):
-        client_id = self._leer_hello(client_socket)
-        if not client_id:
-            client_socket.close()
-            return
-
+    def atender(self, client_socket, client_id):
         estado = self.state.cargar_estado_cliente(client_id)
         datos_ya_enviados = estado.get("datos_enviados", False)
         queries_ya_entregadas = set(estado.get("queries_entregadas", []))
@@ -43,8 +38,6 @@ class ClientHandler:
 
         self.state.registrar_cliente(client_id, client_socket)
 
-        # Adquirir el lock antes de enviar CONFIG_QUERIES: evita que el BackendListener
-        # empiece a enviar REPORTEs al socket antes de que el cliente haya recibido CONFIG_QUERIES.
         _, lock, eof_status = self.state.obtener_cliente(client_id)
         with lock:
             if queries_ya_entregadas and eof_status is not None:
@@ -56,38 +49,45 @@ class ClientHandler:
             if saved_session:
                 self.state.registrar_sesion(client_id, saved_session)
             if len(queries_ya_entregadas) >= len(self._obtener_lista_queries()):
-                logger.info(f"Cliente {client_id}: todas las queries ya entregadas, enviando FIN_DE_REGISTROS")
-                try:
-                    with lock:
+                logger.info(f"Cliente {client_id}: todas las queries ya entregadas, enviando FIN_DE_REGISTROS directo")
+                self.state.esperar_socket_resultados(client_id, timeout=30)
+                results_sock, results_lock, _ = self.state.obtener_socket_resultados(client_id)
+                if results_sock:
+                    try:
                         message_protocol.external.enviar_mensaje(
-                            client_socket, message_protocol.external.TipoMensaje.FIN_DE_REGISTROS
+                            results_sock, message_protocol.external.TipoMensaje.FIN_DE_REGISTROS
                         )
-                except Exception as e:
-                    logger.warning(f"Error enviando FIN_DE_REGISTROS a {client_id}: {e}")
+                    except Exception as e:
+                        logger.warning(f"Error enviando FIN_DE_REGISTROS a {client_id}: {e}")
                 self.state.limpiar_estado_cliente(client_id)
                 self.state.remover_cliente(client_id)
                 client_socket.close()
                 return
-            self._modo_solo_resultados(client_id, client_socket)
+            client_socket.close()
         else:
             self._modo_normal(client_id, client_socket)
 
-    def _leer_hello(self, client_socket):
-        """Lee el mensaje HELLO del cliente y retorna el client_id (nuevo o existente)."""
+    def leer_acks_resultados(self, client_id, results_socket):
+        """Lee ACK_RESULTADO del socket de resultados del cliente."""
         try:
-            tipo_mensaje, payload = message_protocol.external.recibir_mensaje(client_socket)
-            if tipo_mensaje == message_protocol.external.TipoMensaje.HELLO:
-                data = json.loads(payload)
-                cid = data.get("client_id", "").strip()
-                if cid:
-                    logger.info(f"Cliente reconectando con ID existente: {cid}")
-                    return cid
-                nuevo_id = str(uuid.uuid4())
-                logger.info(f"Nuevo cliente, asignando ID: {nuevo_id}")
-                return nuevo_id
-        except Exception as e:
-            logger.error(f"Error leyendo HELLO del cliente: {e}")
-        return None
+            while True:
+                tipo_mensaje, payload = message_protocol.external.recibir_mensaje(results_socket)
+                if tipo_mensaje == message_protocol.external.TipoMensaje.ACK_RESULTADO:
+                    data = json.loads(payload)
+                    self.state.notificar_ack(client_id, data.get("batch_id"))
+        except Exception:
+            pass
+        finally:
+            self.state.cancelar_acks_cliente(client_id)
+            try:
+                results_socket.close()
+            except Exception:
+                pass
+            gc.collect()
+            try:
+                ctypes.cdll.LoadLibrary("libc.so.6").malloc_trim(0)
+            except Exception:
+                pass
 
     def _obtener_lista_queries(self):
         queries = []
@@ -111,37 +111,6 @@ class ClientHandler:
             )
         except Exception as e:
             logger.error(f"Error enviando CONFIG_QUERIES a {client_id}: {e}")
-
-    def _leer_acks(self, client_id, client_socket):
-        """Lee ACK_RESULTADO del cliente y los despacha al BackendListener vía state."""
-        try:
-            while True:
-                tipo_mensaje, payload = message_protocol.external.recibir_mensaje(client_socket)
-                if tipo_mensaje == message_protocol.external.TipoMensaje.ACK_RESULTADO:
-                    data = json.loads(payload)
-                    self.state.notificar_ack(client_id, data.get("batch_id"))
-        except Exception:
-            pass
-        finally:
-            self.state.cancelar_acks_cliente(client_id)
-            try:
-                client_socket.close()
-            except Exception:
-                pass
-            gc.collect()
-            try:
-                ctypes.cdll.LoadLibrary("libc.so.6").malloc_trim(0)
-            except Exception:
-                pass
-
-    def _modo_solo_resultados(self, client_id, client_socket):
-        """
-        El cliente ya envió todos sus datos en una sesión anterior.
-        Solo esperamos a que BackendListener termine de entregar los resultados
-        y el cliente cierre la conexión.
-        """
-        logger.info(f"Cliente {client_id} en modo solo-resultados")
-        self._leer_acks(client_id, client_socket)
 
     def _hilo_publicador(self, buffer, colas_tx, colas_bancos, client_id, error_event):
         try:
@@ -221,14 +190,10 @@ class ClientHandler:
                 tipo_mensaje, payload = message_protocol.external.recibir_mensaje(client_socket)
 
                 if tipo_mensaje == message_protocol.external.TipoMensaje.LOTE_TRANSACCIONES:
-                    self._encolar_lote_tx(client_id, client_socket, payload, colas_tx, publish_buffer)
+                    self._encolar_lote_tx(client_id, payload, colas_tx, publish_buffer)
 
                 elif tipo_mensaje == message_protocol.external.TipoMensaje.LOTE_BANCOS:
-                    self._encolar_lote_bancos(client_id, client_socket, payload, colas_bancos, publish_buffer)
-
-                elif tipo_mensaje == message_protocol.external.TipoMensaje.ACK_RESULTADO:
-                    data = json.loads(payload)
-                    self.state.notificar_ack(client_id, data.get("batch_id"))
+                    self._encolar_lote_bancos(client_id, payload, colas_bancos, publish_buffer)
 
                 elif tipo_mensaje == message_protocol.external.TipoMensaje.FIN_DE_REGISTROS:
                     if client_id is None:
@@ -266,16 +231,12 @@ class ClientHandler:
                 pub_thread.join(timeout=10)
                 self.state.remover_cliente(client_id)
 
-        if eof_enviado:
-            self._leer_acks(client_id, client_socket)
-        else:
-            gc.collect()
-            try:
-                ctypes.cdll.LoadLibrary("libc.so.6").malloc_trim(0)
-            except Exception:
-                pass
+        try:
+            client_socket.close()
+        except Exception:
+            pass
 
-    def _encolar_lote_tx(self, client_id, client_socket, payload, colas_tx, buffer):
+    def _encolar_lote_tx(self, client_id, payload, colas_tx, buffer):
         header = payload[CABECERA]
         schema = self._deduplicar_schema(header[ESQUEMA])
         header[ESQUEMA] = schema
@@ -292,17 +253,9 @@ class ClientHandler:
         buffer.put(("tx", msgs))
 
         self._hook.verificar(CP.GW_UPSTREAM_BEFORE_ACK, f"upstream {client_id}")
-        _, lock, _ = self.state.obtener_cliente(client_id)
-        if lock:
-            with lock:
-                message_protocol.external.enviar_mensaje(client_socket, message_protocol.external.TipoMensaje.ACK)
 
-    def _encolar_lote_bancos(self, client_id, client_socket, payload, colas_bancos, buffer):
+    def _encolar_lote_bancos(self, client_id, payload, colas_bancos, buffer):
         if not self.config.bank_queue_config:
-            _, lock, _ = self.state.obtener_cliente(client_id)
-            if lock:
-                with lock:
-                    message_protocol.external.enviar_mensaje(client_socket, message_protocol.external.TipoMensaje.ACK)
             return
 
         header = payload[CABECERA]
@@ -334,10 +287,6 @@ class ClientHandler:
         buffer.put(("bancos", msgs))
 
         self._hook.verificar(CP.GW_UPSTREAM_BEFORE_ACK, f"upstream {client_id}")
-        _, lock, _ = self.state.obtener_cliente(client_id)
-        if lock:
-            with lock:
-                message_protocol.external.enviar_mensaje(client_socket, message_protocol.external.TipoMensaje.ACK)
 
     @staticmethod
     def _deduplicar_schema(schema):

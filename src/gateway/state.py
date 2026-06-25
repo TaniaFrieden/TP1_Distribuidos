@@ -11,10 +11,13 @@ class GatewayState:
         self.clientes_conectados = {}
         self.clientes_locks = {}
         self.clientes_eof_status = {}
+        self.clientes_resultados = {}
+        self.clientes_results_locks = {}
         self.request_counters = {}
         self.servidor_corriendo = True
         self.state_lock = threading.Lock()
         self._eventos_reconexion = {}  # {client_id: threading.Event}
+        self._eventos_socket_resultados = {}  # {client_id: threading.Event}
         self._acks_pendientes = {}     # {client_id: {batch_id: threading.Event}}
         self._sesiones = {}            # {client_id: session_id}
 
@@ -33,6 +36,30 @@ class GatewayState:
             if client_id not in self._eventos_reconexion:
                 self._eventos_reconexion[client_id] = threading.Event()
             self._eventos_reconexion[client_id].set()
+
+    def registrar_socket_resultados(self, client_id, sock):
+        with self.state_lock:
+            self.clientes_resultados[client_id] = sock
+            if client_id not in self.clientes_results_locks:
+                self.clientes_results_locks[client_id] = threading.Lock()
+            if client_id not in self._eventos_socket_resultados:
+                self._eventos_socket_resultados[client_id] = threading.Event()
+            self._eventos_socket_resultados[client_id].set()
+
+    def obtener_socket_resultados(self, client_id):
+        with self.state_lock:
+            return (
+                self.clientes_resultados.get(client_id),
+                self.clientes_results_locks.get(client_id),
+                self.clientes_eof_status.get(client_id)
+            )
+
+    def esperar_socket_resultados(self, client_id, timeout=120):
+        with self.state_lock:
+            if client_id not in self._eventos_socket_resultados:
+                self._eventos_socket_resultados[client_id] = threading.Event()
+            evento = self._eventos_socket_resultados[client_id]
+        return evento.wait(timeout=timeout)
 
     def registrar_sesion(self, client_id, session_id):
         with self.state_lock:
@@ -64,13 +91,15 @@ class GatewayState:
             self.clientes_conectados.pop(client_id, None)
             self.clientes_locks.pop(client_id, None)
             self.clientes_eof_status.pop(client_id, None)
+            self.clientes_resultados.pop(client_id, None)
+            self.clientes_results_locks.pop(client_id, None)
             keys_to_remove = [k for k in self.request_counters if k[0] == client_id]
             for k in keys_to_remove:
                 self.request_counters.pop(k, None)
-            # Limpia el evento para el próximo ciclo pero no lo elimina,
-            # así esperar_cliente puede reutilizarlo en la siguiente reconexión.
             if client_id in self._eventos_reconexion:
                 self._eventos_reconexion[client_id].clear()
+            if client_id in self._eventos_socket_resultados:
+                self._eventos_socket_resultados[client_id].clear()
 
     def detener_servidor(self):
         self.servidor_corriendo = False

@@ -16,8 +16,10 @@ import json
 import os
 import sys
 import tempfile
+import threading
 import types
 import unittest
+from unittest.mock import MagicMock
 
 raiz = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
 if os.path.join(raiz, 'src/client') not in sys.path:
@@ -33,7 +35,7 @@ mock_config.ACCOUNTS_FILE = "acc.csv"
 mock_config.LOTE_SIZE = 5
 sys.modules['config'] = mock_config
 
-from receiver import _procesar_resultado
+from receptor import Receptor
 
 
 def _hacer_reporte(q_id, registros, batch_id):
@@ -46,18 +48,29 @@ def _hacer_reporte(q_id, registros, batch_id):
     })
 
 
+def _crear_receptor(tmpdir):
+    mock_persistencia = MagicMock()
+    mock_persistencia.directorio_cliente.return_value = tmpdir
+    mock_persistencia.cargar_queries_completadas.return_value = set()
+    mock_persistencia.cargar_batch_ids.return_value = {}
+    return Receptor(
+        conexion=MagicMock(),
+        queries=[],
+        inicio=0.0,
+        client_id="test",
+        evento_completado=threading.Event(),
+        persistencia=mock_persistencia,
+    )
+
+
 class TestBatchIdDuplicado(unittest.TestCase):
 
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
-        self.archivos = {}
-        self.cabeceras = {}
-        self.tiempos = {}
-        self.terminadas = set()
-        self.batch_ids = {}
+        self.receptor = _crear_receptor(self.tmpdir)
 
     def tearDown(self):
-        for f in self.archivos.values():
+        for f in self.receptor._archivos.values():
             f.close()
         import shutil
         shutil.rmtree(self.tmpdir, ignore_errors=True)
@@ -85,16 +98,8 @@ class TestBatchIdDuplicado(unittest.TestCase):
         reporte1 = _hacer_reporte(1, registros, batch_id_identico)
         reporte2 = _hacer_reporte(1, registros, batch_id_identico)
 
-        _procesar_resultado(
-            reporte1, self.archivos, self.cabeceras,
-            self.tiempos, 0.0, self.tmpdir, self.terminadas,
-            self.batch_ids,
-        )
-        _procesar_resultado(
-            reporte2, self.archivos, self.cabeceras,
-            self.tiempos, 0.0, self.tmpdir, self.terminadas,
-            self.batch_ids,
-        )
+        self.receptor._procesar_resultado(reporte1)
+        self.receptor._procesar_resultado(reporte2)
 
         escritas = self._contar_lineas_datos(1)
         self.assertEqual(escritas, 1,
@@ -116,16 +121,8 @@ class TestBatchIdDuplicado(unittest.TestCase):
         reporte1 = _hacer_reporte(1, registros, batch_id_1)
         reporte2 = _hacer_reporte(1, registros, batch_id_2)
 
-        _procesar_resultado(
-            reporte1, self.archivos, self.cabeceras,
-            self.tiempos, 0.0, self.tmpdir, self.terminadas,
-            self.batch_ids,
-        )
-        _procesar_resultado(
-            reporte2, self.archivos, self.cabeceras,
-            self.tiempos, 0.0, self.tmpdir, self.terminadas,
-            self.batch_ids,
-        )
+        self.receptor._procesar_resultado(reporte1)
+        self.receptor._procesar_resultado(reporte2)
 
         escritas = self._contar_lineas_datos(1)
         self.assertEqual(escritas, 2,
@@ -145,16 +142,8 @@ class TestBatchIdDuplicado(unittest.TestCase):
 
         reporte = _hacer_reporte(1, registros, batch_id)
 
-        _procesar_resultado(
-            reporte, self.archivos, self.cabeceras,
-            self.tiempos, 0.0, self.tmpdir, self.terminadas,
-            self.batch_ids,
-        )
-        _procesar_resultado(
-            reporte, self.archivos, self.cabeceras,
-            self.tiempos, 0.0, self.tmpdir, self.terminadas,
-            self.batch_ids,
-        )
+        self.receptor._procesar_resultado(reporte)
+        self.receptor._procesar_resultado(reporte)
 
         escritas = self._contar_lineas_datos(1)
         self.assertEqual(escritas, 1,
@@ -174,11 +163,7 @@ class TestBatchIdDuplicado(unittest.TestCase):
         for i in range(3):
             batch_id = hashlib.md5(f"msg_{i}:0".encode()).hexdigest()[:16]
             reporte = _hacer_reporte(1, [registro], batch_id)
-            _procesar_resultado(
-                reporte, self.archivos, self.cabeceras,
-                self.tiempos, 0.0, self.tmpdir, self.terminadas,
-                self.batch_ids,
-            )
+            self.receptor._procesar_resultado(reporte)
 
         escritas = self._contar_lineas_datos(1)
         self.assertEqual(escritas, 3,
