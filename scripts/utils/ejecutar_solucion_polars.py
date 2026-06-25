@@ -101,7 +101,7 @@ def parsear_args(args, project_root):
 
 
 def main():
-    project_root = Path(__file__).resolve().parents[1]
+    project_root = Path(__file__).resolve().parents[2]
     input_trans, input_accounts, out_dir = parsear_args(sys.argv[1:], project_root)
 
     if not input_trans.exists():
@@ -156,15 +156,11 @@ def main():
 
     # --- Query 2 ---
     print("\nProcesando Query 2...")
-    # Máxima transacción por banco origen, luego join con nombres de banco
-    max_por_banco = (trans_usd
-        .group_by("From Bank")
-        .agg(pl.col("Amount Paid").max().alias("_max"))
-    )
+    # Máxima transacción por banco origen (una sola fila por banco, como idxmax)
     q2 = (trans_usd
-        .join(max_por_banco, on="From Bank")
-        .filter(pl.col("Amount Paid") == pl.col("_max"))
-        .drop("_max")
+        .sort("Amount Paid", descending=True)
+        .group_by("From Bank")
+        .first()
         .join(
             accounts_lazy.rename({"Bank ID": "From Bank"}),
             on="From Bank"

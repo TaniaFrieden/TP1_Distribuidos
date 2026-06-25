@@ -4,8 +4,8 @@ import sys
 import pandas as pd
 from pathlib import Path
 
-DIR1 = "output/mi_prueba/efd678fe-5bd1-441f-a6d3-7b7286caa338"
-DIR2 = "solutions/small"
+DIR1 = "output/06162eb4-8d94-4b3d-b47c-8c96503e579d"
+DIR2 = "solutions/HI-Large"
 
 TEMPLATE = "q{q}_solucion.csv"
 
@@ -46,7 +46,7 @@ def main():
     
     args = parser.parse_args()
     
-    project_root = Path(__file__).resolve().parents[1]
+    project_root = Path(__file__).resolve().parents[2]
     
     scripts_dir = Path(__file__).resolve().parent
     if str(scripts_dir) not in sys.path:

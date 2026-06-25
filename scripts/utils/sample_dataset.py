@@ -4,8 +4,8 @@ import random
 import sys
 from pathlib import Path
 
-DEFAULT_INPUT_DATASET = "datasets/trans_sample.csv"
-DEFAULT_OUTPUT_DATASET = "datasets/trans_sample.csv"
+DEFAULT_INPUT_DATASET = "datasets/HI-Large_Trans.csv"
+DEFAULT_OUTPUT_DATASET = "datasets/HI-Large.csv"
 
 def sample_dataset(input_path: Path, output_path: Path, percentage: float, method: str, seed: int = 42) -> None:
     if not input_path.exists():

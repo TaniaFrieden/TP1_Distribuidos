@@ -13,6 +13,7 @@ help:
 	@echo "Targets disponibles:"
 	@echo ""
 	@echo "=== EJECUCIÓN ==="
+	@echo "  make build                         Buildea imágenes sin levantar (reduce I/O en start)"
 	@echo "  make start                         Levanta docker-compose (detached, con build)"
 	@echo "  make down                          Detiene docker-compose"
 	@echo "  make client [trans] [cuentas]      Corre un cliente"
@@ -42,7 +43,7 @@ help:
 	@echo "  make test-crash-pipeline             Todos los hooks x todas las etapas x 1,2 clientes"
 	@echo ""
 	@echo "=== CAOS (kill externo durante operación) ==="
-	@echo "  make test-caos-total [cli] [espera]  Mata todos los workers de golpe"
+	@echo "  make test-caos-total [cli] [espera] [intervalo]  Mata todos los workers (default 5s/30s)"
 	@echo "  make test-caos-aleatorio [seg] [cli] Chaos monkey continuo"
 	@echo "  make test-caos-secuencial [seg] [cli] Igual pero clientes secuenciales"
 	@echo "  make test-caos-etapa <pref> [cli]    Mata una etapa específica en loop"
@@ -52,11 +53,12 @@ help:
 	@echo ""
 	@echo "=== SUITES ==="
 	@echo "  make test-unit                       Tests unitarios y de persistencia"
-	@echo "  make iterar [N] [tx] [acc] [sol]     N clientes secuenciales sin caos (default 5)"
+	@echo "  make iterar [N] [tx] [acc] [sol]           N clientes secuenciales sin caos (default 5)"
+	@echo "  make iterar-multi [iter] [cli] [tx] [acc] [sol]  iter rondas de cli clientes en paralelo (default 1x2)"
 	@echo "  make test-todos                      Suite completa (unit + crash + caos, dinámico según compose)"
 	@echo "  make test-todos-multi [N]            Suite solo multicliente (default 3)"
 	@echo "  make test-stress-crash [iter]        Stress loop de crash hooks"
-	@echo "  make test-stress-caos [iter] [cli]   Stress loop de caos"
+	@echo "  make test-stress-caos [iter] [cli] [espera] [intervalo]  Stress loop de caos (default 5s/30s)"
 
 %:
 	@:

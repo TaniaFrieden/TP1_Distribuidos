@@ -9,7 +9,7 @@ SOLUCIONES=${4:-${TEST_SOL:-sample}}
 
 run_hook_test() {
     local NOMBRE="$1"
-    local ENV_VAR="$2"
+    local HOOK="$2"
     local DESC="$3"
 
     echo ""
@@ -18,17 +18,12 @@ run_hook_test() {
     timeout 10s docker run --rm -v "$(pwd)/volume:/cleanup" alpine sh -c "rm -rf /cleanup/*" 2>/dev/null \
         || rm -rf volume/* 2>/dev/null || true
 
-    echo "=== Levantando sistema con $ENV_VAR=true ==="
-    eval "$ENV_VAR=true make start"
+    echo "=== Levantando sistema con WATCHDOG_1_CRASH=$HOOK ==="
+    WATCHDOG_1_CRASH="$HOOK" make start
     esperar_sistema_listo
 
-    echo "=== Lanzando $CANT_CLIENTES cliente(s) ==="
     lanzar_clientes "$CANT_CLIENTES" "$TX" "$ACC"
-
-    echo "=== Esperando finalización del cliente ==="
     esperar_clientes
-
-    echo "=== Comparando resultados ==="
     comparar_resultados "$SOLUCIONES"
 
     echo "=== $NOMBRE: OK ==="

@@ -1,5 +1,6 @@
 import logging
 import os
+import sys
 from pathlib import Path
 
 
@@ -33,7 +34,7 @@ class Logger:
         handler_archivo = logging.FileHandler(ruta_log, encoding="utf-8")
         handler_archivo.setFormatter(formato)
 
-        handler_consola = logging.StreamHandler()
+        handler_consola = logging.StreamHandler(sys.stdout)
         handler_consola.setFormatter(formato)
 
         root.addHandler(handler_archivo)

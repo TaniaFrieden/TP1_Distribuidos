@@ -9,7 +9,7 @@ _light_clean = { $(DOCKER_COMPOSE) down --remove-orphans; \
 	docker run --rm -v "$$(pwd)/output:/out" \
 		alpine sh -c "rm -rf /out/*/ /out/client_id*.txt && chmod -R 777 /out"; } > logs/run_clean_light.log 2>&1
 
-_start_env = { $(DOCKER_COMPOSE) up -d && \
+_start_env = { $(DOCKER_COMPOSE) up -d --no-build && \
 	ESPERADOS=$$($(DOCKER_COMPOSE) config --services | wc -l); \
 	for i in $$(seq 1 60); do \
 		CORRIENDO=$$($(DOCKER_COMPOSE) ps --status running --format '{{.Name}}' | wc -l); \

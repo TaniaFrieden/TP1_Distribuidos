@@ -10,29 +10,32 @@ install:
 	$(PIP) install -r requirements.txt
 
 clean:
+	-@pkill -f "make iterar\|make client\|test_helpers\|chaos_monkey" 2>/dev/null || true
 	-@$(MAKE) free-ports
-	-@$(MAKE) down
-	-$(DOCKER_COMPOSE) down -v --remove-orphans 2>/dev/null || true
-	rm -rf .pytest_cache
-	find . -type d -name '__pycache__' -prune -exec rm -rf {} +
-	-docker rm -f $$(docker ps -a -q --filter "name=client_") 2>/dev/null || true
-	rm -f /tmp/client_output.txt
-	rm -f logs/*.txt
-	rm -f logs/*.log
-	find output/ -mindepth 1 ! -name '.gitkeep' -delete 2>/dev/null || true
-	@if [ -d volume ]; then \
-		docker run --rm -v "$$(pwd)/volume:/vol" alpine sh -c "rm -rf /vol/* && chmod -R 777 /vol" 2>/dev/null || true; \
+	-@timeout 10 docker rm -f $$(docker ps -a -q --filter "name=client_") 2>/dev/null || true
+	-@timeout 15 $(DOCKER_COMPOSE) down -v --remove-orphans 2>/dev/null || true
+	@rm -rf .pytest_cache
+	@find . -type d -name '__pycache__' -prune -exec rm -rf {} +
+	@rm -f logs/*.txt logs/*.log
+	@find output/ -mindepth 1 ! -name '.gitkeep' -delete 2>/dev/null || true
+	@if [ -d volume ] && [ -n "$$(ls -A volume/ 2>/dev/null)" ]; then \
+		timeout 15 docker run --rm -v "$$(pwd)/volume:/vol" \
+			alpine sh -c "rm -rf /vol/* && chmod -R 777 /vol" 2>/dev/null || true; \
 	fi
 
 free-ports:
 	@echo "=== Liberando puerto $(SERVER_PORT) (Gateway) ==="
-	@if command -v fuser >/dev/null 2>&1; then \
-		fuser -k $(SERVER_PORT)/tcp >/dev/null 2>&1 || true; \
+	@if command -v lsof >/dev/null 2>&1; then \
+		timeout 3 lsof -t -n -P -i :$(SERVER_PORT) | xargs timeout 3 kill -9 >/dev/null 2>&1 || true; \
+	elif command -v fuser >/dev/null 2>&1; then \
+		timeout 3 fuser -k $(SERVER_PORT)/tcp >/dev/null 2>&1 || true; \
 	fi
 	@echo "=== Liberando puertos de RabbitMQ ==="
-	@if command -v fuser >/dev/null 2>&1; then \
-		fuser -k 5672/tcp >/dev/null 2>&1 || true; \
-		fuser -k 15672/tcp >/dev/null 2>&1 || true; \
+	@if command -v lsof >/dev/null 2>&1; then \
+		timeout 3 lsof -t -n -P -i :5672 -i :15672 | xargs timeout 3 kill -9 >/dev/null 2>&1 || true; \
+	elif command -v fuser >/dev/null 2>&1; then \
+		timeout 3 fuser -k 5672/tcp >/dev/null 2>&1 || true; \
+		timeout 3 fuser -k 15672/tcp >/dev/null 2>&1 || true; \
 	fi
 
 generar:
@@ -70,6 +73,6 @@ solucionar:
 		echo "Ejemplo: make solucionar HI-Large_Trans_sample_30 HI-Large_accounts Hi-Large-30"; \
 		exit 1; \
 	else \
-		$(PYTHON) scripts/utils/ejecutar_solucion_notebook.py $$ARGS; \
+		$(PYTHON) scripts/utils/ejecutar_solucion_polars.py $$ARGS; \
 	fi
 

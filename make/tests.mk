@@ -42,7 +42,7 @@ test-crash-watchdog:
 	bash scripts/tests/test_crash_watchdog.sh $$ARGS
 
 # ─── CAOS (kill externo durante operación) ───
-.PHONY: iterar test-caos-etapa test-caos-total test-caos-aleatorio test-caos-secuencial
+.PHONY: iterar iterar-multi test-caos-etapa test-caos-total test-caos-aleatorio test-caos-secuencial
 .PHONY: test-caos-gateway test-caos-gateway-resultados test-caos-cliente
 
 test-caos-etapa:
@@ -68,13 +68,40 @@ test-caos-secuencial:
 
 iterar:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
-	set -- $$ARGS; \
-	CANT=$${1:-5}; \
-	TX=$${2:-$(TEST_TX)}; \
-	ACC=$${3:-$(TEST_ACC)}; \
-	SOL=$${4:-$(TEST_SOL)}; \
-	export SEQUENTIAL=1 SEQUENTIAL_SOL="$$SOL"; \
-	source scripts/tests/test_helpers.sh && lanzar_clientes "$$CANT" "$$TX" "$$ACC"
+	bash -c '\
+		source scripts/tests/test_helpers.sh; \
+		set -- '"$$ARGS"'; \
+		CANT=$${1:-5}; \
+		TX=$${2:-$(TEST_TX)}; \
+		ACC=$${3:-$(TEST_ACC)}; \
+		SOL=$${4:-$(TEST_SOL)}; \
+		export SEQUENTIAL=1 SEQUENTIAL_SOL="$$SOL"; \
+		lanzar_clientes "$$CANT" "$$TX" "$$ACC"'
+
+iterar-multi:
+	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
+	bash -c '\
+		source scripts/tests/test_helpers.sh; \
+		set -- '"$$ARGS"'; \
+		ITER=$${1:-1}; \
+		CANT=$${2:-2}; \
+		TX=$${3:-$(TEST_TX)}; \
+		ACC=$${4:-$(TEST_ACC)}; \
+		SOL=$${5:-$(TEST_SOL)}; \
+		for r in $$(seq 1 $$ITER); do \
+			echo ""; \
+			echo "=== Iteracion $$r/$$ITER: $$CANT clientes en paralelo ==="; \
+			lanzar_clientes "$$CANT" "$$TX" "$$ACC"; \
+			esperar_clientes; \
+			echo "=== Comparando resultados (iter $$r/$$ITER) contra $$SOL ==="; \
+			if ! comparar_resultados "$$SOL"; then \
+				echo "=== FALLO en iteracion $$r/$$ITER. Abortando. ==="; \
+				exit 1; \
+			fi; \
+			echo "=== Iteracion $$r/$$ITER exitosa ==="; \
+		done; \
+		echo ""; \
+		echo "=== $$ITER iteraciones de $$CANT clientes completadas exitosamente ==="'
 
 test-caos-gateway:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
@@ -141,6 +168,7 @@ test-todos-multi:
 	echo "========================================================="
 
 test-todos:
+	@$(MAKE) build
 	@$(_full_clean)
 	@echo "========================================================="
 	@echo "=== 1. Tests unitarios ==="

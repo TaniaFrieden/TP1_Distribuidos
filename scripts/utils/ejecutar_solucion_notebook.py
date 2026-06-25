@@ -15,7 +15,7 @@ RUTA_SALIDAS = "output/Large"
 
 
 def main():
-    project_root = Path(__file__).resolve().parents[1]
+    project_root = Path(__file__).resolve().parents[2]
     args = sys.argv[1:]
     
     if len(args) >= 1:

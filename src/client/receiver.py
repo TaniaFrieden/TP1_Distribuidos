@@ -2,10 +2,19 @@ import os
 import glob
 import json
 import logging
+import sys
 import time
 from common import message_protocol
 from common.constantes_protocolo import CLAVE_QUERY, CLAVE_RESULTADO, CLAVE_EOF_REPORTE, CLAVE_COLUMNAS
 from config import OUTPUT_DIR
+
+_SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+_spinner_idx = 0
+_filas_por_query = {}
+_valor_query = {}
+_queries_completas = set()
+_progreso_habilitado = os.environ.get("PROGRESS_BAR", "1") != "0"
+_client_tag = os.environ.get("CLIENT_ID_SUFFIX", "")
 
 OUTPUT_FILE_NAME = "q{q_id}_solucion.csv"
 QUERIES_COMPLETADAS_FILE = "queries_completadas.json"
@@ -13,6 +22,12 @@ BATCH_IDS_FILE = "batch_ids_q{q_id}.json"
 
 
 def escuchar_respuesta(sock, queries, inicio_envio, client_id, evento_completado=None, write_lock=None, ack_pendiente=None):
+    global _filas_por_query, _valor_query, _queries_completas, _spinner_idx
+    _filas_por_query = {}
+    _valor_query = {}
+    _queries_completas = set()
+    _spinner_idx = 0
+
     output_path = os.path.join(OUTPUT_DIR, client_id)
     os.makedirs(output_path, exist_ok=True)
 
@@ -41,6 +56,9 @@ def escuchar_respuesta(sock, queries, inicio_envio, client_id, evento_completado
                     _enviar_ack(sock, batch_id, write_lock, ack_pendiente)
             elif tipo_mensaje == message_protocol.external.TipoMensaje.FIN_DE_REGISTROS:
                 elapsed = time.perf_counter() - inicio_envio
+                _mostrar_progreso_downstream()
+                sys.stderr.write("\n")
+                sys.stderr.flush()
                 logging.info(f"Todas las queries completadas en {elapsed:.2f}s")
                 if evento_completado:
                     evento_completado.set()
@@ -159,6 +177,10 @@ def _procesar_resultado(payload, archivos, cabeceras, tiempos_inicio, inicio_env
         if isinstance(item, dict) and not (len(item) == 1 and es_mensaje_final):
             _escribir_cabecera(q_id, item, archivos, cabeceras)
             _escribir_datos(q_id, item, archivos, cabeceras)
+            _filas_por_query[q_id] = _filas_por_query.get(q_id, 0) + 1
+            campos_dato = {k: v for k, v in item.items() if k != "eof"}
+            if len(campos_dato) == 1:
+                _valor_query[q_id] = str(list(campos_dato.values())[0])
             datos_escritos = True
 
         if es_mensaje_final:
@@ -174,6 +196,9 @@ def _procesar_resultado(payload, archivos, cabeceras, tiempos_inicio, inicio_env
             else:
                 logging.info(f"[QUERY {q_id}] EOF recibido")
             queries_terminadas.add(q_id)
+            _queries_completas.add(q_id)
+            _filas_por_query.setdefault(q_id, 0)
+            _mostrar_progreso_downstream()
             _guardar_queries_completadas(output_path, queries_terminadas)
             break
 
@@ -182,7 +207,41 @@ def _procesar_resultado(payload, archivos, cabeceras, tiempos_inicio, inicio_env
         batch_ids_vistos.setdefault(q_id, set()).add(batch_id)
         _guardar_batch_ids_vistos(output_path, q_id, batch_ids_vistos[q_id])
 
+    if datos_escritos:
+        _mostrar_progreso_downstream()
+
     return batch_id
+
+
+def _ancho_terminal():
+    try:
+        return os.get_terminal_size(sys.stderr.fileno()).columns
+    except (OSError, ValueError):
+        return 120
+
+def _mostrar_progreso_downstream():
+    if not _progreso_habilitado:
+        return
+    global _spinner_idx
+    _spinner_idx = (_spinner_idx + 1) % len(_SPINNER)
+    partes = []
+    for q_id in sorted(_filas_por_query.keys()):
+        filas = _filas_por_query[q_id]
+        if q_id in _valor_query:
+            display = f"={_valor_query[q_id]}"
+        else:
+            display = f"{filas:,}"
+        if q_id in _queries_completas:
+            partes.append(f"Q{q_id}: ✔ {display}")
+        else:
+            partes.append(f"Q{q_id}: {_SPINNER[_spinner_idx]} {display}")
+    prefix = f"[C{_client_tag}] " if _client_tag else ""
+    linea = f"\r  {prefix}Recibiendo: {' | '.join(partes)}"
+    ancho_term = _ancho_terminal()
+    if len(linea) > ancho_term:
+        linea = linea[:ancho_term]
+    sys.stderr.write(f"\033[2K{linea}")
+    sys.stderr.flush()
 
 
 def _es_eof(resultado):
@@ -193,8 +252,7 @@ def _escribir_cabecera(q_id, resultado, archivos, cabeceras):
     if cabeceras[q_id] is False:
         claves = [k for k in resultado.keys() if str(k).lower() != 'eof']
         cabeceras[q_id] = claves
-        claves_cabecera = ["Account" if k == "Account.1" else str(k) for k in claves]
-        archivos[q_id].write(",".join(claves_cabecera) + "\n")
+        archivos[q_id].write(",".join(str(k) for k in claves) + "\n")
     elif cabeceras[q_id] is True:
         # Archivo existente: aprender columnas del primer registro sin escribir cabecera
         claves = [k for k in resultado.keys() if str(k).lower() != 'eof']

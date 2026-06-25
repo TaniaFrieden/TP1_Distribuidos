@@ -1,6 +1,12 @@
 # Targets de ejecucion manual (levantar, bajar, correr cliente, gateway, etc.)
 
-.PHONY: start down client run-clients gateway log caos tirar-nodos
+.PHONY: build start down client run-clients gateway log caos tirar-nodos
+
+build:
+	@mkdir -p logs
+	@echo "=== Buildeando imágenes... ==="
+	@$(DOCKER_COMPOSE) build > logs/run_build.log 2>&1
+	@echo "=== Build completado ==="
 
 start:
 	@mkdir -p logs
@@ -42,6 +48,7 @@ client:
 		-e SERVER_HOST="$(SERVER_HOST)" \
 		-e SERVER_PORT="$(SERVER_PORT)" \
 		-e BATCH_SIZE="$(BATCH_SIZE)" \
+		-e PROGRESS_BAR="$${PROGRESS_BAR:-1}" \
 		client-image
 
 run-clients:

@@ -132,8 +132,16 @@ def generar_compose():
     output_queues = []
     bank_queue_config = None
 
-    # Shared workers — siempre se generan
+    # Shared workers — siempre se generan, pero sus output queues se filtran
+    # para incluir solo las que corresponden a las queries seleccionadas.
+    selected_queries = set(args) if args else None
     for node in workers_config.get('shared_workers', []):
+        if selected_queries and isinstance(node.get('output_queue'), list):
+            node = dict(node)
+            node['output_queue'] = [
+                q for q in node['output_queue']
+                if any(q.startswith(f"q{qn}_") for qn in selected_queries)
+            ]
         _generar_servicio(node, worker_config, workers_config, compose_data)
 
     query_files = sorted(glob.glob(CONFIG_QUERIES))

@@ -64,7 +64,7 @@ lanzar_clientes() {
             fi
             echo "=== Cliente $i/$cant iniciando ==="
             ( export CLIENT_ID_SUFFIX=$i; make client TRANSACTIONS_FILE="$tx" ACCOUNTS_FILE="$acc" OUTPUT_DIR="output" \
-                > "logs/client_stdout_$i.txt" 2>&1 )
+                > "logs/client_stdout_$i.txt" )
             if [ -n "${SEQUENTIAL_SOL:-}" ]; then
                 if ! comparar_ultimo_cliente "$SEQUENTIAL_SOL"; then
                     echo "=== FALLO en cliente $i/$cant. Abortando. ==="
@@ -73,14 +73,42 @@ lanzar_clientes() {
             fi
             echo "=== Cliente $i/$cant finalizado exitosamente ==="
         else
-            ( export CLIENT_ID_SUFFIX=$i; make client TRANSACTIONS_FILE="$tx" ACCOUNTS_FILE="$acc" OUTPUT_DIR="output" \
-                > "logs/client_stdout_$i.txt" 2>&1 ) &
+            ( export CLIENT_ID_SUFFIX=$i PROGRESS_BAR=0; make client TRANSACTIONS_FILE="$tx" ACCOUNTS_FILE="$acc" OUTPUT_DIR="output" \
+                > "logs/client_stdout_$i.txt" 2>/dev/null ) &
             PIDS+=($!)
         fi
     done
 }
 
 esperar_clientes() {
+    local inicio=$SECONDS
+    local total=${#PIDS[@]}
+    local restantes=("${PIDS[@]}")
+    local spinner=("⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏")
+    local idx=0
+
+    while [ ${#restantes[@]} -gt 0 ]; do
+        local nuevos=()
+        for pid in "${restantes[@]}"; do
+            if kill -0 "$pid" 2>/dev/null; then
+                nuevos+=("$pid")
+            fi
+        done
+        restantes=("${nuevos[@]}")
+        local terminados=$(( total - ${#restantes[@]} ))
+        local elapsed=$(( SECONDS - inicio ))
+        local mins=$(( elapsed / 60 ))
+        local secs=$(( elapsed % 60 ))
+        printf "\r\033[2K  %s %d/%d clientes completados (%02d:%02d)" \
+            "${spinner[$idx]}" "$terminados" "$total" "$mins" "$secs" >&2
+        idx=$(( (idx + 1) % ${#spinner[@]} ))
+        if [ ${#restantes[@]} -gt 0 ]; then
+            sleep 0.15
+        fi
+    done
+    printf "\r\033[2K  ✔ %d/%d clientes completados (%02d:%02d)\n" \
+        "$total" "$total" "$(( (SECONDS - inicio) / 60 ))" "$(( (SECONDS - inicio) % 60 ))" >&2
+
     for pid in "${PIDS[@]}"; do
         wait "$pid" || echo "[WARN] Proceso $pid (cliente) terminó con error. Ver logs/client_stdout_*.txt"
     done

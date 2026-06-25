@@ -40,7 +40,6 @@ if [ ${#NUMS[@]} -ge 2 ]; then
 fi
 
 preparar_entorno
-docker build -q -t client-image -f src/client/Dockerfile src >/dev/null 2>&1
 
 # Limpiar el log al iniciar este test
 > logs/chaos_monkey_run.log

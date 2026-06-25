@@ -5,7 +5,7 @@ PYTEST := PYTHONPATH=src $(PYTHON) -m pytest
 START_VERBOSE := $(if $(filter --verbose,$(MAKECMDGOALS)),1,0)
 
 # Deteccion automatica de Docker Compose (v1 o v2)
-DOCKER_COMPOSE := $(shell docker compose version >/dev/null 2>&1 && echo "docker compose" || echo "docker-compose")
+DOCKER_COMPOSE := $(shell timeout 2 docker compose version >/dev/null 2>&1 && echo "docker compose" || echo "docker-compose")
 
 # Variables del cliente
 OUTPUT_DIR ?= output

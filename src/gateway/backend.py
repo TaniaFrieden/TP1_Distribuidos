@@ -150,14 +150,16 @@ class BackendListener:
 
     TIMEOUT_ACK_RESULTADO = 30  # segundos máximos esperando que el cliente confirme recepción
 
-    def _enviar_reporte_con_ack(self, client_id, sock, lock, payload_str):
+    def _enviar_reporte_con_ack(self, client_id, sock, lock, payload_str, batch_key=None):
         """
         Envía un REPORTE con batch_id y espera el ACK_RESULTADO del cliente.
         NO llama ack()/nack() a RabbitMQ — eso es responsabilidad del caller.
         Retorna True si el cliente confirmó, False si se perdió la conexión o hubo timeout.
         """
-        # Usar hash del contenido como batch_id: estable entre re-entregas de RabbitMQ
-        batch_id = hashlib.md5(payload_str.encode()).hexdigest()
+        if batch_key:
+            batch_id = hashlib.md5(batch_key.encode()).hexdigest()[:16]
+        else:
+            batch_id = hashlib.md5(payload_str.encode()).hexdigest()[:16]
         data = json.loads(payload_str)
         data["batch_id"] = batch_id
         payload_con_id = json.dumps(data)
@@ -201,7 +203,7 @@ class BackendListener:
             ack()
             return
 
-        for batch in lotes:
+        for idx, batch in enumerate(lotes):
             schema = batch[CABECERA][ESQUEMA]
             records = batch[PAYLOAD]
             logger.info(f"Resultado recibido para {cola_nombre} a {client_id} con {len(records)} registros.")
@@ -210,7 +212,7 @@ class BackendListener:
                 for vals in records
             ]
             payload_str = json.dumps({CLAVE_QUERY: query_id, CLAVE_RESULTADO: resultado_lista})
-            if not self._enviar_reporte_con_ack(client_id, sock, lock, payload_str):
+            if not self._enviar_reporte_con_ack(client_id, sock, lock, payload_str, batch_key=f"{request_id}:{idx}"):
                 with self._lock:
                     self._processed_hashes.pop(client_id, None)
                 self.state.remover_cliente(client_id)
@@ -221,7 +223,7 @@ class BackendListener:
     def _procesar_registro_simple(self, client_id, query_id, sock, lock, request_id, transaccion, ack, nack):
         transaccion[CLAVE_EOF_REPORTE] = False
         payload_str = json.dumps({CLAVE_QUERY: query_id, CLAVE_RESULTADO: transaccion})
-        if self._enviar_reporte_con_ack(client_id, sock, lock, payload_str):
+        if self._enviar_reporte_con_ack(client_id, sock, lock, payload_str, batch_key=request_id):
             ack()
         else:
             with self._lock:
