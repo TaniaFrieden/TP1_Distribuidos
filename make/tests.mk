@@ -1,3 +1,5 @@
+SHELL := /bin/bash
+
 # Tests end-to-end: unitarios, crash hooks, caos, suites
 
 # ─── UNITARIOS ───
