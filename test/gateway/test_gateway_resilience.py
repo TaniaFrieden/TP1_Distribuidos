@@ -6,8 +6,8 @@ import importlib.util
 raiz = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
 while raiz in sys.path:
     sys.path.remove(raiz)
-sys.path.insert(0, os.path.join(raiz, 'src/gateway'))
 sys.path.insert(0, os.path.join(raiz, 'src/client'))
+sys.path.insert(0, os.path.join(raiz, 'src/gateway'))
 sys.path.insert(0, os.path.join(raiz, 'src'))
 
 # Crear modulo config sintetico unificado para evitar colision en sys.modules
@@ -27,11 +27,17 @@ mock_config.GatewayConfig = gateway_config_mod.GatewayConfig
 
 sys.modules['config'] = mock_config
 
+# Importar PersistenciaCliente con las constantes del client en sys.path
+from persistencia import PersistenciaCliente as _PersistenciaCliente
+
+# Limpiar constantes del client para que el gateway cargue las suyas
+sys.modules.pop('constantes', None)
+
 import json
 import pytest
 from unittest.mock import MagicMock, patch
-from gateway.client_handler import ClientHandler
-from gateway.backend import BackendListener
+from gateway.manejador_clientes import ManejadorClientes as ClientHandler
+from gateway.receptor_resultados import ReceptorResultados as BackendListener
 from common.constantes_protocolo import CABECERA, ESQUEMA, PAYLOAD, ID_CLIENTE, ID_SOLICITUD, LOTES, CLAVE_QUERY, CLAVE_RESULTADO, CLAVE_EOF_REPORTE
 from config import GatewayConfig
 from common.crash_hook import CrashHook
@@ -84,10 +90,9 @@ class DummyState:
 
 def test_client_id_from_env(tmp_path):
     """Verifica que el cliente priorice la variable de entorno CLIENT_ID."""
-    from persistencia import PersistenciaCliente
     env = {"CLIENT_ID": "test-env-id-123"}
     with patch.dict("os.environ", env):
-        persistencia = PersistenciaCliente(str(tmp_path))
+        persistencia = _PersistenciaCliente(str(tmp_path))
         cid = persistencia.cargar_o_generar_id()
         assert cid == "test-env-id-123"
 
