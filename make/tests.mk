@@ -46,44 +46,20 @@ test-crash-watchdog:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
 	bash scripts/tests/test_crash_watchdog.sh $$ARGS
 
-# ─── TIRAR (kill one-shot) y CAOS (kill continuo) ───
-.PHONY: tirar tirar-etapa tirar-todos caos caos-etapa caos-todos
+# ─── CAOS (kill externo durante operación) ───
+.PHONY: caos-etapa caos-todos
 .PHONY: iterar iterar-multi test-caos-etapa test-caos-total test-caos-aleatorio test-caos-secuencial
 .PHONY: test-caos-gateway test-caos-gateway-resultados test-caos-cliente
 
-tirar-etapa:
-	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
-	ETAPA=$$(echo $$ARGS | awk '{print $$1}'); \
-	if [ -z "$$ETAPA" ]; then echo "Uso: make tirar-etapa <prefijo>"; exit 1; fi; \
-	CONTAINERS=$$(docker ps --format '{{.Names}}' | grep -i "$$ETAPA" | grep -vE 'client|rabbitmq|actuador'); \
-	if [ -z "$$CONTAINERS" ]; then echo "No se encontraron contenedores para '$$ETAPA'"; exit 0; fi; \
-	echo "Matando: $$CONTAINERS"; \
-	echo "$$CONTAINERS" | xargs docker kill
-
-tirar-todos:
-	@CONTAINERS=$$(docker ps --format '{{.Names}}' | grep -vE 'client|rabbitmq|actuador|gateway|watchdog'); \
-	if [ -z "$$CONTAINERS" ]; then echo "No hay workers activos para matar"; exit 0; fi; \
-	echo "Matando todos: $$CONTAINERS"; \
-	echo "$$CONTAINERS" | xargs docker kill
-
-tirar:
-	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
-	FILTRO=$$(echo $$ARGS | awk '{print $$1}'); \
-	if [ -z "$$FILTRO" ]; then echo "Uso: make tirar <filtro>"; exit 1; fi; \
-	CONTAINERS=$$(docker ps --format '{{.Names}}' | grep -i "$$FILTRO"); \
-	if [ -z "$$CONTAINERS" ]; then echo "No se encontraron contenedores para '$$FILTRO'"; exit 0; fi; \
-	echo "Matando: $$CONTAINERS"; \
-	echo "$$CONTAINERS" | xargs docker kill
-
-caos:
-	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
-	python3 scripts/chaos/chaos_monkey.py $$ARGS
-
 caos-etapa:
-	@python3 scripts/chaos/chaos_monkey.py 5 30 --etapa
+	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
+	bash -c 'set -- '"$$ARGS"'; ESPERA=$${1:-5}; INTERVALO=$${2:-30}; \
+	python3 scripts/chaos/chaos_monkey.py $$ESPERA $$INTERVALO --etapa'
 
 caos-todos:
-	@python3 scripts/chaos/chaos_monkey.py 5 30 --todos
+	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
+	bash -c 'set -- '"$$ARGS"'; ESPERA=$${1:-5}; INTERVALO=$${2:-30}; \
+	python3 scripts/chaos/chaos_monkey.py $$ESPERA $$INTERVALO --todos'
 
 test-caos-etapa:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
