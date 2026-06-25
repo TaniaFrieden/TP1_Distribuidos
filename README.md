@@ -48,7 +48,7 @@ make run-clients            # lanza 2 clientes (por defecto)
 make run-clients SCALE=N    # lanza N clientes en paralelo
 ```
 
-Cada cliente escribe sus resultados en `output/<hostname>/`.
+Cada cliente escribe sus resultados en `output/<client_id>/` (UUID generado por el gateway).
 
 ### Opción B — cliente local (sin Docker)
 
@@ -76,12 +76,24 @@ make client OUTPUT_DIR=output/c2   # cada cliente en su propia terminal
 | `SERVER_PORT`      | `5678`        | Puerto del Gateway                  |
 | `BATCH_SIZE`       | `10000`       | Tamaño del batch de envío           |
 
-Ejemplo con parámetros posicionales:
+Ejemplo con parámetros:
 ```bash
 make client HI-Large_Trans_sample_30 HI-Large_accounts OUTPUT_DIR=output/prueba
 ```
 
 ## Validación de Soluciones
+
+### Samplear un dataset grande
+
+Genera un CSV reducido a un porcentaje del original, útil para pruebas rápidas.
+```bash
+make generar-sample <dataset> [porcentaje]
+```
+
+*Ejemplo:*
+```bash
+make generar-sample HI-Large_Trans 30   # genera HI-Large_Trans_sample_30.csv
+```
 
 ### Generar solución de referencia (Notebook)
 
@@ -97,7 +109,7 @@ make solucionar HI-Large_Trans_sample_30 HI-Large_accounts Hi-Large-30
 
 ### Iterar clientes y comparar resultados
 
-Corre N clientes de forma secuencial (sin caos) y compara cada resultado contra las soluciones de referencia.
+Corre N clientes de forma secuencial (uno a la vez) y compara cada resultado contra las soluciones de referencia.
 ```bash
 make iterar [N] [tx] [acc] [sol]
 ```
@@ -109,6 +121,19 @@ Todos los parámetros son opcionales — usa los defaults del Makefile (`TEST_TX
 make iterar                    # 5 clientes con datasets por defecto
 make iterar 3                  # 3 clientes con datasets por defecto
 make iterar 5 HI-Large_Trans_sample_30 HI-Large_accounts Hi-Large-30
+```
+
+### Iterar con clientes en paralelo
+
+Corre múltiples iteraciones de N clientes simultáneos y compara resultados.
+```bash
+make iterar-multi [iteraciones] [clientes] [tx] [acc] [sol]
+```
+
+*Ejemplo:*
+```bash
+make iterar-multi              # 1 iteración, 2 clientes
+make iterar-multi 3 5          # 3 iteraciones de 5 clientes en paralelo
 ```
 
 ## Tolerancia a Fallos y Pruebas de Caos
@@ -161,13 +186,13 @@ Todos los tests usan tres variables que se definen en `make/datasets.mk`:
 
 | Variable   | Default             | Descripción                                    |
 |------------|---------------------|------------------------------------------------|
-| `TEST_TX`  | `trans_sample`      | Archivo de transacciones (en `datasets/`)      |
+| `TEST_TX`  | `LI-Small_Trans`    | Archivo de transacciones (en `datasets/`)      |
 | `TEST_ACC` | `LI-Small_accounts` | Archivo de cuentas (en `datasets/`)            |
-| `TEST_SOL` | `sample`            | Carpeta de soluciones esperadas (en `solutions/`) |
+| `TEST_SOL` | `LI-Small`          | Carpeta de soluciones esperadas (en `solutions/`) |
 
 Para cambiar el dataset de toda la suite:
 ```bash
-make test-todos TEST_TX=LI-Small_Trans TEST_ACC=LI-Small_accounts TEST_SOL=LI-Small
+make test-todos TEST_TX=HI-Large_Trans TEST_ACC=HI-Large_accounts TEST_SOL=HI-Large
 ```
 
 ### Crash Hooks (determinísticos)
