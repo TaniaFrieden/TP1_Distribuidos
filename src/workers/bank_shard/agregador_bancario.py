@@ -261,9 +261,9 @@ class AgregadorBancarioWorker(WorkerBase):
             if datos:
                 resultado = construir_resultado(client_id, datos)
                 if resultado:
-                    self._hilo_local.id_solicitud_actual = (
-                        f"{PREFIJO_BANK_SHARD}_output:{client_id}:{self.configuracion.id_nodo}"
-                    )
+                    req_id = f"{PREFIJO_BANK_SHARD}_output:{client_id}:{self.configuracion.id_nodo}"
+                    resultado[ID_SOLICITUD] = req_id
+                    self._hilo_local.id_solicitud_actual = req_id
                     try:
                         self._enviar(ParseadorMensajes.serializar(resultado), payload=resultado)
                     finally:

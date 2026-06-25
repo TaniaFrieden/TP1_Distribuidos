@@ -148,11 +148,13 @@ def _procesar_resultado(payload, archivos, cabeceras, tiempos_inicio, inicio_env
     columns_hint = data.get(CLAVE_COLUMNAS)
 
     if q_id is None or q_id in queries_terminadas:
-        return batch_id  # ACKear igual para que el gateway no quede bloqueado
+        logging.warning(f"[RECV] Q{q_id} ya terminada, descartando batch_id={batch_id}")
+        return batch_id
 
     # Saltar batches ya procesados (re-entregas tras crash del gateway)
     if batch_id and batch_ids_vistos is not None:
         if batch_id in batch_ids_vistos.get(q_id, set()):
+            logging.warning(f"[RECV] Q{q_id} batch_id={batch_id} ya visto, descartando")
             return batch_id
 
     if q_id not in tiempos_inicio:
@@ -170,6 +172,7 @@ def _procesar_resultado(payload, archivos, cabeceras, tiempos_inicio, inicio_env
 
     items = resultado if isinstance(resultado, list) else [resultado]
     datos_escritos = False
+    logging.info(f"[RECV] Q{q_id} batch_id={batch_id}: {len(items)} items, type={type(resultado).__name__}")
 
     for item in items:
         es_mensaje_final = _es_eof(item)

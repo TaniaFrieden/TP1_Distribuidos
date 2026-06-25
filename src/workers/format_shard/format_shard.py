@@ -148,6 +148,8 @@ class FormateadorShardWorker(WorkerBase):
         from formateador_salida import construir_resultado
         resultado = construir_resultado(id_cliente, registros)
         if resultado:
+            req_id = f"format_shard_output:{id_cliente}:{self.configuracion.id_nodo}"
+            resultado[ID_SOLICITUD] = req_id
             self._enviar(ParseadorMensajes.serializar(resultado), payload=resultado)
 
         self._persistencia.borrar_archivo_cache(id_cliente)

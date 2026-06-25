@@ -3,6 +3,8 @@ import uuid
 import json
 import gc
 import ctypes
+import threading
+from queue import Queue
 from common.logger import obtener_logger
 from common.crash_hook import CrashHook
 from common import message_protocol, middleware, sharding
@@ -13,6 +15,8 @@ from common.constantes_protocolo import (
     CONF_PREFIJO_SHARD, CONF_TOTAL_WORKERS, CONF_CAMPO_HASH,
 )
 from config import GatewayConfig
+
+PUBLISH_BUFFER_SIZE = 100
 
 logger = obtener_logger(__name__)
 
@@ -139,6 +143,39 @@ class ClientHandler:
         logger.info(f"Cliente {client_id} en modo solo-resultados")
         self._leer_acks(client_id, client_socket)
 
+    def _hilo_publicador(self, buffer, colas_tx, colas_bancos, client_id, error_event):
+        try:
+            while True:
+                item = buffer.get()
+                if item is None:
+                    break
+                tipo, datos = item
+                if tipo == "tx":
+                    for q in colas_tx:
+                        q.send(datos[q.queue_name])
+                elif tipo == "bancos":
+                    for shard_id, msg in datos.items():
+                        colas_bancos[shard_id].send(msg)
+                elif tipo == "eof":
+                    for q in colas_tx:
+                        q.send(datos)
+                    for q in colas_bancos.values():
+                        q.send(datos)
+                elif tipo == "disconnect":
+                    msg, sesion = datos
+                    for q in colas_tx:
+                        q.send(msg)
+                    for q in colas_bancos.values():
+                        q.send(msg)
+        except Exception as e:
+            logger.error(f"Error en hilo publicador para {client_id}: {e}", exc_info=True)
+            error_event.set()
+        finally:
+            for q in colas_tx:
+                q.close()
+            for q in colas_bancos.values():
+                q.close()
+
     def _modo_normal(self, client_id, client_socket):
         """Recibe lotes del cliente, los publica en RabbitMQ y espera el END_OF_RECORDS."""
         colas_tx = [middleware.MessageMiddlewareQueueRabbitMQ(self.config.mom_host, q) for q in self.config.output_queues]
@@ -165,19 +202,31 @@ class ClientHandler:
 
         self._hook.verificar(CP.GW_AFTER_PERSIST_CONNECTED, f"post-conectado {client_id}")
 
+        publish_buffer = Queue(maxsize=PUBLISH_BUFFER_SIZE)
+        publish_error = threading.Event()
+        pub_thread = threading.Thread(
+            target=self._hilo_publicador,
+            args=(publish_buffer, colas_tx, colas_bancos, client_id, publish_error),
+            daemon=True,
+            name=f"publisher-{client_id[:8]}"
+        )
+        pub_thread.start()
+
         eof_enviado = False
         try:
             while True:
+                if publish_error.is_set():
+                    raise RuntimeError("Hilo publicador falló")
+
                 tipo_mensaje, payload = message_protocol.external.recibir_mensaje(client_socket)
 
                 if tipo_mensaje == message_protocol.external.TipoMensaje.LOTE_TRANSACCIONES:
-                    self._reenviar_lote_tx(client_id, client_socket, payload, colas_tx)
+                    self._encolar_lote_tx(client_id, client_socket, payload, colas_tx, publish_buffer)
 
                 elif tipo_mensaje == message_protocol.external.TipoMensaje.LOTE_BANCOS:
-                    self._reenviar_lote_bancos(client_id, client_socket, payload, colas_bancos)
+                    self._encolar_lote_bancos(client_id, client_socket, payload, colas_bancos, publish_buffer)
 
                 elif tipo_mensaje == message_protocol.external.TipoMensaje.ACK_RESULTADO:
-                    # El backend ya comenzó a mandar resultados mientras el cliente aún enviaba datos
                     data = json.loads(payload)
                     self.state.notificar_ack(client_id, data.get("batch_id"))
 
@@ -188,10 +237,9 @@ class ClientHandler:
                         logger.info(f"Cliente {client_id} conectado (FIN_DE_REGISTROS)")
 
                     eof_msg = json.dumps({ID_CLIENTE: client_id, FIN_DE_ARCHIVO: True}).encode("utf-8")
-                    for q in colas_tx:
-                        q.send(eof_msg)
-                    for q in colas_bancos.values():
-                        q.send(eof_msg)
+                    publish_buffer.put(("eof", eof_msg))
+                    publish_buffer.put(None)
+                    pub_thread.join()
                     eof_enviado = True
                     logger.info(f"EOF enviado para {client_id}")
 
@@ -207,15 +255,18 @@ class ClientHandler:
         finally:
             if not eof_enviado:
                 sesion_actual = self.state.obtener_sesion(client_id)
-                self._enviar_disconnect(client_id, colas_tx, colas_bancos, sesion_actual)
+                disconnect_msg = json.dumps({
+                    ID_CLIENTE: client_id,
+                    DESCONEXION_CLIENTE: True,
+                    ID_SESION: sesion_actual
+                }).encode("utf-8") if sesion_actual else None
+                if disconnect_msg:
+                    publish_buffer.put(("eof", disconnect_msg))
+                publish_buffer.put(None)
+                pub_thread.join(timeout=10)
                 self.state.remover_cliente(client_id)
-            for q in colas_tx:
-                q.close()
-            for q in colas_bancos.values():
-                q.close()
 
         if eof_enviado:
-            # Datos enviados al sistema — ahora esperamos ACKs de resultados del cliente
             self._leer_acks(client_id, client_socket)
         else:
             gc.collect()
@@ -224,20 +275,21 @@ class ClientHandler:
             except Exception:
                 pass
 
-    def _reenviar_lote_tx(self, client_id, client_socket, payload, colas_tx):
+    def _encolar_lote_tx(self, client_id, client_socket, payload, colas_tx, buffer):
         header = payload[CABECERA]
         schema = self._deduplicar_schema(header[ESQUEMA])
         header[ESQUEMA] = schema
         records = payload[PAYLOAD]
 
+        msgs = {}
         for q in colas_tx:
             req_id = self.state.generar_request_id(client_id, q.queue_name)
-            internal_msg = json.dumps({
+            msgs[q.queue_name] = json.dumps({
                 ID_CLIENTE: client_id,
                 ID_SOLICITUD: req_id,
                 LOTES: [{CABECERA: header, PAYLOAD: records}]
             }).encode("utf-8")
-            q.send(internal_msg)
+        buffer.put(("tx", msgs))
 
         self._hook.verificar(CP.GW_UPSTREAM_BEFORE_ACK, f"upstream {client_id}")
         _, lock, _ = self.state.obtener_cliente(client_id)
@@ -245,7 +297,7 @@ class ClientHandler:
             with lock:
                 message_protocol.external.enviar_mensaje(client_socket, message_protocol.external.TipoMensaje.ACK)
 
-    def _reenviar_lote_bancos(self, client_id, client_socket, payload, colas_bancos):
+    def _encolar_lote_bancos(self, client_id, client_socket, payload, colas_bancos, buffer):
         if not self.config.bank_queue_config:
             _, lock, _ = self.state.obtener_cliente(client_id)
             if lock:
@@ -268,9 +320,10 @@ class ClientHandler:
             shard_id = sharding.obtener_id_shard(bank_val, total_workers)
             records_by_shard.setdefault(shard_id, []).append(record_values)
 
+        msgs = {}
         for shard_id, shard_records in records_by_shard.items():
             req_id = self.state.generar_request_id(client_id, colas_bancos[shard_id].queue_name)
-            shard_batch = json.dumps({
+            msgs[shard_id] = json.dumps({
                 ID_CLIENTE: client_id,
                 ID_SOLICITUD: req_id,
                 LOTES: [{
@@ -278,7 +331,7 @@ class ClientHandler:
                     PAYLOAD: shard_records
                 }]
             }).encode("utf-8")
-            colas_bancos[shard_id].send(shard_batch)
+        buffer.put(("bancos", msgs))
 
         self._hook.verificar(CP.GW_UPSTREAM_BEFORE_ACK, f"upstream {client_id}")
         _, lock, _ = self.state.obtener_cliente(client_id)
