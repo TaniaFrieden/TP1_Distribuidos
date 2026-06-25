@@ -21,6 +21,9 @@ CHECK_LEADER_INTERVAL = 5               # frecuencia del hilo que chequea timeou
 ELECTION_TIMEOUT = 30                    # segundos antes de reintentar una elección que no cerró
 SUSPECTED_DEAD_TTL = 60                  # segundos que un nodo permanece en la lista de sospechados
 
+PREFETCH_WORKER_QUEUE = 1
+PREFETCH_SHARD_QUEUE = 1000
+
 NUM_ACTUADORES = 2                       # instancias del actuador (consume cola "caidas" en paralelo)
 
 
@@ -94,10 +97,14 @@ def _generar_servicio(node, worker_config, workers_config, compose_data):
             'LOG_FILE': f'/app/logs/{worker_name}.txt'
         })
         env.update(node.get('extra_env', {}))
-        if worker_type in ['bank_shard', 'contador_distinto', 'joiner_q4', 'format_shard']:
-            env.setdefault('PREFETCH_COUNT', '1000')
-        else:
-            env.setdefault('PREFETCH_COUNT', '50')
+        input_q = node['input_queue']
+        cola_compartida = (
+            isinstance(input_q, str)
+            and '{id}' not in input_q
+            and replicas > 1
+        )
+        prefetch = PREFETCH_WORKER_QUEUE if cola_compartida else PREFETCH_SHARD_QUEUE
+        env.setdefault('PREFETCH_COUNT', prefetch)
 
         instance_var = worker_name.upper()
         env['CRASH_HOOK'] = f'${{{instance_var}_CRASH:-}}'
