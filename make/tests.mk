@@ -128,7 +128,11 @@ test-crash-pipeline:
 	bash scripts/tests/test_crash_hooks_pipeline.sh $$ARGS
 
 # ─── SUITES (corren muchos juntos) ───
-.PHONY: test-todos test-todos-multi test-stress-crash test-stress-caos
+.PHONY: test-todos test-todos-multi test-stress-crash test-stress-caos test-demo
+
+test-demo:
+	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
+	bash scripts/tests/test_demo.sh $$ARGS
 
 test-stress-crash:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \

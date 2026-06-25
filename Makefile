@@ -59,6 +59,7 @@ help:
 	@echo "  make test-todos-multi [N]            Suite solo multicliente (default 3)"
 	@echo "  make test-stress-crash [iter]        Stress loop de crash hooks"
 	@echo "  make test-stress-caos [iter] [cli] [espera] [intervalo]  Stress loop de caos (default 5s/30s)"
+	@echo "  make test-demo [cli] [tx] [acc] [sol]  4 escenarios demo con dataset small (default 3 clientes)"
 
 %:
 	@:
