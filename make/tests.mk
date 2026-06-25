@@ -1,10 +1,13 @@
 # Tests end-to-end: unitarios, crash hooks, caos, suites
 
 # ─── UNITARIOS ───
-.PHONY: test-unit test-worker-base test-server
+.PHONY: test-unit test-worker-base test-server test-bank-shard-dedup
 
 test-unit:
 	./scripts/tests/run_local_tests.sh
+
+test-bank-shard-dedup:
+	PYTHONPATH=src/workers/bank_shard:src/workers:src .venv/bin/pytest test/workers/test_bank_shard_dedup_sync.py -v
 
 test-worker-base:
 	$(PYTEST) test/common/worker_base/test_worker_base.py -q

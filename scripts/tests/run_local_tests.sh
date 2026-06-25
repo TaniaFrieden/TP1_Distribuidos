@@ -20,7 +20,7 @@ echo "5/10 - Projection tests..."
 PYTHONPATH=src/workers/proyeccion:src/workers:src .venv/bin/pytest test/common/workers/test_projection.py -q
 
 echo "6/10 - Bank Shard tests..."
-PYTHONPATH=src/workers/bank_shard:src/workers:src .venv/bin/pytest test/workers/test_bank_shard_persistencia.py -q
+PYTHONPATH=src/workers/bank_shard:src/workers:src .venv/bin/pytest test/workers/test_bank_shard_persistencia.py test/workers/test_bank_shard_dedup_sync.py -q
 
 echo "7/10 - Format Shard tests..."
 PYTHONPATH=src/workers/format_shard:src/workers:src .venv/bin/pytest test/workers/test_format_shard_persistencia.py -q

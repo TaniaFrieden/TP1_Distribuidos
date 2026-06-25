@@ -40,7 +40,7 @@ class Logger:
         root.addHandler(handler_archivo)
         root.addHandler(handler_consola)
 
-        logging.getLogger("pika").setLevel(logging.WARNING)
+        logging.getLogger("pika").setLevel(logging.CRITICAL)
         cls._configurado = True
 
     def debug(self, mensaje, **kwargs):
