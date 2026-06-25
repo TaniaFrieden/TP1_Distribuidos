@@ -160,7 +160,6 @@ class WorkerBase(ABC):
                     f"(intento {intento}/{max_intentos}): {e}"
                 )
                 if intento < max_intentos:
-                    import time
                     time.sleep(2)
 
     def iniciar(self):

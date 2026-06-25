@@ -328,8 +328,6 @@ class CoordinadorDistribuido:
             ec = self._clientes.get(client_id)
 
             if ec is not None and ec.finalizado:
-                # Si ya finalicé, no hacer rebroadcast de BARRERA_COMPLETA por cada WORKER_FINALIZADO
-                # que llega tardío, para evitar inundar la red.
                 return
 
             if ec is None or not ec.barrera_activa:
