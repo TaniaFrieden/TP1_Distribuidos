@@ -1,6 +1,6 @@
 # Utilidades: venv, install, clean, generacion de datos, etc.
 
-.PHONY: venv install clean free-ports generar generar-sample solucionar
+.PHONY: venv install clean free-ports generar generar-sample solucionar workers-lista workers-set
 
 venv:
 	python3 -m venv .venv
@@ -37,6 +37,18 @@ free-ports:
 		timeout 3 fuser -k 5672/tcp >/dev/null 2>&1 || true; \
 		timeout 3 fuser -k 15672/tcp >/dev/null 2>&1 || true; \
 	fi
+
+workers-lista:
+	@python3 scripts/utils/gestionar_workers.py listar
+
+workers-set:
+	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
+	if [ -z "$$ARGS" ]; then \
+		echo "Uso: make workers-set <worker> <cantidad>"; \
+		echo "Ejemplo: make workers-set Q1_PROJECTION 4"; \
+		exit 1; \
+	fi; \
+	python3 scripts/utils/gestionar_workers.py set $$ARGS
 
 generar:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
