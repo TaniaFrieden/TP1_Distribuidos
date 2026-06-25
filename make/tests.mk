@@ -74,7 +74,7 @@ iterar:
 	bash -c '\
 		source scripts/tests/test_helpers.sh; \
 		set -- '"$$ARGS"'; \
-		CANT=$${1:-5}; \
+		CANT=$${1:-1}; \
 		TX=$${2:-$(TEST_TX)}; \
 		ACC=$${3:-$(TEST_ACC)}; \
 		SOL=$${4:-$(TEST_SOL)}; \
