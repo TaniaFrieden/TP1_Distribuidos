@@ -21,6 +21,8 @@ help:
 	@echo "  make tirar-nodos [seg] [todos|etapa [p]]  Chaos monkey manual"
 	@echo ""
 	@echo "=== UTILIDADES ==="
+	@echo "  make workers-lista                  Muestra workers activos y sus réplicas"
+	@echo "  make workers-set <worker> <N>      Cambia la cantidad de réplicas de un worker"
 	@echo "  make venv                          Crea el entorno virtual .venv"
 	@echo "  make install                       Instala dependencias en .venv"
 	@echo "  make clean                         Limpia caches, temporales y libera puertos"
