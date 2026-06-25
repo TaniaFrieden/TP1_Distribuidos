@@ -40,15 +40,14 @@ def _mostrar_progreso(nombre, enviados, total):
         _progreso_estado[nombre] = (enviados, total)
         prefix = f"[C{_client_tag}] " if _client_tag else ""
         n_archivos = len(_progreso_estado)
-        # Subir N líneas, limpiar y redibujar
-        if n_archivos > 1:
+        if n_archivos > 0:
             sys.stderr.write(f"\033[{n_archivos}A")
         for n, (e, t) in sorted(_progreso_estado.items()):
             pct = e / t * 100 if t > 0 else 100
             ancho = 25
             lleno = int(ancho * e / t) if t > 0 else ancho
             barra = "█" * lleno + "░" * (ancho - lleno)
-            sys.stderr.write(f"\033[2K  {prefix}{n}: {barra} {pct:5.1f}%\n")
+            sys.stderr.write(f"\033[2K  {prefix}{barra} {pct:5.1f}% {n}\n")
         sys.stderr.flush()
 
 

@@ -32,9 +32,6 @@ def _actualizar_monto_maximo(datos_banco: dict, monto: float, cuenta: str | None
     if monto > datos_banco[CLAVE_MONTO_MAXIMO]:
         datos_banco[CLAVE_MONTO_MAXIMO] = monto
         datos_banco[CLAVE_CUENTAS] = [cuenta] if cuenta else []
-    elif monto == datos_banco[CLAVE_MONTO_MAXIMO] and monto > 0 and cuenta:
-        if cuenta not in datos_banco[CLAVE_CUENTAS]:
-            datos_banco[CLAVE_CUENTAS].append(cuenta)
 
 
 class ProcesadorRegistros:
