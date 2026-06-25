@@ -4,91 +4,103 @@ import sys
 import pandas as pd
 from pathlib import Path
 
-DIR1 = "output/06162eb4-8d94-4b3d-b47c-8c96503e579d"
-DIR2 = "solutions/HI-Large"
 
-TEMPLATE = "q{q}_solucion.csv"
-
-
-def comparar_csv_sin_orden(archivo1: Path | str, archivo2: Path | str) -> tuple[bool, str]:
+def comparar_csv_sin_orden(archivo1, archivo2):
     try:
         df1 = pd.read_csv(archivo1)
         df2 = pd.read_csv(archivo2)
 
         if set(df1.columns) != set(df2.columns):
-            mensaje = (
-                "Los archivos NO son iguales: Tienen columnas diferentes.\n"
-                f"Columnas CSV 1: {list(df1.columns)}\n"
-                f"Columnas CSV 2: {list(df2.columns)}"
-            )
-            return False, mensaje
+            return False, f"Columnas diferentes: {list(df1.columns)} vs {list(df2.columns)}"
 
         df2 = df2[df1.columns]
-        df1_ordenado = df1.sort_values(by=list(df1.columns)).reset_index(drop=True)
-        df2_ordenado = df2.sort_values(by=list(df1.columns)).reset_index(drop=True)
+        df1_sorted = df1.sort_values(by=list(df1.columns)).reset_index(drop=True)
+        df2_sorted = df2.sort_values(by=list(df1.columns)).reset_index(drop=True)
 
-        if df1_ordenado.equals(df2_ordenado):
-            return True, "¡Los archivos CSV son exactamente IGUALES! (ignorando el orden)"
+        if df1_sorted.equals(df2_sorted):
+            return True, ""
 
-        return False, "Los archivos NO son iguales: El contenido de las filas difiere."
+        return False, "El contenido de las filas difiere"
 
     except FileNotFoundError as exc:
-        return False, f"Error: No se pudo encontrar el archivo: {exc.filename}"
+        return False, f"Archivo no encontrado: {exc.filename}"
     except Exception as exc:
-        return False, f"Ocurrió un error inesperado al leer los archivos: {exc}"
+        return False, f"Error: {exc}"
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Compara archivos CSV entre dos directorios usando una plantilla para cada query.")
-    parser.add_argument("--dir1", default=DIR1, help="Ruta al primer directorio.")
-    parser.add_argument("--dir2", default=DIR2, help="Ruta al segundo directorio.")
-    parser.add_argument("--template", default=TEMPLATE, help="Plantilla para el nombre del archivo (debe contener {q}).")
-    
-    args = parser.parse_args()
-    
-    project_root = Path(__file__).resolve().parents[2]
-    
+def comparar_cliente(cid, output_dir, soluciones_dir, queries):
+    correctas = 0
+    total = len(queries)
+    cid_corto = cid[:8] if len(cid) > 8 else cid
+    print(f"\n  ── cliente {cid_corto} ──")
+    for q in queries:
+        actual = Path(output_dir) / f"q{q}_solucion.csv"
+        expected = Path(soluciones_dir) / f"q{q}_solucion.csv"
+        if not actual.exists():
+            print(f"  ⚠ Q{q}  FALTA — {actual}")
+        else:
+            ok, msg = comparar_csv_sin_orden(actual, expected)
+            if ok:
+                print(f"  ✔ Q{q}  OK")
+                correctas += 1
+            else:
+                print(f"  ✘ Q{q}  FAIL — {msg}")
+    return correctas == total
+
+
+def comparar_todos_clientes(output_base, soluciones_dir, queries):
+    output_path = Path(output_base)
+    clientes = sorted([d for d in output_path.iterdir() if d.is_dir()])
+    if not clientes:
+        print("No se encontraron directorios de clientes en", output_base)
+        return False
+    total = len(clientes)
+    exitosos = 0
+    for d in clientes:
+        if comparar_cliente(d.name, str(d), soluciones_dir, queries):
+            exitosos += 1
+    if exitosos == total:
+        print(f"═══ Resultado: {total}/{total} clientes OK ═══")
+    else:
+        print(f"═══ Resultado: {total - exitosos}/{total} clientes FALLARON ═══")
+    return exitosos == total
+
+
+def _obtener_queries():
     scripts_dir = Path(__file__).resolve().parent
     if str(scripts_dir) not in sys.path:
         sys.path.append(str(scripts_dir))
-        
+    project_root = Path(__file__).resolve().parents[2]
     try:
         from obtener_queries import obtener_queries_desde_compose
-        queries = obtener_queries_desde_compose(project_root / "docker-compose.yml")
-        print(f"Queries detectadas desde el docker-compose: {queries}")
-    except Exception as e:
-        queries = [1, 2, 3, 4, 5]
-        print(f"No se pudieron cargar las queries dinámicamente: {e}. Usando fallback por defecto: {queries}")
+        return obtener_queries_desde_compose(project_root / "docker-compose.yml")
+    except Exception:
+        return [1, 2, 3, 4, 5]
 
-    d1 = Path(args.dir1)
-    if not d1.is_absolute():
-        d1 = project_root / d1
-        
-    d2 = Path(args.dir2)
-    if not d2.is_absolute():
-        d2 = project_root / d2
 
-    print(f"Comparando directorios:\n  Dir 1: {d1}\n  Dir 2: {d2}\n  Plantilla: {args.template}\n")
-    
-    hubo_fallas = False
-    for q in queries:
-        nombre_archivo = args.template.format(q=q)
-        f1 = d1 / nombre_archivo
-        f2 = d2 / nombre_archivo
-        
-        print(f"--- Query {q} ({nombre_archivo}) ---")
-        son_iguales, mensaje = comparar_csv_sin_orden(f1, f2)
-        print(mensaje)
-        if not son_iguales:
-            hubo_fallas = True
-        print()
+def main():
+    parser = argparse.ArgumentParser(description="Compara resultados de queries contra soluciones esperadas.")
+    parser.add_argument("output_dir", help="Directorio de output (base con subdirs de clientes, o directorio de un cliente).")
+    parser.add_argument("soluciones_dir", help="Directorio con las soluciones esperadas.")
+    args = parser.parse_args()
 
-    if hubo_fallas:
-        print("Resultado General: Se encontraron diferencias o errores en la comparación.")
-        sys.exit(1)
+    project_root = Path(__file__).resolve().parents[2]
+    queries = _obtener_queries()
+
+    output = Path(args.output_dir)
+    if not output.is_absolute():
+        output = project_root / output
+    soluciones = Path(args.soluciones_dir)
+    if not soluciones.is_absolute():
+        soluciones = project_root / soluciones
+
+    tiene_csvs = any(output.glob("q*_solucion.csv"))
+    if tiene_csvs:
+        ok = comparar_cliente(output.name, str(output), str(soluciones), queries)
     else:
-        print("Resultado General: Todos los archivos correspondientes son exactamente IGUALES.")
-        sys.exit(0)
+        ok = comparar_todos_clientes(str(output), str(soluciones), queries)
+
+    sys.exit(0 if ok else 1)
 
 
 if __name__ == "__main__":

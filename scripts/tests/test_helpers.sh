@@ -142,72 +142,18 @@ print(' '.join(str(q) for q in qs))
 
 comparar_ultimo_cliente() {
     local soluciones_dir=$1
-    local fallo=0
-    local queries
-    queries=$(obtener_queries)
-    if [ -z "$queries" ]; then
-        queries="1 2 3 4 5"
-    fi
     local last_dir
     last_dir=$(ls -td output/*/ 2>/dev/null | head -1)
     if [ -z "$last_dir" ]; then
         echo "No se encontró output de cliente"
         return 1
     fi
-    local cid
-    cid=$(basename "$last_dir")
-    for q in $queries; do
-        actual="output/$cid/q${q}_solucion.csv"
-        expected="solutions/$soluciones_dir/q${q}_solucion.csv"
-        if [ -f "$actual" ]; then
-            .venv/bin/python -c "
-import sys
-sys.path.append('scripts/utils')
-from comparar_datasets import comparar_csv_sin_orden
-ok, msg = comparar_csv_sin_orden('$actual', '$expected')
-print(f'[cliente $cid][q$q]', msg)
-sys.exit(0 if ok else 1)
-" || fallo=1
-        else
-            echo "[cliente $cid][q$q] FALTA archivo $actual"
-            fallo=1
-        fi
-    done
-    return $fallo
+    .venv/bin/python scripts/utils/comparar_datasets.py "$last_dir" "solutions/$soluciones_dir"
 }
 
 comparar_resultados() {
     local soluciones_dir=$1
-    local fallo=0
-    local queries
-    queries=$(obtener_queries)
-    if [ -z "$queries" ]; then
-        echo "No se pudieron determinar las queries desde docker-compose.yml. Usando fallback 1 2 3 4 5."
-        queries="1 2 3 4 5"
-    fi
-    echo "Queries a comparar: $queries"
-
-    for dir in output/*/; do
-        cid=$(basename "$dir")
-        for q in $queries; do
-            actual="output/$cid/q${q}_solucion.csv"
-            expected="solutions/$soluciones_dir/q${q}_solucion.csv"
-            if [ -f "$actual" ]; then
-                .venv/bin/python -c "
-import sys
-sys.path.append('scripts/utils')
-from comparar_datasets import comparar_csv_sin_orden
-ok, msg = comparar_csv_sin_orden('$actual', '$expected')
-print(f'[cliente $cid][q$q]', msg)
-sys.exit(0 if ok else 1)
-" || fallo=1
-            else
-                echo "[cliente $cid][q$q] FALTA archivo $actual"
-                fallo=1
-            fi
-        done
-    done
-    return $fallo
+    .venv/bin/python scripts/utils/comparar_datasets.py output "solutions/$soluciones_dir"
 }
 
 limpiar_test_global() {
