@@ -289,7 +289,7 @@ def generar_compose():
     actuador_image = _image_name_from_dockerfile(actuador_dockerfile)
 
     # Actuador — múltiples instancias consumen la cola "caidas" en paralelo
-    # Monitoreados por el watchdog via heartbeat (sin restart: always de Docker)
+    # Monitoreados por el watchdog via heartbeat; otro actuador lo reinicia si cae.
     for aid in range(1, NUM_ACTUADORES + 1):
         service_name = f"actuador_{aid:02d}"
         service = {

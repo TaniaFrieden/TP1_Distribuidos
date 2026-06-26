@@ -161,7 +161,7 @@ if __name__ == "__main__":
             if not (c.name.startswith("client") or any(crit in c.name for crit in SERVICIOS_CRITICOS))
         ]
         if victimas:
-            log(f"Matando a todos los contenedores activos: {[c.name for c in victimas]}")
+            log(f"Matando {len(victimas)} contenedores activos.")
             for v in victimas:
                 try:
                     v.kill()
