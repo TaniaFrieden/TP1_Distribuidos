@@ -1,4 +1,13 @@
-# TP1 Distribuidos
+# TP1 — Sistemas Distribuidos (FIUBA, 1C2026 - Cátedra Roca)
+
+Pipeline distribuido de procesamiento de transacciones financieras sobre Docker y RabbitMQ. El sistema procesa datasets de hasta 53 millones de transacciones con workers replicados, escalabilidad horizontal, y tolerancia a fallos mediante escritura atómica, deduplicación y recuperación automática de nodos caídos.
+
+## Dataset
+- [IBM Transactions for Anti-Money Laundering (AML)](https://www.kaggle.com/datasets/ealtman2019/ibm-transactions-for-anti-money-laundering-aml)
+
+## Ejemplo de ejecucion
+- [Video - Ejecución con 53M de transacciones y kill total de nodos periodico](https://youtu.be/OgWL86G-CTA?si=vl3dGTJQRSbaxwsQ)
+
 
 ## Requisitos previos
 

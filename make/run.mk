@@ -57,7 +57,7 @@ cliente:
 	SOL=$$(echo $$ARGS | cut -d' ' -f3); \
 	TX_FILE=$${TRANSACTIONS_FILE:-$${TX:-$(TEST_TX)}}; \
 	ACC_FILE=$${ACCOUNTS_FILE:-$${ACC:-$(TEST_ACC)}}; \
-	SOL_DIR=$${SOL:-$(TEST_SOL)}; \
+	SOL_DIR=$${SOL:-$${TX:-$(TEST_SOL)}}; \
 	CLIENT_SUFFIX=$$(date +%s%N); \
 	CLIENT_ID_SUFFIX=$${CLIENT_ID_SUFFIX:-$$CLIENT_SUFFIX}; \
 	mkdir -p "$(OUTPUT_DIR)" logs/clientes && \
