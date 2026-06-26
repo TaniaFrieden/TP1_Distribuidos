@@ -23,15 +23,16 @@ class PersistenciaConteo:
             return conteos, ids_procesados
 
         prefijo = f"{PREFIJO_CONTADOR}_{self._id_nodo}_cliente_"
-        carpetas = [c for c in os.listdir(VOLUMEN_DIR) if c.startswith(prefijo)]
+        archivos = [f[:-5] for f in os.listdir(VOLUMEN_DIR)
+                     if f.startswith(prefijo) and f.endswith('.json')]
 
-        if not carpetas:
+        if not archivos:
             logger.info(f"Sin estado previo en disco (prefijo={prefijo}).")
             return conteos, ids_procesados
 
-        for carpeta in carpetas:
-            client_id = carpeta[len(prefijo):]
-            persistidor = PersistidorEstado(carpeta, base_dir=VOLUMEN_DIR)
+        for nombre in archivos:
+            client_id = nombre[len(prefijo):]
+            persistidor = PersistidorEstado(nombre, base_dir=VOLUMEN_DIR)
             estado = persistidor.cargar()
 
             if not estado:

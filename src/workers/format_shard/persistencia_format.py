@@ -39,14 +39,7 @@ class PersistenciaFormateador:
         return PersistidorEstado(f"{self._prefijo}_cliente_{id_cliente}", base_dir=self._dir_base)
 
     def _obtener_ruta_cache(self, id_cliente: str) -> str:
-        nombre = f"{self._prefijo}_cliente_{id_cliente}"
-        directorio = os.path.join(self._dir_base, nombre)
-        old_umask = os.umask(0o022)
-        try:
-            os.makedirs(directorio, mode=0o755, exist_ok=True)
-        finally:
-            os.umask(old_umask)
-        return os.path.join(directorio, "cache_tardio.jsonl")
+        return os.path.join(self._dir_base, f"{self._prefijo}_cliente_{id_cliente}_cache.jsonl")
 
     def escribir_en_cache(self, id_cliente: str, id_solicitud: str, esquema: list, registros: list):
         ruta = self._obtener_ruta_cache(id_cliente)
@@ -77,13 +70,13 @@ class PersistenciaFormateador:
             return resultado
 
         prefijo_cliente = f"{self._prefijo}_cliente_"
-        for folder_name in os.listdir(self._dir_base):
-            if not folder_name.startswith(prefijo_cliente):
-                continue
-            if not os.path.isdir(os.path.join(self._dir_base, folder_name)):
-                continue
+        archivos = [f[:-5] for f in os.listdir(self._dir_base)
+                     if f.startswith(prefijo_cliente) and f.endswith('.json')]
+        if not archivos:
+            return resultado
 
-            id_cliente = folder_name[len(prefijo_cliente):]
+        for nombre in archivos:
+            id_cliente = nombre[len(prefijo_cliente):]
             persistidor = self._persistidor(id_cliente)
             saved = persistidor.cargar()
             ruta_cache = self._obtener_ruta_cache(id_cliente)
@@ -120,7 +113,6 @@ class PersistenciaFormateador:
                                 estado[CLAVE_IDS_PROCESADOS].add(rid)
                         except Exception:
                             pass
-
 
             if estado[CLAVE_TEMPRANO_CERRADO] and estado[CLAVE_TARDIO_CERRADO] and estado[CLAVE_CACHE_PROCESADO] and barrier_completada:
                 persistidor.borrar()

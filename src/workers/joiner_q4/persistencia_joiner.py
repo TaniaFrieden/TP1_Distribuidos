@@ -52,15 +52,16 @@ class PersistenciaJoiner:
             return {}
 
         prefijo_cliente = self._prefijo + "_cliente_"
-        carpetas = [c for c in os.listdir(self._base_dir) if c.startswith(prefijo_cliente)]
-        if not carpetas:
+        archivos = [f[:-5] for f in os.listdir(self._base_dir)
+                     if f.startswith(prefijo_cliente) and f.endswith('.json')]
+        if not archivos:
             logger.info("[PersistenciaJoiner] Sin estado previo en disco. Arrancando limpio.")
             return {}
 
         resultado = {}
-        for carpeta in carpetas:
-            client_id = carpeta[len(prefijo_cliente):]
-            persistidor = PersistidorEstado(carpeta, base_dir=self._base_dir)
+        for nombre in archivos:
+            client_id = nombre[len(prefijo_cliente):]
+            persistidor = PersistidorEstado(nombre, base_dir=self._base_dir)
             estado = persistidor.cargar()
 
             if not estado:

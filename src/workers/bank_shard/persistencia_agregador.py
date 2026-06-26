@@ -44,13 +44,11 @@ class PersistenciaAgregador:
             return resultado
 
         prefijo_cliente = f"{self._prefijo}_cliente_"
-        for carpeta in os.listdir(self._base_dir):
-            if not carpeta.startswith(prefijo_cliente):
-                continue
-            if not os.path.isdir(os.path.join(self._base_dir, carpeta)):
+        for archivo in os.listdir(self._base_dir):
+            if not archivo.startswith(prefijo_cliente) or not archivo.endswith('.json'):
                 continue
 
-            client_id = carpeta[len(prefijo_cliente):]
+            client_id = archivo[len(prefijo_cliente):-5]
             persistidor = self._persistidor(client_id)
             estado = persistidor.cargar()
 
