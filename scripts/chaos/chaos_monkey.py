@@ -156,22 +156,38 @@ if __name__ == "__main__":
     try:
         if "--todos" in args:
             log(f"Iniciando loop destructor cada {segundos_fijos}s...")
+            import subprocess
+            nombres_compose = set()
+            try:
+                result = subprocess.run(
+                    ["docker", "compose", "ps", "--format", "{{.Name}}"],
+                    capture_output=True, text=True
+                )
+                for name in result.stdout.strip().split("\n"):
+                    name = name.strip()
+                    if name and not any(crit in name for crit in SERVICIOS_CRITICOS) and not name.startswith("client"):
+                        nombres_compose.add(name)
+            except Exception as e:
+                log(f"Error obteniendo servicios de compose: {e}")
+            log(f"Workers del compose a matar ({len(nombres_compose)}): {sorted(nombres_compose)}")
             while True:
-                log("") # Salto de línea para diferenciar ciclos
-                # Ejecutamos matar todos
+                log("")
                 try:
                     cl = docker.from_env()
-                    contenedores = cl.containers.list(filters={"status": "running"})
-                    victimas = [
-                        c for c in contenedores 
-                        if not (c.name.startswith("client") or any(crit in c.name for crit in SERVICIOS_CRITICOS))
-                    ]
+                    victimas = []
+                    for name in nombres_compose:
+                        try:
+                            c = cl.containers.get(name)
+                            if c.status == "running":
+                                victimas.append(c)
+                        except docker.errors.NotFound:
+                            pass
                     if victimas:
-                        log(f"Matando a todos los contenedores activos: {[c.name for c in victimas]}")
+                        log(f"Matando {len(victimas)}/{len(nombres_compose)} workers: {[c.name for c in victimas]}")
                         for v in victimas:
                             try:
                                 v.kill()
-                            except Exception as e:
+                            except Exception:
                                 pass
                     else:
                         log("No hay workers activos para matar.")

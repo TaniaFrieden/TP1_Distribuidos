@@ -14,8 +14,7 @@ echo "========================================================="
 echo "=== Stress Test: $ITERACIONES iter, $CANT_CLIENTES clientes, intervalo caos ${INTERVALO}s ==="
 echo "========================================================="
 
-echo "=== Limpieza completa y arranque limpio ==="
-limpiar_y_arrancar
+preparar_entorno
 
 > logs/chaos_monkey_run.log
 
