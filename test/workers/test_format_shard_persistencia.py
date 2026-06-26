@@ -28,13 +28,12 @@ NODE_PREFIX = "format_shard_1"
 
 
 def _escribir_estado(tmp_path, client_id, estado):
-    PersistidorEstado(f"{NODE_PREFIX}_{client_id}", base_dir=str(tmp_path)).guardar(estado)
+    PersistidorEstado(f"{NODE_PREFIX}_cliente_{client_id}", base_dir=str(tmp_path)).guardar(estado)
 
 
 def _escribir_cache(tmp_path, client_id, lineas):
-    directory = tmp_path / f"{NODE_PREFIX}_{client_id}"
-    os.makedirs(directory, exist_ok=True)
-    with open(directory / "cache_tardio.jsonl", "w") as f:
+    cache_path = tmp_path / f"{NODE_PREFIX}_cliente_{client_id}_cache.jsonl"
+    with open(cache_path, "w") as f:
         for linea in lineas:
             f.write(json.dumps(linea) + "\n")
 
@@ -256,7 +255,7 @@ class TestFormatShardDedupPropio:
         w.procesar_payload("q3_tardio_1", "c1", payload, json.dumps(payload).encode(), ack, MagicMock())
 
         ack.assert_called_once()
-        cache_path = tmp_path / f"{NODE_PREFIX}_c1" / "cache_tardio.jsonl"
+        cache_path = tmp_path / f"{NODE_PREFIX}_cliente_c1_cache.jsonl"
         with open(cache_path) as f:
             lines = [l for l in f.readlines() if l.strip()]
         assert len(lines) == 1

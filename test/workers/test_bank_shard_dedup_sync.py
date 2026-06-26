@@ -46,7 +46,7 @@ DEDUP_PREFIX = "dedup_q2_agregador_shard_1"
 
 
 def _escribir_estado(tmp_path, client_id, estado):
-    PersistidorEstado(f"{NODE_PREFIX}_{client_id}", base_dir=str(tmp_path)).guardar(estado)
+    PersistidorEstado(f"{NODE_PREFIX}_cliente_{client_id}", base_dir=str(tmp_path)).guardar(estado)
 
 
 def _escribir_dedup(tmp_path, data: dict):

@@ -333,7 +333,7 @@ class TestTopologiaPersistida(unittest.TestCase):
             self.assertIn("01", topo["q5_converter"])
             self.assertIn("02", topo["q5_converter"])
 
-            archivo = os.path.join(tmp, "topologia", "estado.json")
+            archivo = os.path.join(tmp, "topologia.json")
             self.assertTrue(os.path.exists(archivo))
             with open(archivo) as f:
                 guardado = json.load(f)
