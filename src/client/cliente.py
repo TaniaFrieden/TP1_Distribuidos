@@ -33,9 +33,11 @@ class Cliente:
         self._host = SERVER_HOST
         self._puerto = SERVER_PORT
         self._persistencia = PersistenciaCliente(OUTPUT_DIR)
-        self._client_id = self._persistencia.cargar_o_generar_id(CLIENT_ID_SUFFIX)
+        self._client_id = self._persistencia.cargar_id(CLIENT_ID_SUFFIX)
 
     def ejecutar(self):
+        if not Enviador.validar_archivos_estatico(ARCHIVOS_A_ENVIAR):
+            sys.exit(1)
         inicio = time.perf_counter()
         intentos = INTENTOS_RECONEXION
         while intentos > 0:
@@ -118,14 +120,21 @@ class Cliente:
         return RESULTADO_COMPLETADO if completado.is_set() else RESULTADO_FALLO_CONEXION
 
     def _handshake(self, conexion):
-        payload = json.dumps({"client_id": self._client_id})
-        conexion.enviar(TipoMensaje.HELLO, payload)
+        hello_data = {}
+        if self._client_id:
+            hello_data["client_id"] = self._client_id
+        conexion.enviar(TipoMensaje.HELLO, json.dumps(hello_data))
 
         tipo, respuesta = conexion.recibir()
         if tipo != TipoMensaje.CONFIG_QUERIES:
             raise Exception("Respuesta inesperada del gateway")
 
         config = json.loads(respuesta)
+        assigned_id = config.get("client_id", "")
+        if assigned_id and assigned_id != self._client_id:
+            self._client_id = assigned_id
+            self._persistencia.guardar_id(self._client_id, CLIENT_ID_SUFFIX)
+
         queries = config.get("queries", [])
         omitir_envio = config.get("omitir_envio", False)
         logging.info(f"Conectado al gateway. ID: {self._client_id} | Queries: {queries}")

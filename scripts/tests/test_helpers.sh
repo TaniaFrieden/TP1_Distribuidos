@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 DOCKER_COMPOSE="${DOCKER_COMPOSE:-docker compose}"
+TEMP_DIR="${TEMP_DIR:-temp}"
 
 limpiar_y_arrancar() {
     local clients
@@ -8,8 +9,7 @@ limpiar_y_arrancar() {
     if [ -n "$clients" ]; then
         timeout 10s docker rm -f $clients 2>/dev/null || true
     fi
-    timeout 10s docker run --rm -v "$(pwd)/output:/out" -v "$(pwd)/logs:/lg" \
-        alpine sh -c "rm -rf /out/*/ /out/client_id*.txt /lg/client_*.txt" 2>/dev/null || true
+    rm -rf "$TEMP_DIR"/* output/*/ output/client_id_*.txt 2>/dev/null || true
     make down 2>/dev/null || true
     sleep 2
     timeout 10s docker run --rm -v "$(pwd)/volume:/vol" \
@@ -24,8 +24,7 @@ preparar_entorno() {
     if [ -n "$clients" ]; then
         timeout 10s docker rm -f $clients 2>/dev/null || true
     fi
-    timeout 10s docker run --rm -v "$(pwd)/output:/out" -v "$(pwd)/logs:/lg" \
-        alpine sh -c "rm -rf /out/*/ /out/client_id*.txt /lg/client_*.txt" 2>/dev/null || true
+    rm -rf "$TEMP_DIR"/* output/*/ output/client_id_*.txt 2>/dev/null || true
     trap 'jobs -p | xargs -r kill 2>/dev/null; true' EXIT
     local esperados corriendo
     esperados=$($DOCKER_COMPOSE config --services 2>/dev/null | wc -l)
@@ -69,28 +68,30 @@ lanzar_clientes() {
     local cant=$1
     local tx=$2
     local acc=$3
+    local run_id
+    run_id=$(date +%s)
     PIDS=()
-    timeout 10s docker run --rm -v "$(pwd)/output:/cleanup_out" -v "$(pwd)/logs:/cleanup_logs" \
-        alpine sh -c "rm -rf /cleanup_out/*/ /cleanup_out/client_id_*.txt" 2>/dev/null \
-        || { rm -rf output/*/ output/client_id_*.txt 2>/dev/null || true; }
+    mkdir -p "$TEMP_DIR" output
+    DIRS_ANTES=$(ls -d output/*/ 2>/dev/null | sort)
+    rm -f output/client_id_*.txt 2>/dev/null || true
     for i in $(seq 1 "$cant"); do
         if [ "${SEQUENTIAL:-0}" = "1" ]; then
             if [ "$i" -gt 1 ]; then
                 echo ""
             fi
-            echo "=== Cliente $i/$cant iniciando ==="
-            ( export CLIENT_ID_SUFFIX=$i; make client TRANSACTIONS_FILE="$tx" ACCOUNTS_FILE="$acc" OUTPUT_DIR="output" \
-                > /dev/null )
+            echo "=== Iteracion $i/$cant iniciando ==="
+            ( export CLIENT_ID_SUFFIX="${run_id}_$i"; make cliente TRANSACTIONS_FILE="$tx" ACCOUNTS_FILE="$acc" \
+                > "$TEMP_DIR/client_stdout_$i.txt" )
             if [ -n "${SEQUENTIAL_SOL:-}" ]; then
                 if ! comparar_ultimo_cliente "$SEQUENTIAL_SOL"; then
-                    echo "=== FALLO en cliente $i/$cant. Abortando. ==="
+                    echo "=== FALLO en iteracion $i/$cant. Abortando. ==="
                     return 1
                 fi
             fi
-            echo "=== Cliente $i/$cant finalizado exitosamente ==="
+            echo "=== Iteracion $i/$cant finalizado exitosamente ==="
         else
-            ( export CLIENT_ID_SUFFIX=$i PROGRESS_BAR=0; make client TRANSACTIONS_FILE="$tx" ACCOUNTS_FILE="$acc" OUTPUT_DIR="output" \
-                > /dev/null 2>/dev/null ) &
+            ( export CLIENT_ID_SUFFIX="${run_id}_$i" PROGRESS_BAR=0; make cliente TRANSACTIONS_FILE="$tx" ACCOUNTS_FILE="$acc" \
+                > "$TEMP_DIR/client_stdout_$i.txt" 2>/dev/null ) &
             PIDS+=($!)
         fi
     done
@@ -126,7 +127,7 @@ esperar_clientes() {
         "$total" "$total" "$(( (SECONDS - inicio) / 60 ))" "$(( (SECONDS - inicio) % 60 ))" >&2
 
     for pid in "${PIDS[@]}"; do
-        wait "$pid" || echo "[WARN] Proceso $pid (cliente) terminó con error."
+        wait "$pid" || echo "[WARN] Proceso $pid (cliente) terminó con error. Ver $TEMP_DIR/client_stdout_*.txt"
     done
 }
 
@@ -149,11 +150,35 @@ comparar_ultimo_cliente() {
         return 1
     fi
     .venv/bin/python scripts/utils/comparar_datasets.py "$last_dir" "solutions/$soluciones_dir"
+    local result=$?
+    rm -f output/client_id_*.txt
+    return $result
 }
 
 comparar_resultados() {
     local soluciones_dir=$1
-    .venv/bin/python scripts/utils/comparar_datasets.py output "solutions/$soluciones_dir"
+    local dirs_despues
+    dirs_despues=$(ls -d output/*/ 2>/dev/null | sort)
+    local nuevos
+    nuevos=$(comm -13 <(echo "$DIRS_ANTES") <(echo "$dirs_despues"))
+    if [ -z "$nuevos" ]; then
+        echo "No se encontraron carpetas de resultados nuevas"
+        return 1
+    fi
+    local total=0 exitosos=0
+    while IFS= read -r dir; do
+        total=$((total + 1))
+        if .venv/bin/python scripts/utils/comparar_datasets.py "$dir" "solutions/$soluciones_dir" 2>/dev/null; then
+            exitosos=$((exitosos + 1))
+        fi
+    done <<< "$nuevos"
+    if [ "$exitosos" -eq "$total" ]; then
+        echo "═══ Resultado: $total/$total clientes OK ═══"
+        return 0
+    else
+        echo "═══ Resultado: $((total - exitosos))/$total clientes FALLARON ═══"
+        return 1
+    fi
 }
 
 limpiar_test_global() {

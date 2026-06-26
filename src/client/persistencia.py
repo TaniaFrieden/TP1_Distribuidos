@@ -1,7 +1,6 @@
 import os
 import glob
 import json
-import uuid
 import logging
 from constantes import (
     ARCHIVO_ENVIO_COMPLETO,
@@ -16,13 +15,12 @@ class PersistenciaCliente:
     def __init__(self, directorio_salida):
         self._directorio = directorio_salida
 
-    def cargar_o_generar_id(self, sufijo=""):
+    def cargar_id(self, sufijo=""):
         env_id = os.environ.get("CLIENT_ID")
         if env_id:
             return env_id
 
         nombre_archivo = f"client_id_{sufijo}.txt" if sufijo else "client_id.txt"
-        os.makedirs(self._directorio, exist_ok=True)
         ruta = os.path.join(self._directorio, nombre_archivo)
 
         if os.path.exists(ruta):
@@ -30,11 +28,14 @@ class PersistenciaCliente:
                 cid = f.read().strip()
             if cid:
                 return cid
+        return None
 
-        cid = str(uuid.uuid4())
+    def guardar_id(self, client_id, sufijo=""):
+        nombre_archivo = f"client_id_{sufijo}.txt" if sufijo else "client_id.txt"
+        os.makedirs(self._directorio, exist_ok=True)
+        ruta = os.path.join(self._directorio, nombre_archivo)
         with open(ruta, "w") as f:
-            f.write(cid)
-        return cid
+            f.write(client_id)
 
     def directorio_cliente(self, client_id):
         directorio = os.path.join(self._directorio, client_id)

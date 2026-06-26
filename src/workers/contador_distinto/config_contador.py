@@ -1,5 +1,5 @@
 import os
-from operadores_contador import OP_IGUAL
+from constantes import OP_IGUAL
 
 
 def _parsear_campos(nombre_env: str, default: str = "") -> list[str]:
@@ -8,7 +8,6 @@ def _parsear_campos(nombre_env: str, default: str = "") -> list[str]:
 
 
 class ConfigContador:
-    """Lee y expone toda la configuración del worker desde variables de entorno."""
 
     def __init__(self):
         self.campos_grupo = _parsear_campos("GROUP_FIELDS")

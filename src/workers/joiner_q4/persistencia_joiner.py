@@ -27,7 +27,7 @@ class PersistenciaJoiner:
         self._base_dir = base_dir
 
     def _nombre_carpeta(self, client_id: str) -> str:
-        return f"{self._prefijo}_{client_id}"
+        return f"{self._prefijo}_cliente_{client_id}"
 
     def guardar(self, client_id: str, scatter: dict, txns: dict, vistos: set):
         """Serializa y persiste el estado del cliente en disco."""
@@ -51,15 +51,17 @@ class PersistenciaJoiner:
             logger.info(f"[PersistenciaJoiner] Directorio {self._base_dir} no existe. Arrancando limpio.")
             return {}
 
-        carpetas = [c for c in os.listdir(self._base_dir) if c.startswith(self._prefijo + "_")]
-        if not carpetas:
+        prefijo_cliente = self._prefijo + "_cliente_"
+        archivos = [f[:-5] for f in os.listdir(self._base_dir)
+                     if f.startswith(prefijo_cliente) and f.endswith('.json')]
+        if not archivos:
             logger.info("[PersistenciaJoiner] Sin estado previo en disco. Arrancando limpio.")
             return {}
 
         resultado = {}
-        for carpeta in carpetas:
-            client_id = carpeta[len(self._prefijo) + 1:]
-            persistidor = PersistidorEstado(carpeta, base_dir=self._base_dir)
+        for nombre in archivos:
+            client_id = nombre[len(prefijo_cliente):]
+            persistidor = PersistidorEstado(nombre, base_dir=self._base_dir)
             estado = persistidor.cargar()
 
             if not estado:

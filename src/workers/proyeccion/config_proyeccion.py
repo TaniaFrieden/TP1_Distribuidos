@@ -2,7 +2,6 @@ import os
 
 
 class ConfigProyeccion:
-    """Lee y expone la configuración de campos a proyectar desde variables de entorno."""
 
     def __init__(self):
         campos_str = os.environ.get("CAMPOS", "")

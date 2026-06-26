@@ -160,7 +160,6 @@ class WorkerBase(ABC):
                     f"(intento {intento}/{max_intentos}): {e}"
                 )
                 if intento < max_intentos:
-                    import time
                     time.sleep(2)
 
     def iniciar(self):
@@ -304,10 +303,17 @@ class WorkerBase(ABC):
         )
         if sesion_invalidada:
             self._sesiones_invalidadas.setdefault(client_id, set()).add(sesion_invalidada)
+        else:
+            self._sesiones_invalidadas.pop(client_id, None)
         self._manejador_eof.limpiar_cliente(client_id)
         self.al_desconectar_cliente(client_id)
         self.coordinador.limpiar_cliente(client_id)
         self.filtro_dedup.limpiar_cliente(client_id)
+        if isinstance(self._mensajes_procesados, dict):
+            self._mensajes_procesados.pop(client_id, None)
+        if isinstance(self._mensajes_emitidos, dict):
+            self._mensajes_emitidos.pop(client_id, None)
+        self._persistir_conteos()
         self._enviar(mensaje, mensaje_json)
         ack()
 

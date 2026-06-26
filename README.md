@@ -24,6 +24,15 @@ make generar 1 2 3 4 5  # genera todas las queries
 
 Esto configura automáticamente el Gateway y los workers correspondientes.
 
+## Configurar réplicas de workers
+
+Antes de levantar, podés ver y cambiar la cantidad de réplicas de cada worker:
+
+```bash
+make workers-lista                    # lista workers activos y sus réplicas
+make workers-set Q1_PROJECTION 4      # cambia las réplicas de un worker
+```
+
 ## Levantar el lado del servidor (Docker)
 
 Una vez generado el compose:
@@ -39,65 +48,10 @@ Para detener:
 make down
 ```
 
-## Levantar el lado del cliente
+## Generar soluciones de referencia
 
-### Opción A — clientes en contenedores Docker
+Antes de correr clientes, generá las soluciones esperadas contra las cuales se comparan los resultados:
 
-```bash
-make run-clients            # lanza 2 clientes (por defecto)
-make run-clients SCALE=N    # lanza N clientes en paralelo
-```
-
-Cada cliente escribe sus resultados en `output/<client_id>/` (UUID generado por el gateway).
-
-### Opción B — cliente local (sin Docker)
-
-Útil para desarrollo o debug. Requiere levantar el gateway localmente primero.
-
-**Terminal 1 — Gateway:**
-```bash
-make gateway
-```
-
-**Terminal 2+ — Clientes:**
-```bash
-make client OUTPUT_DIR=output/c1
-make client OUTPUT_DIR=output/c2   # cada cliente en su propia terminal
-```
-
-#### Variables configurables del cliente
-
-| Variable           | Default       | Descripción                         |
-|--------------------|---------------|-------------------------------------|
-| `TRANSACTIONS_FILE`| —             | Path al CSV de transacciones        |
-| `ACCOUNTS_FILE`    | —             | Path al CSV de cuentas              |
-| `OUTPUT_DIR`       | `output`      | Carpeta donde se guardan resultados |
-| `SERVER_HOST`      | `127.0.0.1`   | Host del Gateway                    |
-| `SERVER_PORT`      | `5678`        | Puerto del Gateway                  |
-| `BATCH_SIZE`       | `10000`       | Tamaño del batch de envío           |
-
-Ejemplo con parámetros:
-```bash
-make client HI-Large_Trans_sample_30 HI-Large_accounts OUTPUT_DIR=output/prueba
-```
-
-## Validación de Soluciones
-
-### Samplear un dataset grande
-
-Genera un CSV reducido a un porcentaje del original, útil para pruebas rápidas.
-```bash
-make generar-sample <dataset> [porcentaje]
-```
-
-*Ejemplo:*
-```bash
-make generar-sample HI-Large_Trans 30   # genera HI-Large_Trans_sample_30.csv
-```
-
-### Generar solución de referencia (Notebook)
-
-Ejecuta la lógica de pandas de referencia para crear los archivos CSV de soluciones esperadas.
 ```bash
 make solucionar <transacciones> <cuentas> <dir>
 ```
@@ -107,34 +61,26 @@ make solucionar <transacciones> <cuentas> <dir>
 make solucionar HI-Large_Trans_sample_30 HI-Large_accounts Hi-Large-30
 ```
 
-### Iterar clientes y comparar resultados
+## Correr clientes
 
-Corre N clientes de forma secuencial (uno a la vez) y compara cada resultado contra las soluciones de referencia.
+El cliente se conecta al gateway, envía los datos, recibe los resultados en `output/<client_id>/` y los compara automáticamente contra las soluciones de referencia. El gateway asigna un ID numérico secuencial (0, 1, 2...) a cada cliente nuevo.
+
 ```bash
-make iterar [N] [tx] [acc] [sol]
+make cliente                          # usa datasets por defecto (TEST_TX, TEST_ACC, TEST_SOL)
+make cliente <tx> <acc> <sol>         # datasets y soluciones custom
 ```
 
-Todos los parámetros son opcionales — usa los defaults del Makefile (`TEST_TX`, `TEST_ACC`, `TEST_SOL`).
+Para correr múltiples clientes:
 
-*Ejemplo:*
 ```bash
-make iterar                    # 5 clientes con datasets por defecto
-make iterar 3                  # 3 clientes con datasets por defecto
-make iterar 5 HI-Large_Trans_sample_30 HI-Large_accounts Hi-Large-30
+make iterar                           # 1 cliente secuencial con defaults
+make iterar 5                         # 5 clientes secuenciales
+make iterar 5 <tx> <acc> <sol>        # 5 clientes con datasets custom
+make iterar-multi                     # 1 ronda de 2 clientes en paralelo
+make iterar-multi 3 4                 # 3 rondas de 4 clientes en paralelo
 ```
 
-### Iterar con clientes en paralelo
-
-Corre múltiples iteraciones de N clientes simultáneos y compara resultados.
-```bash
-make iterar-multi [iteraciones] [clientes] [tx] [acc] [sol]
-```
-
-*Ejemplo:*
-```bash
-make iterar-multi              # 1 iteración, 2 clientes
-make iterar-multi 3 5          # 3 iteraciones de 5 clientes en paralelo
-```
+Los resultados quedan en `output/<client_id>/` y no se borran entre ejecuciones.
 
 ## Tolerancia a Fallos y Pruebas de Caos
 
@@ -147,9 +93,17 @@ El sistema cuenta con un mecanismo de tolerancia a fallos autocurativo y herrami
 * **Watchdog**: Monitorea de forma centralizada la llegada de heartbeats de cada worker y reporta fallos al actuador ante la pérdida reiterada de señales.
 * **Actuador**: Escucha reportes del watchdog e interactúa con el daemon de Docker (`docker.sock`) para reiniciar automáticamente las réplicas caídas.
 
-### Simulación de Caos (Chaos Monkey)
+### Simulación de Caos
 
-Para validar la tolerancia a fallos de forma manual en dos terminales:
+Para matar contenedores manualmente (una sola vez):
+
+```bash
+make tirar gateway                 # mata un contenedor por nombre
+make tirar todos                   # mata todos los workers
+make tirar etapa counter           # mata una etapa completa
+```
+
+Para validar la tolerancia a fallos con chaos monkey en loop continuo (dos terminales):
 
 **Terminal 1 (Clientes):**
 ```bash
@@ -158,11 +112,11 @@ make iterar 5
 
 **Terminal 2 (Chaos Monkey):**
 ```bash
-make tirar-nodos                   # aleatorio cada 10s
-make tirar-nodos 5                 # aleatorio cada 5s
-make tirar-nodos 5 todos           # mata todos los workers cada 5s
-make tirar-nodos 5 etapa           # mata una etapa al azar cada 5s
-make tirar-nodos 5 etapa counter   # mata etapa counter cada 5s
+make caos                          # aleatorio cada 10s
+make caos 5                        # aleatorio cada 5s
+make caos 5 todos                  # mata todos los workers cada 5s
+make caos 5 etapa                  # mata una etapa al azar cada 5s
+make caos 5 etapa counter          # mata etapa counter cada 5s
 ```
 
 ## Suite de Tests Automatizados
@@ -177,7 +131,7 @@ El Makefile está modularizado en `make/`:
 | `make/datasets.mk` | Datasets y soluciones para tests (`TEST_TX`, `TEST_ACC`, `TEST_SOL`) |
 | `make/helpers.mk` | Helpers internos (`_full_clean`, `_light_clean`, `_start_env`) |
 | `make/utils.mk` | Utilidades (venv, install, clean, generar, solucionar) |
-| `make/run.mk` | Ejecución manual (start, down, client, gateway, tirar-nodos) |
+| `make/run.mk` | Ejecución manual (start, down, cliente, gateway, caos, tirar) |
 | `make/tests.mk` | Todos los targets de test |
 
 ### Datasets de test
@@ -186,13 +140,13 @@ Todos los tests usan tres variables que se definen en `make/datasets.mk`:
 
 | Variable   | Default             | Descripción                                    |
 |------------|---------------------|------------------------------------------------|
-| `TEST_TX`  | `LI-Small_Trans`    | Archivo de transacciones (en `datasets/`)      |
+| `TEST_TX`  | `trans_sample`      | Archivo de transacciones (en `datasets/`)      |
 | `TEST_ACC` | `LI-Small_accounts` | Archivo de cuentas (en `datasets/`)            |
-| `TEST_SOL` | `LI-Small`          | Carpeta de soluciones esperadas (en `solutions/`) |
+| `TEST_SOL` | `sample`            | Carpeta de soluciones esperadas (en `solutions/`) |
 
 Para cambiar el dataset de toda la suite:
 ```bash
-make test-todos TEST_TX=HI-Large_Trans TEST_ACC=HI-Large_accounts TEST_SOL=HI-Large
+make test-todos TEST_TX=LI-Small_Trans TEST_ACC=LI-Small_accounts TEST_SOL=LI-Small
 ```
 
 ### Crash Hooks (determinísticos)
@@ -270,15 +224,23 @@ Corre solo los tests de caos con N clientes simultáneos:
 ## Limpiar todo
 
 ```bash
-make clean
+make clean          # limpieza completa (contenedores, volúmenes, caches, puertos e imágenes Docker)
+make docker-clean   # solo limpia imágenes dangling y build cache de Docker
 ```
 
-Detiene los contenedores, libera los puertos 5678, 5672 y 15672, y elimina caches y archivos temporales.
+`make clean` detiene los contenedores, libera los puertos 5678, 5672 y 15672, elimina caches y archivos temporales, y además ejecuta `docker-clean` para remover imágenes huérfanas y build cache acumulado.
+
+`make docker-clean` se puede correr de forma independiente cuando se quiere liberar espacio de disco sin detener nada.
 
 ## Comandos útiles
 
 ```bash
 make log gateway          # logs del gateway en tiempo real
 make log filter_usd_01    # logs de un worker específico
+make tirar gateway        # mata un contenedor por nombre
+make tirar todos          # mata todos los workers (una vez)
+make tirar etapa counter  # mata una etapa completa (una vez)
+make caos 10              # chaos monkey aleatorio cada 10s (loop)
+make caos 5 etapa counter # mata etapa counter cada 5s (loop)
 make help                 # lista todos los targets disponibles
 ```

@@ -59,8 +59,6 @@ class AgregadorBancarioWorker(WorkerBase):
         self._recuperar_estado()
         logger.info("AgregadorBancario inicializado.")
 
-    # ── Locks por cliente ──
-
     def _obtener_lock(self, client_id: str) -> threading.Lock:
         with self._lock_global:
             if client_id not in self._locks_cliente:
@@ -70,8 +68,6 @@ class AgregadorBancarioWorker(WorkerBase):
     def _liberar_lock(self, client_id: str):
         with self._lock_global:
             self._locks_cliente.pop(client_id, None)
-
-    # ── Persistencia por lotes ──
 
     def _persistir_estado(self, client_id: str):
         self._persistencia.guardar(
@@ -85,8 +81,6 @@ class AgregadorBancarioWorker(WorkerBase):
         for ack_pendiente in self._acks_pendientes.get(client_id, []):
             ack_pendiente()
         self._acks_pendientes.pop(client_id, None)
-
-    # ── Recuperación ──
 
     def _recuperar_estado(self):
         estados = self._persistencia.recuperar_estados()
@@ -146,8 +140,6 @@ class AgregadorBancarioWorker(WorkerBase):
         if hubo_cambio:
             self.filtro_dedup._persistir()
 
-    # ── Procesamiento de datos ──
-
     def procesar_payload(self, nombre_cola: str, client_id: str, payload: dict,
                          mensaje_original: bytes, ack, nack):
         try:
@@ -201,8 +193,6 @@ class AgregadorBancarioWorker(WorkerBase):
                 self._procesador.procesar_transaccion_individual(estado, payload)
             elif COLA_BANCOS in nombre_cola:
                 self._procesador.procesar_banco_individual(estado, payload)
-
-    # ── Coordinación EOF ──
 
     def interceptar_eof(self, nombre_cola: str, client_id: str, payload: dict,
                         mensaje_original: bytes) -> bool:
@@ -266,14 +256,9 @@ class AgregadorBancarioWorker(WorkerBase):
     def al_iniciar_post_arranque(self):
         for client_id, eof_mensaje in self._barreras_para_iniciar:
             logger.info(f"Iniciando barrera diferida para {client_id} post-recovery.")
-            # Limpiar vuelos residuales de mensajes re-entregados por RabbitMQ
-            # para evitar deadlock: el flush espera vuelos=0, pero los acks
-            # pendientes (que llaman descontar) solo se ejecutan durante el flush.
             self.contador_vuelos.limpiar(client_id)
             self.coordinador.iniciar_barrera(client_id, eof_mensaje)
         self._barreras_para_iniciar.clear()
-
-    # ── Completar / Desconectar ──
 
     def al_completar_cliente(self, client_id: str):
         lock = self._obtener_lock(client_id)

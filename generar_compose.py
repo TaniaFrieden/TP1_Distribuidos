@@ -65,13 +65,25 @@ def _resolver_variables(obj, workers_config):
     return obj
 
 
-def _generar_servicio(node, worker_config, workers_config, compose_data):
+def _image_name_from_dockerfile(dockerfile):
+    parts = dockerfile.split('/')
+    filename = parts[-1]
+    if filename == 'Dockerfile':
+        dir_name = parts[-2] if len(parts) > 1 else 'base'
+    else:
+        dir_name = filename.replace('Dockerfile', '').lower()
+    return f"tp1-{dir_name}"
+
+
+def _generar_servicio(node, worker_config, workers_config, compose_data, built_images):
     node = _resolver_variables(node, workers_config)
 
     worker_type = node['type']
     base_config = worker_config.get(worker_type, {})
     prefix = node['prefix']
     replicas = node.get('replicas', 1)
+    dockerfile = base_config['dockerfile']
+    image_name = _image_name_from_dockerfile(dockerfile)
 
     for i in range(1, replicas + 1):
         worker_id = str(i)
@@ -111,8 +123,7 @@ def _generar_servicio(node, worker_config, workers_config, compose_data):
 
         volumes = ['./logs:/app/logs', f'./volume/{worker_name}:/app/volumen']
 
-        compose_data['services'][worker_name] = {
-            'build': {'context': './src', 'dockerfile': base_config['dockerfile']},
+        service = {
             'container_name': worker_name,
             'depends_on': {
                 'rabbitmq': {'condition': 'service_healthy'},
@@ -121,6 +132,15 @@ def _generar_servicio(node, worker_config, workers_config, compose_data):
             'volumes': volumes,
             'environment': env
         }
+
+        if dockerfile not in built_images:
+            built_images[dockerfile] = image_name
+            service['build'] = {'context': './src', 'dockerfile': dockerfile}
+            service['image'] = image_name
+        else:
+            service['image'] = image_name
+
+        compose_data['services'][worker_name] = service
 
 
 def generar_compose():
@@ -134,6 +154,8 @@ def generar_compose():
 
     with open(WORKERS_CONFIG_FILE, 'r') as f:
         workers_config = json.load(f)
+
+    built_images = {}
 
     input_queues = []
     output_queues = []
@@ -149,7 +171,7 @@ def generar_compose():
                 q for q in node['output_queue']
                 if any(q.startswith(f"q{qn}_") for qn in selected_queries)
             ]
-        _generar_servicio(node, worker_config, workers_config, compose_data)
+        _generar_servicio(node, worker_config, workers_config, compose_data, built_images)
 
     query_files = sorted(glob.glob(CONFIG_QUERIES))
 
@@ -174,10 +196,12 @@ def generar_compose():
                 bank_queue_config = _resolver_variables(raw, workers_config)
 
         for node in data.get('workers', []):
-            _generar_servicio(node, worker_config, workers_config, compose_data)
+            _generar_servicio(node, worker_config, workers_config, compose_data, built_images)
 
     if 'gateway' in compose_data['services']:
-        env = compose_data['services']['gateway']['environment']
+        gw = compose_data['services']['gateway']
+        gw['image'] = 'tp1-gateway'
+        env = gw['environment']
         env['OUTPUTS_QUEUE'] = ", ".join(output_queues)
         env['INPUTS_QUEUE'] = ", ".join(input_queues)
         env['LOG_FILE'] = '/app/logs/gateway.txt'
@@ -188,10 +212,13 @@ def generar_compose():
         if bank_queue_config is not None:
             env['BANK_QUEUE'] = _serializar_valor_env(bank_queue_config)
         env['CRASH_HOOK'] = '${GATEWAY_01_CRASH:-}'
-        compose_data['services']['gateway']['volumes'] = [
+        gw['volumes'] = [
             './logs:/app/logs',
             './volume/gateway:/app/volumen',
         ]
+
+    if 'client' in compose_data['services']:
+        compose_data['services']['client']['image'] = 'tp1-client'
 
     if 'rabbitmq' in compose_data['services']:
         compose_data['services']['rabbitmq'].setdefault('environment', {})
@@ -203,18 +230,22 @@ def generar_compose():
 
     # Recolectar dinámicamente los NODE_PREFIX de todos los servicios para monitorear.
     # El gateway no tiene NODE_PREFIX pero también debe monitorearse.
+    # 'actuador' se agrega explícitamente porque se genera después de este loop.
     watchdog_stages = ['gateway']
     for s_name, s_data in compose_data.get('services', {}).items():
         if isinstance(s_data, dict) and 'environment' in s_data:
             prefix = s_data['environment'].get('NODE_PREFIX')
             if prefix and prefix not in watchdog_stages:
                 watchdog_stages.append(prefix)
+    watchdog_stages.append('actuador')
+
+    watchdog_dockerfile = 'watchdog/Dockerfile'
+    watchdog_image = _image_name_from_dockerfile(watchdog_dockerfile)
 
     # Watchdog — 3 instancias con elección en anillo; sólo el líder activa el detector de caídas
     for wid in range(1, NUM_WATCHDOGS + 1):
         service_name = f"watchdog_{wid}"
-        compose_data['services'][service_name] = {
-            'build': {'context': './src', 'dockerfile': 'watchdog/Dockerfile'},
+        service = {
             'container_name': service_name,
             'restart': 'on-failure',
             'depends_on': {
@@ -246,20 +277,30 @@ def generar_compose():
                 'CRASH_HOOK': f'${{WATCHDOG_{wid}_CRASH:-}}',
             },
         }
+        if watchdog_dockerfile not in built_images:
+            built_images[watchdog_dockerfile] = watchdog_image
+            service['build'] = {'context': './src', 'dockerfile': watchdog_dockerfile}
+            service['image'] = watchdog_image
+        else:
+            service['image'] = watchdog_image
+        compose_data['services'][service_name] = service
+
+    actuador_dockerfile = 'watchdog/DockerfileActuador'
+    actuador_image = _image_name_from_dockerfile(actuador_dockerfile)
 
     # Actuador — múltiples instancias consumen la cola "caidas" en paralelo
+    # Monitoreados por el watchdog via heartbeat; otro actuador lo reinicia si cae.
     for aid in range(1, NUM_ACTUADORES + 1):
-        service_name = f"actuador_{aid}"
-        compose_data['services'][service_name] = {
-            'build': {'context': './src', 'dockerfile': 'watchdog/DockerfileActuador'},
+        service_name = f"actuador_{aid:02d}"
+        service = {
             'container_name': service_name,
-            'restart': 'always',
             'depends_on': {
                 'rabbitmq': {'condition': 'service_healthy'},
             },
             'volumes': [
                 '/var/run/docker.sock:/var/run/docker.sock',
                 './logs:/app/logs',
+                f'./volume/{service_name}:/app/volumen',
             ],
             'environment': {
                 'MOM_HOST': 'rabbitmq',
@@ -268,10 +309,21 @@ def generar_compose():
                 'MOM_PASSWORD': 'distributed',
                 'MOM_VHOST': '/',
                 'CAIDAS_QUEUE': 'caidas',
+                'NODE_PREFIX': 'actuador',
+                'ID': str(aid),
+                'TOTAL_WORKERS': str(NUM_ACTUADORES),
+                'HEARTBEAT_INTERVAL_SECONDS': str(HEARTBEAT_INTERVAL_SECONDS),
                 'LOG_LEVEL': 'INFO',
-                'LOG_FILE': f'/app/logs/actuador_{aid}.txt',
+                'LOG_FILE': f'/app/logs/{service_name}.txt',
             },
         }
+        if actuador_dockerfile not in built_images:
+            built_images[actuador_dockerfile] = actuador_image
+            service['build'] = {'context': './src', 'dockerfile': actuador_dockerfile}
+            service['image'] = actuador_image
+        else:
+            service['image'] = actuador_image
+        compose_data['services'][service_name] = service
 
     with open('docker-compose.yml', 'w') as f:
         yaml.dump(compose_data, f, sort_keys=False, default_flow_style=False, width=1000)

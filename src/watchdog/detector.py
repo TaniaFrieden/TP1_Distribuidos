@@ -6,6 +6,7 @@ from common.logger import obtener_logger
 from common.crash_hook import CrashHook
 from common import crash_points as CP
 from common.middleware.middleware_rabbitmq import MessageMiddlewareQueueRabbitMQ
+from constantes import PREFIJO_HEARTBEAT
 
 
 class DetectorLatidos:
@@ -55,7 +56,7 @@ class DetectorLatidos:
                 pass
 
     def _consumir_etapa(self, etapa: str):
-        nombre_cola = f"heartbeat.{etapa}"
+        nombre_cola = f"{PREFIJO_HEARTBEAT}.{etapa}"
         try:
             cola = MessageMiddlewareQueueRabbitMQ(self._config.host_mom, nombre_cola)
             with self._lock:

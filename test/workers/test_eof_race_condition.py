@@ -83,12 +83,12 @@ class TestEOFRaceCondition:
              patch("base.coordinacion.coordinador.TransporteControl", LoopbackTransporteControl), \
              patch.object(common.persistencia.PersistidorEstado, "__init__", patched_init), \
              patch("common.persistencia.VOLUMEN_DIR", str(tmp_path)), \
-             patch("persistencia_conteo.VOLUMEN_DIR", str(tmp_path)), \
+             patch("persistencia.VOLUMEN_DIR", str(tmp_path)), \
              patch("common.crash_hook.VOLUMEN_DIR", str(tmp_path)), \
              patch("common.dedup_filter.VOLUMEN_DIR", str(tmp_path)):
 
-            from contador import CounterWorker
-            w1 = CounterWorker()
+            from contador import WorkerContador
+            w1 = WorkerContador()
             w1.coordinador.iniciar_consumo()
             w1._enviar = MagicMock()
 
@@ -110,11 +110,11 @@ class TestEOFRaceCondition:
              patch("base.coordinacion.coordinador.TransporteControl", LoopbackTransporteControl), \
              patch.object(common.persistencia.PersistidorEstado, "__init__", patched_init), \
              patch("common.persistencia.VOLUMEN_DIR", str(tmp_path)), \
-             patch("persistencia_conteo.VOLUMEN_DIR", str(tmp_path)), \
+             patch("persistencia.VOLUMEN_DIR", str(tmp_path)), \
              patch("common.crash_hook.VOLUMEN_DIR", str(tmp_path)), \
              patch("common.dedup_filter.VOLUMEN_DIR", str(tmp_path)):
 
-            w2 = CounterWorker()
+            w2 = WorkerContador()
             w2.coordinador.iniciar_consumo()
             w2._enviar = MagicMock()
 

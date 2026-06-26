@@ -35,7 +35,7 @@ class PersistenciaAgregador:
         self._base_dir = base_dir
 
     def _persistidor(self, client_id: str) -> PersistidorEstado:
-        return PersistidorEstado(f"{self._prefijo}_{client_id}", base_dir=self._base_dir)
+        return PersistidorEstado(f"{self._prefijo}_cliente_{client_id}", base_dir=self._base_dir)
 
     def recuperar_estados(self) -> dict[str, dict]:
         resultado: dict[str, dict] = {}
@@ -43,14 +43,12 @@ class PersistenciaAgregador:
         if not os.path.exists(self._base_dir):
             return resultado
 
-        prefijo = f"{self._prefijo}_"
-        for carpeta in os.listdir(self._base_dir):
-            if not carpeta.startswith(prefijo):
-                continue
-            if not os.path.isdir(os.path.join(self._base_dir, carpeta)):
+        prefijo_cliente = f"{self._prefijo}_cliente_"
+        for archivo in os.listdir(self._base_dir):
+            if not archivo.startswith(prefijo_cliente) or not archivo.endswith('.json'):
                 continue
 
-            client_id = carpeta[len(prefijo):]
+            client_id = archivo[len(prefijo_cliente):-5]
             persistidor = self._persistidor(client_id)
             estado = persistidor.cargar()
 

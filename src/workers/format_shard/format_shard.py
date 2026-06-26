@@ -7,6 +7,7 @@ from common.constantes_protocolo import ID_SOLICITUD, LOTES, CABECERA, ESQUEMA, 
 from config_format import ConfigFormateador
 from persistencia_format import PersistenciaFormateador
 from procesador_registros import ProcesadorRegistros
+from formateador_salida import construir_resultado
 from constantes import (
     CLAVE_TEMPRANO_CERRADO, CLAVE_TARDIO_CERRADO, CLAVE_PROMEDIOS_LISTOS,
     CLAVE_PROMEDIOS, CLAVE_DATOS_TEMPRANO, CLAVE_EOF_MENSAJE,
@@ -145,7 +146,6 @@ class FormateadorShardWorker(WorkerBase):
         ruta_cache = self._persistencia._obtener_ruta_cache(id_cliente)
         registros = self._procesador.filtrar_registros_tardios(estado, ruta_cache)
 
-        from formateador_salida import construir_resultado
         resultado = construir_resultado(id_cliente, registros)
         if resultado:
             req_id = f"format_shard_output:{id_cliente}:{self.configuracion.id_nodo}"

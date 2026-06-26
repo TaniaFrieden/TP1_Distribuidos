@@ -3,7 +3,7 @@ import time
 import unittest
 from unittest.mock import MagicMock, patch
 
-from watchdog.detector import DetectorLatidos
+from detector import DetectorLatidos
 
 
 def crear_config(etapas=None, timeout=15.0, intervalo_chequeo=5.0):
@@ -90,7 +90,7 @@ class TestPublicarCaida(unittest.TestCase):
 
     def test_crea_conexion_si_no_existe(self):
         detector = crear_detector()
-        with patch("watchdog.detector.MessageMiddlewareQueueRabbitMQ") as mock_cls:
+        with patch("detector.MessageMiddlewareQueueRabbitMQ") as mock_cls:
             mock_cls.return_value = MagicMock()
             detector._ultimo_visto[("filtro", "1")] = time.time() - 20
             detector._publicar_caida("filtro", "1")
@@ -103,7 +103,7 @@ class TestPublicarCaida(unittest.TestCase):
         detector._ultimo_visto[("filtro", "1")] = time.time() - 20
         detector._ultimo_visto[("filtro", "2")] = time.time() - 20
 
-        with patch("watchdog.detector.MessageMiddlewareQueueRabbitMQ") as mock_cls:
+        with patch("detector.MessageMiddlewareQueueRabbitMQ") as mock_cls:
             detector._publicar_caida("filtro", "1")
             detector._publicar_caida("filtro", "2")
 

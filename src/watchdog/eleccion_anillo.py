@@ -12,8 +12,10 @@ from common.middleware.middleware_rabbitmq import (
     FanoutQueueRabbitMQ,
     MessageMiddlewareQueueRabbitMQ,
 )
-
-EXCHANGE_LATIDO_LIDER = "heartbeat.watchdog"
+from constantes import (
+    EXCHANGE_LATIDO_LIDER, EXCHANGE_REGISTRO,
+    PREFIJO_COLA_ANILLO, PREFIJO_COLA_REGISTRO, PREFIJO_LATIDO_LIDER,
+)
 
 
 class EleccionAnillo:
@@ -104,7 +106,7 @@ class EleccionAnillo:
                 self._guardar_topologia_a_disco()
 
     def _consumir_registro_topologia(self):
-        nombre_cola = f"watchdog.registro.{self._id}"
+        nombre_cola = f"{PREFIJO_COLA_REGISTRO}.{self._id}"
 
         def al_recibir_registro(msg: bytes, ack, _):
             try:
@@ -133,7 +135,7 @@ class EleccionAnillo:
 
         while not self._evento_parada.is_set():
             try:
-                cola = FanoutQueueRabbitMQ(self._config.host_mom, nombre_cola, "watchdog.exchange.registro")
+                cola = FanoutQueueRabbitMQ(self._config.host_mom, nombre_cola, EXCHANGE_REGISTRO)
                 self._logger.info(f"Escuchando registros de topología en {nombre_cola}")
                 cola.start_consuming(al_recibir_registro)
             except Exception as e:
@@ -324,7 +326,7 @@ class EleccionAnillo:
             self._enviar_a(destino, {"tipo": "coordinador", "id": id_lider, "topologia": self.obtener_topologia_serializable()})
 
     def _consumir_anillo(self):
-        nombre_cola = f"ring.{self._id}"
+        nombre_cola = f"{PREFIJO_COLA_ANILLO}.{self._id}"
         while not self._evento_parada.is_set():
             try:
                 cola = MessageMiddlewareQueueRabbitMQ(self._config.host_mom, nombre_cola)
@@ -379,7 +381,7 @@ class EleccionAnillo:
                 self._logger.error(f" Error en loop heartbeat líder: {e}", exc_info=True)
 
     def _consumir_latido_lider(self):
-        nombre_cola = f"heartbeat.watchdog.{self._id}"
+        nombre_cola = f"{PREFIJO_LATIDO_LIDER}.{self._id}"
         while not self._evento_parada.is_set():
             try:
                 cola = FanoutQueueRabbitMQ(self._config.host_mom, nombre_cola, EXCHANGE_LATIDO_LIDER)
@@ -505,7 +507,7 @@ class EleccionAnillo:
             return self._calcular_proximo_destino()
 
     def _enviar_a(self, id_destino: int, payload: dict):
-        nombre_cola = f"ring.{id_destino}"
+        nombre_cola = f"{PREFIJO_COLA_ANILLO}.{id_destino}"
         datos = json.dumps(payload).encode()
         with self._lock_envio:
             try:

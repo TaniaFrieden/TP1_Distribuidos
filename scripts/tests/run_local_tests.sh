@@ -32,7 +32,7 @@ echo "9/10 - Persistencia Base tests..."
 PYTHONPATH=src/workers:src .venv/bin/pytest test/common/persistencia/test_persistencia.py -q
 
 echo "10/12 - Watchdog & Ring Election tests..."
-PYTHONPATH=src .venv/bin/pytest test/watchdog/ -q
+PYTHONPATH=src/watchdog:src .venv/bin/pytest test/watchdog/ -q
 
 echo "11/12 - Client ACK Starvation tests..."
 PYTHONPATH=src/client:src .venv/bin/pytest test/gateway/test_client_ack_starvation.py -q

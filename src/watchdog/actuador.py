@@ -1,10 +1,12 @@
 import json
 import os
+import threading
 
 import docker
 import docker.errors
 from common.logger import obtener_logger
 from common.middleware.middleware_rabbitmq import MessageMiddlewareQueueRabbitMQ
+from latido import Latido
 
 
 class Actuador:
@@ -15,13 +17,24 @@ class Actuador:
         self._nombre_cola_caidas = os.getenv("CAIDAS_QUEUE", "caidas")
         self._cola: MessageMiddlewareQueueRabbitMQ | None = None
         self._docker = docker.from_env()
+        self._evento_cierre = threading.Event()
+
+        prefijo = os.getenv("NODE_PREFIX", "actuador")
+        id_nodo = int(os.getenv("ID", "1"))
+        intervalo = float(os.getenv("HEARTBEAT_INTERVAL_SECONDS", "5"))
+        self._latido = Latido(
+            self._host_mom, prefijo, id_nodo, intervalo,
+            self._evento_cierre, "Actuador",
+        )
 
     def iniciar(self):
+        self._latido.iniciar()
         self._cola = MessageMiddlewareQueueRabbitMQ(self._host_mom, self._nombre_cola_caidas)
         self._logger.info(f"Escuchando cola '{self._nombre_cola_caidas}'.")
         self._cola.start_consuming(self._al_recibir_caida)
 
     def detener(self):
+        self._evento_cierre.set()
         if self._cola is not None:
             try:
                 self._cola.stop_consuming()

@@ -1,6 +1,6 @@
 # Utilidades: venv, install, clean, generacion de datos, etc.
 
-.PHONY: venv install clean free-ports generar generar-sample solucionar workers-lista workers-set tirar tirar-etapa tirar-todos
+.PHONY: venv install clean docker-clean free-ports generar generar-sample solucionar workers-lista workers-set
 
 venv:
 	python3 -m venv .venv
@@ -13,15 +13,23 @@ clean:
 	-@pkill -f "make iterar\|make cliente\|test_helpers\|chaos_monkey" 2>/dev/null || true
 	-@$(MAKE) free-ports
 	-@timeout 10 docker rm -f $$(docker ps -a -q --filter "name=client_") 2>/dev/null || true
-	-@timeout 15 $(DOCKER_COMPOSE) down -v --remove-orphans 2>/dev/null || true
+	-@timeout 60 $(DOCKER_COMPOSE) down -v --remove-orphans 2>/dev/null || true
 	@rm -rf .pytest_cache
 	@find . -type d -name '__pycache__' -prune -exec rm -rf {} +
-	@rm -f logs/*.txt logs/*.log
+	@rm -rf logs/*.txt logs/*.log logs/clientes temp
 	@find output/ -mindepth 1 ! -name '.gitkeep' -delete 2>/dev/null || true
 	@if [ -d volume ] && [ -n "$$(ls -A volume/ 2>/dev/null)" ]; then \
 		timeout 15 docker run --rm -v "$$(pwd)/volume:/vol" \
 			alpine sh -c "rm -rf /vol/* && chmod -R 777 /vol" 2>/dev/null || true; \
 	fi
+	@$(MAKE) docker-clean
+
+docker-clean:
+	@echo "=== Limpiando imágenes dangling ==="
+	@docker image prune -f 2>/dev/null || true
+	@echo "=== Limpiando build cache ==="
+	@docker builder prune -f 2>/dev/null || true
+	@echo "=== Docker limpio ==="
 
 free-ports:
 	@echo "=== Liberando puerto $(SERVER_PORT) (Gateway) ==="
@@ -45,44 +53,10 @@ workers-set:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
 	if [ -z "$$ARGS" ]; then \
 		echo "Uso: make workers-set <worker> <cantidad>"; \
-		echo "Ejemplo: make workers-set q1_projection 4"; \
+		echo "Ejemplo: make workers-set Q1_PROJECTION 4"; \
 		exit 1; \
 	fi; \
 	python3 scripts/utils/gestionar_workers.py set $$ARGS
-
-tirar:
-	@NODO="$(filter-out $@,$(MAKECMDGOALS))"; \
-	if [ -z "$$NODO" ]; then \
-		echo "Uso: make tirar <nombre_contenedor>"; \
-		echo "Ejemplo: make tirar q1_projection_01"; \
-		exit 1; \
-	fi; \
-	echo "Matando: $$NODO"; \
-	docker kill $$NODO
-
-tirar-etapa:
-	@ETAPA="$(filter-out $@,$(MAKECMDGOALS))"; \
-	if [ -z "$$ETAPA" ]; then \
-		echo "Uso: make tirar-etapa <prefijo_etapa>"; \
-		echo "Ejemplo: make tirar-etapa q1_projection"; \
-		exit 1; \
-	fi; \
-	NODOS=$$(docker ps --format '{{.Names}}' | grep "$$ETAPA" || true); \
-	if [ -z "$$NODOS" ]; then \
-		echo "No se encontraron nodos con prefijo '$$ETAPA'"; \
-		exit 1; \
-	fi; \
-	echo "Matando: $$NODOS"; \
-	docker kill $$NODOS
-
-tirar-todos:
-	@NODOS=$$(docker ps --format '{{.Names}}' | grep -vE 'rabbitmq|gateway|watchdog|actuador|client' || true); \
-	if [ -z "$$NODOS" ]; then \
-		echo "No hay workers corriendo"; \
-		exit 1; \
-	fi; \
-	echo "Matando todos los workers: $$NODOS"; \
-	docker kill $$NODOS
 
 generar:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \

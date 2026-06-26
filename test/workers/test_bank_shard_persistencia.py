@@ -34,7 +34,7 @@ NODE_PREFIX = "bank_shard_1"
 
 
 def _escribir_estado(tmp_path, client_id, estado):
-    PersistidorEstado(f"{NODE_PREFIX}_{client_id}", base_dir=str(tmp_path)).guardar(estado)
+    PersistidorEstado(f"{NODE_PREFIX}_cliente_{client_id}", base_dir=str(tmp_path)).guardar(estado)
 
 
 def _crear_worker(tmp_path, extra_env=None):
@@ -161,7 +161,7 @@ class TestBankShardBarrierCompletada:
         })
         _crear_worker(tmp_path)
 
-        filepath = tmp_path / f"{NODE_PREFIX}_c1" / "estado.json"
+        filepath = tmp_path / f"{NODE_PREFIX}_cliente_c1.json"
         assert not filepath.exists()
 
     def test_estado_sin_barrier_completada_si_se_carga(self, tmp_path):

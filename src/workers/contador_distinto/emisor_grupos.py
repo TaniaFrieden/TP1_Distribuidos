@@ -1,33 +1,18 @@
 import json
 
 from config_contador import ConfigContador
-from operadores_contador import OP_MAYOR_QUE, OP_MAYOR_IGUAL
+from constantes import OP_MAYOR_QUE, OP_MAYOR_IGUAL, MODO_EXPLODE
 from common.constantes_protocolo import ID_CLIENTE, LOTES, CABECERA, ESQUEMA, CANTIDAD, PAYLOAD
 from common.persistencia import TAMANIO_BATCH_EMISION
 
-MODO_EXPLODE = "explode"
-
 
 class EmisorResultados:
-    """
-    Recorre los grupos acumulados, filtra por la condición configurada
-    y envía los resultados en lotes hacia la cola de salida.
-
-    Modos de emisión:
-      explode    → un registro por cada ítem del set de valores distintos.
-                   Incluye campos de grupo y de valor.
-      aggregate  → un registro por grupo con el conteo en COUNT_OUTPUT_FIELD.
-    """
 
     def __init__(self, config: ConfigContador, enviar_fn):
         self._config = config
         self._enviar = enviar_fn
 
     def emitir(self, client_id: str, grupos: dict) -> int:
-        """
-        Filtra y envía resultados para todos los grupos de un cliente.
-        Retorna la cantidad de registros emitidos.
-        """
         esquema = self._construir_esquema()
         batch: list = []
         enviados = 0

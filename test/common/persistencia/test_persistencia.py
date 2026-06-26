@@ -45,35 +45,25 @@ class TestPersistidorEstado:
         p.borrar()  # no debe lanzar
 
     def test_no_quedan_archivos_temporales_tras_guardado_exitoso(self, tmp_path):
-        """Garantiza que el archivo temp_* se elimina después del os.replace."""
         p = PersistidorEstado("nodo", base_dir=str(tmp_path))
         p.guardar({"count": 1})
-        directorio = os.path.join(str(tmp_path), "nodo")
-        temp_files = [f for f in os.listdir(directorio) if f.startswith("temp_")]
+        temp_files = [f for f in os.listdir(str(tmp_path)) if f.startswith("temp_")]
         assert temp_files == []
 
     def test_estado_anterior_sobrevive_si_escritura_nueva_se_interrumpe(self, tmp_path):
-        """
-        Simula un crash a mitad de escritura: escribe el temp pero no hace
-        os.replace. El estado previo (estado.json) debe permanecer intacto.
-        """
         p = PersistidorEstado("nodo", base_dir=str(tmp_path))
         p.guardar({"count": 99})
 
-        # Simular crash: crear el temp file pero no reemplazar
-        directorio = os.path.join(str(tmp_path), "nodo")
-        fd, temp_path = tempfile.mkstemp(dir=directorio, prefix="temp_estado_", suffix=".json")
+        fd, temp_path = tempfile.mkstemp(dir=str(tmp_path), prefix="temp_estado_", suffix=".json")
         with os.fdopen(fd, "w") as f:
             f.write('{"count": 0}')
-        os.remove(temp_path)  # eliminamos sin hacer replace → simula crash post-fsync
+        os.remove(temp_path)
 
         assert p.cargar() == {"count": 99}
 
     def test_cargar_archivo_corrupto_lanza_runtime_error(self, tmp_path):
         p = PersistidorEstado("nodo", base_dir=str(tmp_path))
-        directorio = os.path.join(str(tmp_path), "nodo")
-        os.makedirs(directorio, exist_ok=True)
-        with open(os.path.join(directorio, "estado.json"), "w") as f:
+        with open(os.path.join(str(tmp_path), "nodo.json"), "w") as f:
             f.write("{json invalido: sin comillas}")
         with pytest.raises(RuntimeError, match="corrupto"):
             p.cargar()

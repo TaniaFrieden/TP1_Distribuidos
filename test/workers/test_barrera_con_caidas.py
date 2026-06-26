@@ -78,15 +78,15 @@ class TestBarreraConCaidas:
              patch("base.coordinacion.coordinador.TransporteControl", LoopbackTransporteControl), \
              patch.object(common.persistencia.PersistidorEstado, "__init__", patched_init), \
              patch("common.persistencia.VOLUMEN_DIR", str(tmp_path)), \
-             patch("persistencia_conteo.VOLUMEN_DIR", str(tmp_path)), \
+             patch("persistencia.VOLUMEN_DIR", str(tmp_path)), \
              patch("common.crash_hook.VOLUMEN_DIR", str(tmp_path)), \
              patch("common.dedup_filter.VOLUMEN_DIR", str(tmp_path)):
 
-            from contador import CounterWorker
+            from contador import WorkerContador
             
             # Instanciar Shard 1 (Originador de la barrera)
             with patch.dict("os.environ", {"ID": "1"}):
-                w1 = CounterWorker()
+                w1 = WorkerContador()
                 w1.enrutador.enviar = MagicMock()
                 w1.coordinador.iniciar_consumo()
             
@@ -115,7 +115,7 @@ class TestBarreraConCaidas:
 
             # Instanciar Shard 2
             with patch.dict("os.environ", {"ID": "2"}):
-                w2 = CounterWorker()
+                w2 = WorkerContador()
                 w2.enrutador.enviar = MagicMock()
                 w2.coordinador.iniciar_consumo()
 

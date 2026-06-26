@@ -17,8 +17,8 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from common.persistencia import PersistidorEstado
-from watchdog.detector import DetectorLatidos
-from watchdog.eleccion_anillo import EleccionAnillo
+from detector import DetectorLatidos
+from eleccion_anillo import EleccionAnillo
 
 
 def _crear_config_anillo(id_watchdog=1, cantidad_watchdogs=3):
@@ -47,7 +47,7 @@ def _crear_config_detector(etapas=None, timeout=1.0):
 
 def _crear_eleccion(tmp_path, id_watchdog=1, cantidad_watchdogs=3):
     config = _crear_config_anillo(id_watchdog, cantidad_watchdogs)
-    with patch("watchdog.eleccion_anillo.PersistidorEstado",
+    with patch("eleccion_anillo.PersistidorEstado",
                lambda name: PersistidorEstado(name, base_dir=str(tmp_path))):
         eleccion = EleccionAnillo(
             config, MagicMock(), MagicMock(), MagicMock()
@@ -142,7 +142,7 @@ class TestCrashPostLeaderDeclare(unittest.TestCase):
             lider = _crear_eleccion(tmp, id_watchdog=3, cantidad_watchdogs=3)
 
             # Líder se declara
-            with patch("watchdog.eleccion_anillo.threading.Thread"):
+            with patch("eleccion_anillo.threading.Thread"):
                 lider._declarar_lider()
             self.assertTrue(lider._es_lider)
 
@@ -164,7 +164,7 @@ class TestCrashPostLeaderDeclare(unittest.TestCase):
                 "gateway": ["01"],
             })
 
-            with patch("watchdog.eleccion_anillo.threading.Thread"):
+            with patch("eleccion_anillo.threading.Thread"):
                 lider._declarar_lider()
             del lider
 

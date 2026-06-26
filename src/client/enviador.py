@@ -13,6 +13,15 @@ class Enviador:
         self._shutdown = shutdown
         self._progreso = progreso
 
+    @staticmethod
+    def validar_archivos_estatico(archivos_con_tipo):
+        faltantes = [ruta for ruta, _ in archivos_con_tipo if not os.path.isfile(ruta)]
+        if faltantes:
+            for ruta in faltantes:
+                logging.error(f"Archivo no encontrado: {ruta}")
+            return False
+        return True
+
     def enviar_archivos(self, archivos_con_tipo):
         """Envía múltiples archivos en paralelo. Cada elemento es (ruta, tipo_mensaje)."""
         hilos = []
@@ -25,7 +34,12 @@ class Enviador:
 
     def _enviar_archivo(self, ruta, tipo_mensaje):
         nombre = os.path.basename(ruta)
-        total = self._contar_lineas(ruta)
+        try:
+            total = self._contar_lineas(ruta)
+        except FileNotFoundError:
+            logging.error(f"Archivo no encontrado: {ruta}")
+            self._shutdown.set()
+            return
         logging.info(f"Enviando {ruta} ({total:,} registros)...")
         try:
             with open(ruta, "r", encoding="utf-8") as f:
@@ -36,9 +50,6 @@ class Enviador:
                 logging.info(f"Envío de {ruta} interrumpido.")
             else:
                 logging.info(f"Envío de {ruta} completado.")
-        except FileNotFoundError:
-            logging.error(f"Archivo no encontrado: {ruta}")
-            raise
         except (BrokenPipeError, ConnectionResetError, OSError) as e:
             logging.error(f"Error de red al procesar {ruta}: {e}")
             self._shutdown.set()

@@ -1,99 +1,83 @@
 import json
 import os
 
-from common.persistencia import PersistidorEstado, VOLUMEN_DIR
+from common.persistencia import PersistidorAppendOnly, VOLUMEN_DIR
 from common.logger import obtener_logger
-from common.constantes_protocolo import ID_CLIENTE
-from base.constantes import CLAVE_BARRERA_COMPLETADA, CLAVE_IDS_PROCESADOS
+from base.constantes import CLAVE_BARRERA_COMPLETADA
 
 logger = obtener_logger(__name__)
 
 BASE_DIR = VOLUMEN_DIR
 
-CLAVE_GRUPOS = "grupos"
+CLAVE_OPS = "o"
+CLAVE_IDS = "i"
 
 
 class PersistenciaContador:
-    """
-    Gestiona la persistencia del estado del contador en disco.
-
-    Cada cliente tiene su propia carpeta nombrada: <prefijo>_<client_id>.
-    El estado se serializa como JSON con los grupos y los request_ids vistos.
-    """
 
     def __init__(self, prefijo_nodo: str, base_dir: str = BASE_DIR):
         self._prefijo = prefijo_nodo
         self._base_dir = base_dir
 
-    def _nombre_carpeta(self, client_id: str) -> str:
-        return f"{self._prefijo}_{client_id}"
+    def _nombre_archivo(self, client_id: str) -> str:
+        return f"{self._prefijo}_cliente_{client_id}"
 
-    def guardar(self, client_id: str, grupos: dict, vistos: set):
-        """Serializa y persiste el estado del cliente en disco."""
-        grupos_serial = {}
-        for clave_grupo, conjunto_valores in grupos.items():
-            k = json.dumps(list(clave_grupo))
-            grupos_serial[k] = [list(v) for v in conjunto_valores]
+    def _persistidor(self, client_id: str) -> PersistidorAppendOnly:
+        return PersistidorAppendOnly(self._nombre_archivo(client_id), base_dir=self._base_dir)
 
-        PersistidorEstado(self._nombre_carpeta(client_id), base_dir=self._base_dir).guardar({
-            ID_CLIENTE: client_id,
-            CLAVE_GRUPOS: grupos_serial,
-            CLAVE_IDS_PROCESADOS: list(vistos),
-        })
+    def appendear(self, client_id: str, ops: list, ids: list):
+        if not ops and not ids:
+            return
+        entrada = {
+            CLAVE_OPS: [[list(g), list(v)] for g, v in ops],
+            CLAVE_IDS: ids,
+        }
+        self._persistidor(client_id).appendear(entrada)
 
     def recuperar_todos(self) -> dict[str, tuple[dict, set]]:
-        """
-        Carga el estado de todos los clientes desde disco.
-
-        Retorna un diccionario: client_id → (grupos, vistos).
-        Omite entradas con barrera completada (y las borra del disco).
-        """
         if not os.path.exists(self._base_dir):
             logger.info(f"[PersistenciaContador] Directorio {self._base_dir} no existe. Arrancando limpio.")
             return {}
 
-        carpetas = [c for c in os.listdir(self._base_dir) if c.startswith(self._prefijo + "_")]
-        if not carpetas:
+        prefijo_cliente = self._prefijo + "_cliente_"
+        archivos = [f[:-6] for f in os.listdir(self._base_dir)
+                     if f.startswith(prefijo_cliente) and f.endswith('.jsonl')]
+        if not archivos:
             logger.info("[PersistenciaContador] Sin estado previo en disco. Arrancando limpio.")
             return {}
 
         resultado = {}
-        for carpeta in carpetas:
-            client_id = carpeta[len(self._prefijo) + 1:]
-            persistidor = PersistidorEstado(carpeta, base_dir=self._base_dir)
-            estado = persistidor.cargar()
+        for nombre in archivos:
+            client_id = nombre[len(prefijo_cliente):]
+            entradas = self._persistidor(client_id).recuperar()
 
-            if not estado:
+            barrera = any(e.get(CLAVE_BARRERA_COMPLETADA, False) for e in entradas)
+            if barrera:
+                logger.info(f"[PersistenciaContador] Barrera completada para client_id={client_id}. Omitiendo.")
                 continue
 
-            if estado.get(CLAVE_BARRERA_COMPLETADA, False):
-                logger.info(f"[PersistenciaContador] Barrera completada detectada para client_id={client_id}. Omitiendo recuperación.")
-                continue
+            grupos: dict[tuple, set] = {}
+            vistos: set = set()
+            for entrada in entradas:
+                for g, v in entrada.get(CLAVE_OPS, []):
+                    clave_grupo = tuple(g)
+                    grupos.setdefault(clave_grupo, set()).add(tuple(v))
+                vistos.update(entrada.get(CLAVE_IDS, []))
 
-            grupos_serial = estado.get(CLAVE_GRUPOS, {})
-            grupos = {}
-            for k, vlist in grupos_serial.items():
-                clave_grupo = tuple(json.loads(k))
-                grupos[clave_grupo] = set(tuple(v) for v in vlist)
-
-            vistos = set(estado.get(CLAVE_IDS_PROCESADOS, []))
             resultado[client_id] = (grupos, vistos)
-
             logger.info(
-                f"[PersistenciaContador] Recuperado estado para client_id={client_id}: "
+                f"[PersistenciaContador] Recuperado client_id={client_id}: "
                 f"grupos={len(grupos)}, vistos={len(vistos)}"
             )
 
         return resultado
 
     def borrar(self, client_id: str):
-        """Elimina el estado del cliente del disco."""
-        PersistidorEstado(self._nombre_carpeta(client_id), base_dir=self._base_dir).borrar()
+        self._persistidor(client_id).borrar()
 
     def marcar_barrera_completada(self, client_id: str):
-        """Marca en disco que la barrera fue completada para este cliente."""
-        PersistidorEstado(self._nombre_carpeta(client_id), base_dir=self._base_dir).guardar({CLAVE_BARRERA_COMPLETADA: True})
+        self._persistidor(client_id).appendear({CLAVE_BARRERA_COMPLETADA: True})
 
     def esta_barrera_completada(self, client_id: str) -> bool:
-        estado = PersistidorEstado(self._nombre_carpeta(client_id), base_dir=self._base_dir).cargar()
-        return estado.get(CLAVE_BARRERA_COMPLETADA, False)
+        entradas = self._persistidor(client_id).recuperar()
+        return any(e.get(CLAVE_BARRERA_COMPLETADA, False) for e in entradas)
