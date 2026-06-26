@@ -9,6 +9,7 @@ from common import message_protocol, middleware
 from common.constantes_protocolo import (
     CABECERA, ESQUEMA, PAYLOAD, ID_CLIENTE, ID_SOLICITUD, LOTES,
     CLAVE_QUERY, CLAVE_RESULTADO, CLAVE_EOF_REPORTE, CLAVE_COLUMNAS,
+    DESCONEXION_CLIENTE, CONF_PREFIJO_SHARD, CONF_TOTAL_WORKERS,
 )
 from config import GatewayConfig
 from common import crash_points as CP
@@ -288,6 +289,31 @@ class ReceptorResultados:
         self.estado.limpiar_estado_cliente(client_id)
         self.estado.remover_cliente(client_id)
         self._detener_worker(client_id)
+        self._enviar_disconnect_a_workers(client_id)
+
+    def _enviar_disconnect_a_workers(self, client_id):
+        payload = json.dumps({ID_CLIENTE: client_id, DESCONEXION_CLIENTE: True}).encode("utf-8")
+        logger.info(f"Enviando CLIENT_DISCONNECT post-finalización para {client_id}")
+
+        for queue_name in self.config.output_queues:
+            try:
+                cola = middleware.MessageMiddlewareQueueRabbitMQ(self.config.mom_host, queue_name)
+                cola.send(payload)
+                cola.close()
+            except Exception as e:
+                logger.warning(f"No se pudo enviar CLIENT_DISCONNECT a {queue_name}: {e}")
+
+        if self.config.bank_queue_config:
+            prefix = self.config.bank_queue_config.get(CONF_PREFIJO_SHARD)
+            total_workers = self.config.bank_queue_config.get(CONF_TOTAL_WORKERS, 1)
+            for i in range(1, total_workers + 1):
+                queue_name = f"{prefix}_{i}"
+                try:
+                    cola = middleware.MessageMiddlewareQueueRabbitMQ(self.config.mom_host, queue_name)
+                    cola.send(payload)
+                    cola.close()
+                except Exception as e:
+                    logger.warning(f"No se pudo enviar CLIENT_DISCONNECT a {queue_name}: {e}")
 
     # --- Q4: cuentas únicas ---
 

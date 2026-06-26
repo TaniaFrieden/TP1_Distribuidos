@@ -1,5 +1,4 @@
 import threading
-import uuid
 from common.persistencia import PersistidorEstado
 from constantes import VOLUMEN_GATEWAY
 
@@ -19,9 +18,23 @@ class EstadoGateway:
         self._eventos_socket_resultados = {}
         self._acks_pendientes = {}
         self._sesiones = {}
+        self._contador_clientes = self._cargar_contador_clientes()
+
+    def _cargar_contador_clientes(self):
+        estado = PersistidorEstado("gateway_contador_clientes", VOLUMEN_GATEWAY).cargar()
+        return estado.get("siguiente", 0)
+
+    def _guardar_contador_clientes(self):
+        PersistidorEstado("gateway_contador_clientes", VOLUMEN_GATEWAY).guardar(
+            {"siguiente": self._contador_clientes}
+        )
 
     def generar_siguiente_id(self):
-        return str(uuid.uuid4())
+        with self.state_lock:
+            client_id = str(self._contador_clientes)
+            self._contador_clientes += 1
+            self._guardar_contador_clientes()
+            return client_id
 
     def registrar_cliente(self, client_id, socket_cliente):
         with self.state_lock:

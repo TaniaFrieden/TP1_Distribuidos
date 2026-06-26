@@ -93,7 +93,7 @@ def test_client_id_from_env(tmp_path):
     env = {"CLIENT_ID": "test-env-id-123"}
     with patch.dict("os.environ", env):
         persistencia = _PersistenciaCliente(str(tmp_path))
-        cid = persistencia.cargar_o_generar_id()
+        cid = persistencia.cargar_id()
         assert cid == "test-env-id-123"
 
 def test_gateway_upstream_crash_hook(tmp_path):

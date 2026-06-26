@@ -55,9 +55,8 @@ def _despachar_conexion(sock, manejador, estado):
         data = json.loads(payload)
         client_id = data.get("client_id", "").strip()
         if not client_id:
-            logger.warning("HELLO sin client_id, cerrando conexión")
-            sock.close()
-            return
+            client_id = estado.generar_siguiente_id()
+            logger.info(f"Nuevo cliente, ID asignado: {client_id}")
         manejador.atender(sock, client_id)
 
     elif tipo_mensaje == message_protocol.external.TipoMensaje.HELLO_RESULTS:
