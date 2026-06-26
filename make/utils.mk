@@ -13,10 +13,10 @@ clean:
 	-@pkill -f "make iterar\|make cliente\|test_helpers\|chaos_monkey" 2>/dev/null || true
 	-@$(MAKE) free-ports
 	-@timeout 10 docker rm -f $$(docker ps -a -q --filter "name=client_") 2>/dev/null || true
-	-@timeout 15 $(DOCKER_COMPOSE) down -v --remove-orphans 2>/dev/null || true
+	-@timeout 60 $(DOCKER_COMPOSE) down -v --remove-orphans 2>/dev/null || true
 	@rm -rf .pytest_cache
 	@find . -type d -name '__pycache__' -prune -exec rm -rf {} +
-	@rm -rf logs/*.txt logs/*.log logs/clientes
+	@rm -rf logs/*.txt logs/*.log logs/clientes temp
 	@find output/ -mindepth 1 ! -name '.gitkeep' -delete 2>/dev/null || true
 	@if [ -d volume ] && [ -n "$$(ls -A volume/ 2>/dev/null)" ]; then \
 		timeout 15 docker run --rm -v "$$(pwd)/volume:/vol" \
