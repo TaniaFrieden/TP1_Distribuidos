@@ -90,5 +90,9 @@ help:
 	@echo "  Defaults: tx=$(TEST_TX)  acc=$(TEST_ACC)  sol=$(TEST_SOL)"
 	@echo ""
 
-%:
+MAKECMDGOALS_EXTRA := $(filter-out $(firstword $(MAKECMDGOALS)), $(MAKECMDGOALS))
+ifneq ($(MAKECMDGOALS_EXTRA),)
+.PHONY: $(MAKECMDGOALS_EXTRA)
+$(MAKECMDGOALS_EXTRA):
 	@:
+endif
