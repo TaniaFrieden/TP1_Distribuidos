@@ -1,3 +1,4 @@
+import logging
 import os
 import sys
 import threading
@@ -19,6 +20,26 @@ def _prefijo():
     return f"[C{_ETIQUETA}] " if _ETIQUETA else ""
 
 
+class _ProgresoHandler(logging.StreamHandler):
+    def __init__(self, progreso):
+        super().__init__(sys.stderr)
+        self._progreso = progreso
+
+    def emit(self, record):
+        with self._progreso._lock:
+            if self._progreso._finalizado:
+                super().emit(record)
+                return
+            if self._progreso._lineas_escritas > 0:
+                sys.stderr.write(f"\033[{self._progreso._lineas_escritas}A")
+                for _ in range(self._progreso._lineas_escritas):
+                    sys.stderr.write("\033[2K\n")
+                sys.stderr.write(f"\033[{self._progreso._lineas_escritas}A")
+            super().emit(record)
+            self._progreso._lineas_escritas = 0
+            self._progreso._renderizar()
+
+
 class Progreso:
     """Progreso unificado de envío y recepción en una sola línea."""
 
@@ -30,6 +51,22 @@ class Progreso:
         self._valor_query = {}
         self._queries_completas = set()
         self._lineas_escritas = 0
+        self._finalizado = False
+        if _HABILITADO:
+            self._instalar_handler()
+
+    def _instalar_handler(self):
+        root = logging.getLogger()
+        for handler in list(root.handlers):
+            if isinstance(handler, logging.StreamHandler) and \
+               handler.stream in (sys.stderr, sys.stdout):
+                fmt = handler.formatter
+                root.removeHandler(handler)
+                nuevo = _ProgresoHandler(self)
+                nuevo.setFormatter(fmt)
+                nuevo.setLevel(handler.level)
+                root.addHandler(nuevo)
+                break
 
     def actualizar_envio(self, nombre, enviados, total):
         if not _HABILITADO:
@@ -58,7 +95,10 @@ class Progreso:
             return
         with self._lock:
             self._renderizar()
+            sys.stderr.write("\n")
+            sys.stderr.flush()
             self._lineas_escritas = 0
+            self._finalizado = True
 
     def _renderizar(self):
         self._idx_spinner = (self._idx_spinner + 1) % len(_SPINNER)
