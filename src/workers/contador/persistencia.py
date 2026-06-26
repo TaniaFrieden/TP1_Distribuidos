@@ -12,7 +12,7 @@ class PersistenciaConteo:
         self._id_nodo = id_nodo
 
     def _nombre_nodo(self, client_id: str) -> str:
-        return f"{PREFIJO_CONTADOR}_{self._id_nodo}_{client_id}"
+        return f"{PREFIJO_CONTADOR}_{self._id_nodo}_cliente_{client_id}"
 
     def recuperar_estado(self) -> tuple[dict[str, int], dict[str, set[str]]]:
         conteos: dict[str, int] = {}
@@ -22,7 +22,7 @@ class PersistenciaConteo:
             logger.info(f"Directorio {VOLUMEN_DIR} no existe. Arrancando limpio.")
             return conteos, ids_procesados
 
-        prefijo = f"{PREFIJO_CONTADOR}_{self._id_nodo}_"
+        prefijo = f"{PREFIJO_CONTADOR}_{self._id_nodo}_cliente_"
         carpetas = [c for c in os.listdir(VOLUMEN_DIR) if c.startswith(prefijo)]
 
         if not carpetas:

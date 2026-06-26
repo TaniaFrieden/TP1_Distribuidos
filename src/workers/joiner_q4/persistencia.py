@@ -17,7 +17,7 @@ class PersistenciaJoiner:
         self._base_dir = base_dir
 
     def _nombre_carpeta(self, client_id: str) -> str:
-        return f"{self._prefijo}_{client_id}"
+        return f"{self._prefijo}_cliente_{client_id}"
 
     def guardar(self, client_id: str, scatter: dict, txns: dict, vistos: set):
         scatter_serial = {k: [list(a) for a in v] for k, v in scatter.items()}
@@ -34,14 +34,15 @@ class PersistenciaJoiner:
             logger.info(f"[PersistenciaJoiner] Directorio {self._base_dir} no existe. Arrancando limpio.")
             return {}
 
-        carpetas = [c for c in os.listdir(self._base_dir) if c.startswith(self._prefijo + "_")]
+        prefijo_cliente = self._prefijo + "_cliente_"
+        carpetas = [c for c in os.listdir(self._base_dir) if c.startswith(prefijo_cliente)]
         if not carpetas:
             logger.info("[PersistenciaJoiner] Sin estado previo en disco. Arrancando limpio.")
             return {}
 
         resultado = {}
         for carpeta in carpetas:
-            client_id = carpeta[len(self._prefijo) + 1:]
+            client_id = carpeta[len(prefijo_cliente):]
             persistidor = PersistidorEstado(carpeta, base_dir=self._base_dir)
             estado = persistidor.cargar()
 

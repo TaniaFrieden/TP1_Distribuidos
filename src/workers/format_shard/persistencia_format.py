@@ -36,12 +36,16 @@ class PersistenciaFormateador:
         self._dir_base = dir_base
 
     def _persistidor(self, id_cliente: str) -> PersistidorEstado:
-        return PersistidorEstado(f"{self._prefijo}_{id_cliente}", base_dir=self._dir_base)
+        return PersistidorEstado(f"{self._prefijo}_cliente_{id_cliente}", base_dir=self._dir_base)
 
     def _obtener_ruta_cache(self, id_cliente: str) -> str:
-        nombre = f"{self._prefijo}_{id_cliente}"
+        nombre = f"{self._prefijo}_cliente_{id_cliente}"
         directorio = os.path.join(self._dir_base, nombre)
-        os.makedirs(directorio, exist_ok=True)
+        old_umask = os.umask(0o022)
+        try:
+            os.makedirs(directorio, mode=0o755, exist_ok=True)
+        finally:
+            os.umask(old_umask)
         return os.path.join(directorio, "cache_tardio.jsonl")
 
     def escribir_en_cache(self, id_cliente: str, id_solicitud: str, esquema: list, registros: list):
@@ -51,7 +55,12 @@ class PersistenciaFormateador:
             CLAVE_CACHE_ESQUEMA: esquema,
             CLAVE_CACHE_REGISTROS: registros
         }).decode("utf-8")
-        with open(ruta, "a+b") as f:
+        old_umask = os.umask(0o022)
+        try:
+            fd = os.open(ruta, os.O_RDWR | os.O_CREAT | os.O_APPEND, 0o644)
+        finally:
+            os.umask(old_umask)
+        with os.fdopen(fd, "a+b") as f:
             tamanio = f.seek(0, 2)
             if tamanio > 0:
                 f.seek(-1, 2)
@@ -67,14 +76,14 @@ class PersistenciaFormateador:
         if not os.path.exists(self._dir_base):
             return resultado
 
-        prefijo = f"{self._prefijo}_"
+        prefijo_cliente = f"{self._prefijo}_cliente_"
         for folder_name in os.listdir(self._dir_base):
-            if not folder_name.startswith(prefijo):
+            if not folder_name.startswith(prefijo_cliente):
                 continue
             if not os.path.isdir(os.path.join(self._dir_base, folder_name)):
                 continue
 
-            id_cliente = folder_name[len(prefijo):]
+            id_cliente = folder_name[len(prefijo_cliente):]
             persistidor = self._persistidor(id_cliente)
             saved = persistidor.cargar()
             ruta_cache = self._obtener_ruta_cache(id_cliente)

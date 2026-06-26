@@ -23,7 +23,11 @@ class PersistidorEstado:
 
     def _inicializar_directorio(self):
         try:
-            os.makedirs(self.directory, exist_ok=True)
+            old_umask = os.umask(0o022)
+            try:
+                os.makedirs(self.directory, mode=0o755, exist_ok=True)
+            finally:
+                os.umask(old_umask)
         except Exception as e:
             logger.error(f"[Persistencia] Error creando directorio {self.directory}: {e}")
 
@@ -35,16 +39,19 @@ class PersistidorEstado:
         temp_file = None
         try:
             # Creamos el archivo temporal en el mismo directorio para asegurar que esté en el mismo filesystem
-            fd, temp_path = tempfile.mkstemp(dir=self.directory, prefix="temp_estado_", suffix=".json")
+            old_umask = os.umask(0o022)
+            try:
+                fd, temp_path = tempfile.mkstemp(dir=self.directory, prefix="temp_estado_", suffix=".json")
+            finally:
+                os.umask(old_umask)
             temp_file = os.fdopen(fd, 'w', encoding='utf-8')
-            
+
             json.dump(estado, temp_file, ensure_ascii=False)
             temp_file.flush()
-            os.fsync(fd)  # Forzar el flush físico a disco
+            os.fsync(fd)
             temp_file.close()
             temp_file = None
 
-            # Reemplazo atómico
             os.replace(temp_path, self.filepath)
             return True
         except Exception as e:
