@@ -24,7 +24,7 @@ else
     docker kill "$CLIENTE_A_MATAR"
 fi
 
-# Esperamos a los demás (el muerto ya no está en PIDS de wait, pero su `make client`
+# Esperamos a los demás (el muerto ya no está en PIDS de wait, pero su `make cliente`
 # va a devolver error; lo ignoramos)
 for pid in "${PIDS[@]}"; do
     wait "$pid" || true
@@ -32,7 +32,8 @@ done
 
 # Borrar output de clientes que no completaron (el matado) para no comparar basura
 TOTAL_QUERIES=$(obtener_queries | wc -w)
-for dir in output/*/; do
+TEMP_DIR="${TEMP_DIR:-temp}"
+for dir in "$TEMP_DIR"/*/; do
     [ -d "$dir" ] || continue
     total_csvs=$(find "$dir" -maxdepth 1 -name 'q*_solucion.csv' 2>/dev/null | wc -l)
     if [ "$total_csvs" -lt "$TOTAL_QUERIES" ]; then

@@ -1,6 +1,6 @@
 # Utilidades: venv, install, clean, generacion de datos, etc.
 
-.PHONY: venv install clean free-ports generar generar-sample solucionar workers-lista workers-set
+.PHONY: venv install clean docker-clean free-ports generar generar-sample solucionar workers-lista workers-set
 
 venv:
 	python3 -m venv .venv
@@ -10,7 +10,7 @@ install:
 	$(PIP) install -r requirements.txt
 
 clean:
-	-@pkill -f "make iterar\|make client\|test_helpers\|chaos_monkey" 2>/dev/null || true
+	-@pkill -f "make iterar\|make cliente\|test_helpers\|chaos_monkey" 2>/dev/null || true
 	-@$(MAKE) free-ports
 	-@timeout 10 docker rm -f $$(docker ps -a -q --filter "name=client_") 2>/dev/null || true
 	-@timeout 15 $(DOCKER_COMPOSE) down -v --remove-orphans 2>/dev/null || true
@@ -22,6 +22,14 @@ clean:
 		timeout 15 docker run --rm -v "$$(pwd)/volume:/vol" \
 			alpine sh -c "rm -rf /vol/* && chmod -R 777 /vol" 2>/dev/null || true; \
 	fi
+	@$(MAKE) docker-clean
+
+docker-clean:
+	@echo "=== Limpiando imágenes dangling ==="
+	@docker image prune -f 2>/dev/null || true
+	@echo "=== Limpiando build cache ==="
+	@docker builder prune -f 2>/dev/null || true
+	@echo "=== Docker limpio ==="
 
 free-ports:
 	@echo "=== Liberando puerto $(SERVER_PORT) (Gateway) ==="

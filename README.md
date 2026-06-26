@@ -61,8 +61,8 @@ make gateway
 
 **Terminal 2+ — Clientes:**
 ```bash
-make client OUTPUT_DIR=output/c1
-make client OUTPUT_DIR=output/c2   # cada cliente en su propia terminal
+make cliente OUTPUT_DIR=output/c1
+make cliente OUTPUT_DIR=output/c2   # cada cliente en su propia terminal
 ```
 
 #### Variables configurables del cliente
@@ -78,7 +78,7 @@ make client OUTPUT_DIR=output/c2   # cada cliente en su propia terminal
 
 Ejemplo con parámetros posicionales:
 ```bash
-make client HI-Large_Trans_sample_30 HI-Large_accounts OUTPUT_DIR=output/prueba
+make cliente HI-Large_Trans_sample_30 HI-Large_accounts OUTPUT_DIR=output/prueba
 ```
 
 ## Validación de Soluciones
@@ -245,10 +245,13 @@ Corre solo los tests de caos con N clientes simultáneos:
 ## Limpiar todo
 
 ```bash
-make clean
+make clean          # limpieza completa (contenedores, volúmenes, caches, puertos e imágenes Docker)
+make docker-clean   # solo limpia imágenes dangling y build cache de Docker
 ```
 
-Detiene los contenedores, libera los puertos 5678, 5672 y 15672, y elimina caches y archivos temporales.
+`make clean` detiene los contenedores, libera los puertos 5678, 5672 y 15672, elimina caches y archivos temporales, y además ejecuta `docker-clean` para remover imágenes huérfanas y build cache acumulado.
+
+`make docker-clean` se puede correr de forma independiente cuando se quiere liberar espacio de disco sin detener nada.
 
 ## Comandos útiles
 

@@ -46,7 +46,7 @@ for i in "${!CASOS[@]}"; do
 
     make down 2>/dev/null || true
     timeout 10s docker run --rm -v "$(pwd)/volume:/vol" -v "$(pwd)/output:/out" -v "$(pwd)/logs:/lg" \
-        alpine sh -c "rm -rf /vol/* /out/*/ /out/client_id*.txt /lg/client_*.txt" 2>/dev/null || true
+        alpine sh -c "rm -rf /vol/* && rm -f /out/client_id*.txt && rm -rf /lg/client_*.txt" 2>/dev/null || true
 
     echo "=== Levantando sistema con GATEWAY_01_CRASH=$ENV_VAR ==="
     GATEWAY_01_CRASH="$ENV_VAR" make start

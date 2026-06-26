@@ -228,3 +228,6 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 *.pdf
+
+# Temp dir for client output and logs
+temp/

@@ -38,7 +38,7 @@ echo "=== Limpiando volúmenes de workers y reiniciando sistema... ==="
 make down 2>/dev/null || true
 timeout 10s docker run --rm -v "$(pwd)/volume:/vol" alpine sh -c "rm -rf /vol/*" 2>/dev/null || true
 # Forzar nuevo client_id para que los workers no reutilicen estado de runs anteriores
-rm -f output/client_id.txt 2>/dev/null || true
+rm -f "${TEMP_DIR:-temp}"/client_id*.txt 2>/dev/null || true
 make start
 
 echo "=== Esperando que el sistema esté listo... ==="

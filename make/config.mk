@@ -8,7 +8,7 @@ START_VERBOSE := $(if $(filter --verbose,$(MAKECMDGOALS)),1,0)
 DOCKER_COMPOSE := $(shell timeout 2 docker compose version >/dev/null 2>&1 && echo "docker compose" || echo "docker-compose")
 
 # Variables del cliente
-OUTPUT_DIR ?= output
+OUTPUT_DIR ?= temp
 SERVER_HOST ?= 127.0.0.1
 SERVER_PORT ?= 5678
 BATCH_SIZE ?= 10000
