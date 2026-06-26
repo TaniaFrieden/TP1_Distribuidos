@@ -106,9 +106,6 @@ class Receptor:
                 self._client_id, q_id, self._batch_ids_vistos[q_id]
             )
 
-        if datos_escritos:
-            self._progreso.mostrar()
-
         return batch_id
 
     def _abrir_archivo(self, q_id):
@@ -151,7 +148,6 @@ class Receptor:
             logging.info(f"[QUERY {q_id}] EOF recibido")
         self._queries_terminadas.add(q_id)
         self._progreso.marcar_completa(q_id)
-        self._progreso.mostrar()
         self._persistencia.guardar_queries_completadas(
             self._client_id, self._queries_terminadas
         )
