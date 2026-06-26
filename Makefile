@@ -20,6 +20,7 @@ help:
 	@echo "  rebuild                                Rebuild + start (equivale al viejo start)"
 	@echo "  down                                   Detiene el sistema"
 	@echo "  cliente [tx] [acc] [sol]               Corre un cliente y compara con soluciones"
+	@echo "  tirar <contenedor>                     Mata un contenedor por nombre"
 	@echo "  log <servicio>                         Muestra logs de un servicio"
 	@echo ""
 	@echo "  UTILIDADES"

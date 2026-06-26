@@ -74,9 +74,8 @@ lanzar_clientes() {
     run_id=$(date +%s)
     PIDS=()
     mkdir -p "$TEMP_DIR"
-    timeout 10s docker run --rm -v "$(pwd)/$TEMP_DIR:/tmp_clean" \
-        alpine sh -c "rm -f /tmp_clean/client_id*.txt && rm -rf /tmp_clean/client_stdout_*.txt" 2>/dev/null \
-        || { rm -f "$TEMP_DIR"/client_id_*.txt 2>/dev/null || true; }
+    DIRS_ANTES=$(ls -d "$TEMP_DIR"/*/ 2>/dev/null | sort)
+    rm -f "$TEMP_DIR"/client_id_*.txt 2>/dev/null || true
     for i in $(seq 1 "$cant"); do
         if [ "${SEQUENTIAL:-0}" = "1" ]; then
             if [ "$i" -gt 1 ]; then
