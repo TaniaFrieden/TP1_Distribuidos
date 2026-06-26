@@ -30,6 +30,7 @@ services:
       HTTP_PORT: '8080'
       BANK_QUEUE: '{"queue_shard_prefix": "q2_raw_banks", "total_workers": 2, "hash_field": "Bank ID"}'
       CRASH_HOOK: ${GATEWAY_01_CRASH:-}
+    image: tp1-gateway
   rabbitmq:
     image: rabbitmq:3-management
     container_name: rabbitmq
@@ -69,10 +70,8 @@ services:
       OUTPUT_DIR: /app/output
       OUTPUT_APPEND_HOSTNAME: 'true'
       BATCH_SIZE: '2500'
+    image: tp1-client
   shared_filter_usd_01:
-    build:
-      context: ./src
-      dockerfile: workers/filtro/Dockerfile
     container_name: shared_filter_usd_01
     depends_on:
       rabbitmq:
@@ -102,10 +101,11 @@ services:
       OPERADOR_FILTRO: igual
       PREFETCH_COUNT: 1
       CRASH_HOOK: ${SHARED_FILTER_USD_01_CRASH:-}
-  shared_filter_usd_02:
     build:
       context: ./src
       dockerfile: workers/filtro/Dockerfile
+    image: tp1-filtro
+  shared_filter_usd_02:
     container_name: shared_filter_usd_02
     depends_on:
       rabbitmq:
@@ -135,10 +135,8 @@ services:
       OPERADOR_FILTRO: igual
       PREFETCH_COUNT: 1
       CRASH_HOOK: ${SHARED_FILTER_USD_02_CRASH:-}
+    image: tp1-filtro
   q1_projection_01:
-    build:
-      context: ./src
-      dockerfile: workers/proyeccion/Dockerfile
     container_name: q1_projection_01
     depends_on:
       rabbitmq:
@@ -167,10 +165,11 @@ services:
       INT_FIELDS: From Bank
       PREFETCH_COUNT: 1
       CRASH_HOOK: ${Q1_PROJECTION_01_CRASH:-}
-  q1_projection_02:
     build:
       context: ./src
       dockerfile: workers/proyeccion/Dockerfile
+    image: tp1-proyeccion
+  q1_projection_02:
     container_name: q1_projection_02
     depends_on:
       rabbitmq:
@@ -199,10 +198,8 @@ services:
       INT_FIELDS: From Bank
       PREFETCH_COUNT: 1
       CRASH_HOOK: ${Q1_PROJECTION_02_CRASH:-}
+    image: tp1-proyeccion
   q1_minor_than_50_01:
-    build:
-      context: ./src
-      dockerfile: workers/filtro/Dockerfile
     container_name: q1_minor_than_50_01
     depends_on:
       rabbitmq:
@@ -232,10 +229,8 @@ services:
       OPERADOR_FILTRO: menor
       PREFETCH_COUNT: 1
       CRASH_HOOK: ${Q1_MINOR_THAN_50_01_CRASH:-}
+    image: tp1-filtro
   q1_minor_than_50_02:
-    build:
-      context: ./src
-      dockerfile: workers/filtro/Dockerfile
     container_name: q1_minor_than_50_02
     depends_on:
       rabbitmq:
@@ -265,10 +260,8 @@ services:
       OPERADOR_FILTRO: menor
       PREFETCH_COUNT: 1
       CRASH_HOOK: ${Q1_MINOR_THAN_50_02_CRASH:-}
+    image: tp1-filtro
   q1_minor_than_50_03:
-    build:
-      context: ./src
-      dockerfile: workers/filtro/Dockerfile
     container_name: q1_minor_than_50_03
     depends_on:
       rabbitmq:
@@ -298,10 +291,8 @@ services:
       OPERADOR_FILTRO: menor
       PREFETCH_COUNT: 1
       CRASH_HOOK: ${Q1_MINOR_THAN_50_03_CRASH:-}
+    image: tp1-filtro
   q2_bank_projection_01:
-    build:
-      context: ./src
-      dockerfile: workers/proyeccion/Dockerfile
     container_name: q2_bank_projection_01
     depends_on:
       rabbitmq:
@@ -330,10 +321,8 @@ services:
       INT_FIELDS: ''
       PREFETCH_COUNT: 1000
       CRASH_HOOK: ${Q2_BANK_PROJECTION_01_CRASH:-}
+    image: tp1-proyeccion
   q2_bank_projection_02:
-    build:
-      context: ./src
-      dockerfile: workers/proyeccion/Dockerfile
     container_name: q2_bank_projection_02
     depends_on:
       rabbitmq:
@@ -362,10 +351,8 @@ services:
       INT_FIELDS: ''
       PREFETCH_COUNT: 1000
       CRASH_HOOK: ${Q2_BANK_PROJECTION_02_CRASH:-}
+    image: tp1-proyeccion
   q2_projection_01:
-    build:
-      context: ./src
-      dockerfile: workers/proyeccion/Dockerfile
     container_name: q2_projection_01
     depends_on:
       rabbitmq:
@@ -394,10 +381,8 @@ services:
       INT_FIELDS: From Bank
       PREFETCH_COUNT: 1
       CRASH_HOOK: ${Q2_PROJECTION_01_CRASH:-}
+    image: tp1-proyeccion
   q2_projection_02:
-    build:
-      context: ./src
-      dockerfile: workers/proyeccion/Dockerfile
     container_name: q2_projection_02
     depends_on:
       rabbitmq:
@@ -426,10 +411,8 @@ services:
       INT_FIELDS: From Bank
       PREFETCH_COUNT: 1
       CRASH_HOOK: ${Q2_PROJECTION_02_CRASH:-}
+    image: tp1-proyeccion
   q2_agregador_shard_01:
-    build:
-      context: ./src
-      dockerfile: workers/bank_shard/Dockerfile
     container_name: q2_agregador_shard_01
     depends_on:
       rabbitmq:
@@ -458,10 +441,11 @@ services:
       TOTAL_BANK_UPSTREAM: 2
       PREFETCH_COUNT: 1000
       CRASH_HOOK: ${Q2_AGREGADOR_SHARD_01_CRASH:-}
-  q2_agregador_shard_02:
     build:
       context: ./src
       dockerfile: workers/bank_shard/Dockerfile
+    image: tp1-bank_shard
+  q2_agregador_shard_02:
     container_name: q2_agregador_shard_02
     depends_on:
       rabbitmq:
@@ -490,10 +474,8 @@ services:
       TOTAL_BANK_UPSTREAM: 2
       PREFETCH_COUNT: 1000
       CRASH_HOOK: ${Q2_AGREGADOR_SHARD_02_CRASH:-}
+    image: tp1-bank_shard
   q3_filter_fechas_01:
-    build:
-      context: ./src
-      dockerfile: workers/filtro/Dockerfile
     container_name: q3_filter_fechas_01
     depends_on:
       rabbitmq:
@@ -523,10 +505,8 @@ services:
       OPERADOR_FILTRO: entre
       PREFETCH_COUNT: 1
       CRASH_HOOK: ${Q3_FILTER_FECHAS_01_CRASH:-}
+    image: tp1-filtro
   q3_filter_fechas_02:
-    build:
-      context: ./src
-      dockerfile: workers/filtro/Dockerfile
     container_name: q3_filter_fechas_02
     depends_on:
       rabbitmq:
@@ -556,10 +536,8 @@ services:
       OPERADOR_FILTRO: entre
       PREFETCH_COUNT: 1
       CRASH_HOOK: ${Q3_FILTER_FECHAS_02_CRASH:-}
+    image: tp1-filtro
   q3_filter_fechas_03:
-    build:
-      context: ./src
-      dockerfile: workers/filtro/Dockerfile
     container_name: q3_filter_fechas_03
     depends_on:
       rabbitmq:
@@ -589,10 +567,8 @@ services:
       OPERADOR_FILTRO: entre
       PREFETCH_COUNT: 1
       CRASH_HOOK: ${Q3_FILTER_FECHAS_03_CRASH:-}
+    image: tp1-filtro
   q3_filter_fechas_04:
-    build:
-      context: ./src
-      dockerfile: workers/filtro/Dockerfile
     container_name: q3_filter_fechas_04
     depends_on:
       rabbitmq:
@@ -622,10 +598,8 @@ services:
       OPERADOR_FILTRO: entre
       PREFETCH_COUNT: 1
       CRASH_HOOK: ${Q3_FILTER_FECHAS_04_CRASH:-}
+    image: tp1-filtro
   q3_format_shard_01:
-    build:
-      context: ./src
-      dockerfile: workers/format_shard/Dockerfile
     container_name: q3_format_shard_01
     depends_on:
       rabbitmq:
@@ -652,10 +626,11 @@ services:
       LOG_FILE: /app/logs/q3_format_shard_01.txt
       PREFETCH_COUNT: 1000
       CRASH_HOOK: ${Q3_FORMAT_SHARD_01_CRASH:-}
-  q3_format_shard_02:
     build:
       context: ./src
       dockerfile: workers/format_shard/Dockerfile
+    image: tp1-format_shard
+  q3_format_shard_02:
     container_name: q3_format_shard_02
     depends_on:
       rabbitmq:
@@ -682,10 +657,8 @@ services:
       LOG_FILE: /app/logs/q3_format_shard_02.txt
       PREFETCH_COUNT: 1000
       CRASH_HOOK: ${Q3_FORMAT_SHARD_02_CRASH:-}
+    image: tp1-format_shard
   q3_format_shard_03:
-    build:
-      context: ./src
-      dockerfile: workers/format_shard/Dockerfile
     container_name: q3_format_shard_03
     depends_on:
       rabbitmq:
@@ -712,10 +685,8 @@ services:
       LOG_FILE: /app/logs/q3_format_shard_03.txt
       PREFETCH_COUNT: 1000
       CRASH_HOOK: ${Q3_FORMAT_SHARD_03_CRASH:-}
+    image: tp1-format_shard
   q4_projection_01:
-    build:
-      context: ./src
-      dockerfile: workers/proyeccion/Dockerfile
     container_name: q4_projection_01
     depends_on:
       rabbitmq:
@@ -744,10 +715,8 @@ services:
       INT_FIELDS: From Bank,To Bank
       PREFETCH_COUNT: 1
       CRASH_HOOK: ${Q4_PROJECTION_01_CRASH:-}
+    image: tp1-proyeccion
   q4_projection_02:
-    build:
-      context: ./src
-      dockerfile: workers/proyeccion/Dockerfile
     container_name: q4_projection_02
     depends_on:
       rabbitmq:
@@ -776,10 +745,8 @@ services:
       INT_FIELDS: From Bank,To Bank
       PREFETCH_COUNT: 1
       CRASH_HOOK: ${Q4_PROJECTION_02_CRASH:-}
+    image: tp1-proyeccion
   q4_filter_period_01:
-    build:
-      context: ./src
-      dockerfile: workers/filtro/Dockerfile
     container_name: q4_filter_period_01
     depends_on:
       rabbitmq:
@@ -809,10 +776,8 @@ services:
       OPERADOR_FILTRO: entre
       PREFETCH_COUNT: 1
       CRASH_HOOK: ${Q4_FILTER_PERIOD_01_CRASH:-}
+    image: tp1-filtro
   q4_filter_period_02:
-    build:
-      context: ./src
-      dockerfile: workers/filtro/Dockerfile
     container_name: q4_filter_period_02
     depends_on:
       rabbitmq:
@@ -842,10 +807,8 @@ services:
       OPERADOR_FILTRO: entre
       PREFETCH_COUNT: 1
       CRASH_HOOK: ${Q4_FILTER_PERIOD_02_CRASH:-}
+    image: tp1-filtro
   q4_sumador_01:
-    build:
-      context: ./src
-      dockerfile: workers/contador_distinto/Dockerfile
     container_name: q4_sumador_01
     depends_on:
       rabbitmq:
@@ -879,10 +842,11 @@ services:
       EMIT_MODE: explode
       PREFETCH_COUNT: 1000
       CRASH_HOOK: ${Q4_SUMADOR_01_CRASH:-}
-  q4_sumador_02:
     build:
       context: ./src
       dockerfile: workers/contador_distinto/Dockerfile
+    image: tp1-contador_distinto
+  q4_sumador_02:
     container_name: q4_sumador_02
     depends_on:
       rabbitmq:
@@ -916,10 +880,8 @@ services:
       EMIT_MODE: explode
       PREFETCH_COUNT: 1000
       CRASH_HOOK: ${Q4_SUMADOR_02_CRASH:-}
+    image: tp1-contador_distinto
   q4_joiner_01:
-    build:
-      context: ./src
-      dockerfile: workers/joiner_q4/Dockerfile
     container_name: q4_joiner_01
     depends_on:
       rabbitmq:
@@ -946,10 +908,11 @@ services:
       LOG_FILE: /app/logs/q4_joiner_01.txt
       PREFETCH_COUNT: 1000
       CRASH_HOOK: ${Q4_JOINER_01_CRASH:-}
-  q4_joiner_02:
     build:
       context: ./src
       dockerfile: workers/joiner_q4/Dockerfile
+    image: tp1-joiner_q4
+  q4_joiner_02:
     container_name: q4_joiner_02
     depends_on:
       rabbitmq:
@@ -976,10 +939,8 @@ services:
       LOG_FILE: /app/logs/q4_joiner_02.txt
       PREFETCH_COUNT: 1000
       CRASH_HOOK: ${Q4_JOINER_02_CRASH:-}
+    image: tp1-joiner_q4
   q4_contador_01:
-    build:
-      context: ./src
-      dockerfile: workers/contador_distinto/Dockerfile
     container_name: q4_contador_01
     depends_on:
       rabbitmq:
@@ -1013,10 +974,8 @@ services:
       COUNT_OUTPUT_FIELD: Amount Transactions
       PREFETCH_COUNT: 1000
       CRASH_HOOK: ${Q4_CONTADOR_01_CRASH:-}
+    image: tp1-contador_distinto
   q4_contador_02:
-    build:
-      context: ./src
-      dockerfile: workers/contador_distinto/Dockerfile
     container_name: q4_contador_02
     depends_on:
       rabbitmq:
@@ -1050,10 +1009,8 @@ services:
       COUNT_OUTPUT_FIELD: Amount Transactions
       PREFETCH_COUNT: 1000
       CRASH_HOOK: ${Q4_CONTADOR_02_CRASH:-}
+    image: tp1-contador_distinto
   q5_projection_01:
-    build:
-      context: ./src
-      dockerfile: workers/proyeccion/Dockerfile
     container_name: q5_projection_01
     depends_on:
       rabbitmq:
@@ -1081,10 +1038,8 @@ services:
       CAMPOS: Timestamp,Payment Currency,Payment Format,Amount Paid
       PREFETCH_COUNT: 1
       CRASH_HOOK: ${Q5_PROJECTION_01_CRASH:-}
+    image: tp1-proyeccion
   q5_projection_02:
-    build:
-      context: ./src
-      dockerfile: workers/proyeccion/Dockerfile
     container_name: q5_projection_02
     depends_on:
       rabbitmq:
@@ -1112,10 +1067,8 @@ services:
       CAMPOS: Timestamp,Payment Currency,Payment Format,Amount Paid
       PREFETCH_COUNT: 1
       CRASH_HOOK: ${Q5_PROJECTION_02_CRASH:-}
+    image: tp1-proyeccion
   q5_projection_03:
-    build:
-      context: ./src
-      dockerfile: workers/proyeccion/Dockerfile
     container_name: q5_projection_03
     depends_on:
       rabbitmq:
@@ -1143,10 +1096,8 @@ services:
       CAMPOS: Timestamp,Payment Currency,Payment Format,Amount Paid
       PREFETCH_COUNT: 1
       CRASH_HOOK: ${Q5_PROJECTION_03_CRASH:-}
+    image: tp1-proyeccion
   q5_projection_04:
-    build:
-      context: ./src
-      dockerfile: workers/proyeccion/Dockerfile
     container_name: q5_projection_04
     depends_on:
       rabbitmq:
@@ -1174,10 +1125,8 @@ services:
       CAMPOS: Timestamp,Payment Currency,Payment Format,Amount Paid
       PREFETCH_COUNT: 1
       CRASH_HOOK: ${Q5_PROJECTION_04_CRASH:-}
+    image: tp1-proyeccion
   q5_filter_period_01:
-    build:
-      context: ./src
-      dockerfile: workers/filtro/Dockerfile
     container_name: q5_filter_period_01
     depends_on:
       rabbitmq:
@@ -1207,10 +1156,8 @@ services:
       OPERADOR_FILTRO: entre
       PREFETCH_COUNT: 1
       CRASH_HOOK: ${Q5_FILTER_PERIOD_01_CRASH:-}
+    image: tp1-filtro
   q5_filter_period_02:
-    build:
-      context: ./src
-      dockerfile: workers/filtro/Dockerfile
     container_name: q5_filter_period_02
     depends_on:
       rabbitmq:
@@ -1240,10 +1187,8 @@ services:
       OPERADOR_FILTRO: entre
       PREFETCH_COUNT: 1
       CRASH_HOOK: ${Q5_FILTER_PERIOD_02_CRASH:-}
+    image: tp1-filtro
   q5_filter_period_03:
-    build:
-      context: ./src
-      dockerfile: workers/filtro/Dockerfile
     container_name: q5_filter_period_03
     depends_on:
       rabbitmq:
@@ -1273,10 +1218,8 @@ services:
       OPERADOR_FILTRO: entre
       PREFETCH_COUNT: 1
       CRASH_HOOK: ${Q5_FILTER_PERIOD_03_CRASH:-}
+    image: tp1-filtro
   q5_filter_period_04:
-    build:
-      context: ./src
-      dockerfile: workers/filtro/Dockerfile
     container_name: q5_filter_period_04
     depends_on:
       rabbitmq:
@@ -1306,10 +1249,8 @@ services:
       OPERADOR_FILTRO: entre
       PREFETCH_COUNT: 1
       CRASH_HOOK: ${Q5_FILTER_PERIOD_04_CRASH:-}
+    image: tp1-filtro
   q5_filter_format_01:
-    build:
-      context: ./src
-      dockerfile: workers/filtro/Dockerfile
     container_name: q5_filter_format_01
     depends_on:
       rabbitmq:
@@ -1339,10 +1280,8 @@ services:
       OPERADOR_FILTRO: en
       PREFETCH_COUNT: 1
       CRASH_HOOK: ${Q5_FILTER_FORMAT_01_CRASH:-}
+    image: tp1-filtro
   q5_filter_format_02:
-    build:
-      context: ./src
-      dockerfile: workers/filtro/Dockerfile
     container_name: q5_filter_format_02
     depends_on:
       rabbitmq:
@@ -1372,10 +1311,8 @@ services:
       OPERADOR_FILTRO: en
       PREFETCH_COUNT: 1
       CRASH_HOOK: ${Q5_FILTER_FORMAT_02_CRASH:-}
+    image: tp1-filtro
   q5_converter_01:
-    build:
-      context: ./src
-      dockerfile: workers/convertidor/Dockerfile
     container_name: q5_converter_01
     depends_on:
       rabbitmq:
@@ -1404,10 +1341,11 @@ services:
       FECHA_FIN: '2022-09-05'
       PREFETCH_COUNT: 1
       CRASH_HOOK: ${Q5_CONVERTER_01_CRASH:-}
-  q5_converter_02:
     build:
       context: ./src
       dockerfile: workers/convertidor/Dockerfile
+    image: tp1-convertidor
+  q5_converter_02:
     container_name: q5_converter_02
     depends_on:
       rabbitmq:
@@ -1436,10 +1374,8 @@ services:
       FECHA_FIN: '2022-09-05'
       PREFETCH_COUNT: 1
       CRASH_HOOK: ${Q5_CONVERTER_02_CRASH:-}
+    image: tp1-convertidor
   q5_counter_01:
-    build:
-      context: ./src
-      dockerfile: workers/contador/Dockerfile
     container_name: q5_counter_01
     depends_on:
       rabbitmq:
@@ -1466,10 +1402,11 @@ services:
       LOG_FILE: /app/logs/q5_counter_01.txt
       PREFETCH_COUNT: 1000
       CRASH_HOOK: ${Q5_COUNTER_01_CRASH:-}
-  watchdog_1:
     build:
       context: ./src
-      dockerfile: watchdog/Dockerfile
+      dockerfile: workers/contador/Dockerfile
+    image: tp1-contador
+  watchdog_1:
     container_name: watchdog_1
     restart: on-failure
     depends_on:
@@ -1486,7 +1423,7 @@ services:
       MOM_USER: distributed
       MOM_PASSWORD: distributed
       MOM_VHOST: /
-      WATCHDOG_STAGES: '["gateway", "shared_filter_usd", "q1_projection", "q1_minor_than_50", "q2_bank_projection", "q2_projection", "q2_agregador_shard", "q3_filter_fechas", "q3_format_shard", "q4_projection", "q4_filter_period", "q4_sumador", "q4_joiner", "q4_contador", "q5_projection", "q5_filter_period", "q5_filter_format", "q5_converter", "q5_counter"]'
+      WATCHDOG_STAGES: '["gateway", "shared_filter_usd", "q1_projection", "q1_minor_than_50", "q2_bank_projection", "q2_projection", "q2_agregador_shard", "q3_filter_fechas", "q3_format_shard", "q4_projection", "q4_filter_period", "q4_sumador", "q4_joiner", "q4_contador", "q5_projection", "q5_filter_period", "q5_filter_format", "q5_converter", "q5_counter", "actuador"]'
       HEARTBEAT_INTERVAL_SECONDS: '5'
       MISSED_HEARTBEATS_THRESHOLD: '6'
       CHECK_INTERVAL_SECONDS: '5'
@@ -1502,10 +1439,11 @@ services:
       LOG_LEVEL: INFO
       LOG_FILE: /app/logs/watchdog_1.txt
       CRASH_HOOK: ${WATCHDOG_1_CRASH:-}
-  watchdog_2:
     build:
       context: ./src
       dockerfile: watchdog/Dockerfile
+    image: tp1-watchdog
+  watchdog_2:
     container_name: watchdog_2
     restart: on-failure
     depends_on:
@@ -1522,7 +1460,7 @@ services:
       MOM_USER: distributed
       MOM_PASSWORD: distributed
       MOM_VHOST: /
-      WATCHDOG_STAGES: '["gateway", "shared_filter_usd", "q1_projection", "q1_minor_than_50", "q2_bank_projection", "q2_projection", "q2_agregador_shard", "q3_filter_fechas", "q3_format_shard", "q4_projection", "q4_filter_period", "q4_sumador", "q4_joiner", "q4_contador", "q5_projection", "q5_filter_period", "q5_filter_format", "q5_converter", "q5_counter"]'
+      WATCHDOG_STAGES: '["gateway", "shared_filter_usd", "q1_projection", "q1_minor_than_50", "q2_bank_projection", "q2_projection", "q2_agregador_shard", "q3_filter_fechas", "q3_format_shard", "q4_projection", "q4_filter_period", "q4_sumador", "q4_joiner", "q4_contador", "q5_projection", "q5_filter_period", "q5_filter_format", "q5_converter", "q5_counter", "actuador"]'
       HEARTBEAT_INTERVAL_SECONDS: '5'
       MISSED_HEARTBEATS_THRESHOLD: '6'
       CHECK_INTERVAL_SECONDS: '5'
@@ -1538,10 +1476,8 @@ services:
       LOG_LEVEL: INFO
       LOG_FILE: /app/logs/watchdog_2.txt
       CRASH_HOOK: ${WATCHDOG_2_CRASH:-}
+    image: tp1-watchdog
   watchdog_3:
-    build:
-      context: ./src
-      dockerfile: watchdog/Dockerfile
     container_name: watchdog_3
     restart: on-failure
     depends_on:
@@ -1558,7 +1494,7 @@ services:
       MOM_USER: distributed
       MOM_PASSWORD: distributed
       MOM_VHOST: /
-      WATCHDOG_STAGES: '["gateway", "shared_filter_usd", "q1_projection", "q1_minor_than_50", "q2_bank_projection", "q2_projection", "q2_agregador_shard", "q3_filter_fechas", "q3_format_shard", "q4_projection", "q4_filter_period", "q4_sumador", "q4_joiner", "q4_contador", "q5_projection", "q5_filter_period", "q5_filter_format", "q5_converter", "q5_counter"]'
+      WATCHDOG_STAGES: '["gateway", "shared_filter_usd", "q1_projection", "q1_minor_than_50", "q2_bank_projection", "q2_projection", "q2_agregador_shard", "q3_filter_fechas", "q3_format_shard", "q4_projection", "q4_filter_period", "q4_sumador", "q4_joiner", "q4_contador", "q5_projection", "q5_filter_period", "q5_filter_format", "q5_converter", "q5_counter", "actuador"]'
       HEARTBEAT_INTERVAL_SECONDS: '5'
       MISSED_HEARTBEATS_THRESHOLD: '6'
       CHECK_INTERVAL_SECONDS: '5'
@@ -1574,18 +1510,16 @@ services:
       LOG_LEVEL: INFO
       LOG_FILE: /app/logs/watchdog_3.txt
       CRASH_HOOK: ${WATCHDOG_3_CRASH:-}
-  actuador_1:
-    build:
-      context: ./src
-      dockerfile: watchdog/DockerfileActuador
-    container_name: actuador_1
-    restart: always
+    image: tp1-watchdog
+  actuador_01:
+    container_name: actuador_01
     depends_on:
       rabbitmq:
         condition: service_healthy
     volumes:
     - /var/run/docker.sock:/var/run/docker.sock
     - ./logs:/app/logs
+    - ./volume/actuador_01:/app/volumen
     environment:
       MOM_HOST: rabbitmq
       MOM_PORT: '5672'
@@ -1593,20 +1527,25 @@ services:
       MOM_PASSWORD: distributed
       MOM_VHOST: /
       CAIDAS_QUEUE: caidas
+      NODE_PREFIX: actuador
+      ID: '1'
+      TOTAL_WORKERS: '2'
+      HEARTBEAT_INTERVAL_SECONDS: '5'
       LOG_LEVEL: INFO
-      LOG_FILE: /app/logs/actuador_1.txt
-  actuador_2:
+      LOG_FILE: /app/logs/actuador_01.txt
     build:
       context: ./src
       dockerfile: watchdog/DockerfileActuador
-    container_name: actuador_2
-    restart: always
+    image: tp1-actuador
+  actuador_02:
+    container_name: actuador_02
     depends_on:
       rabbitmq:
         condition: service_healthy
     volumes:
     - /var/run/docker.sock:/var/run/docker.sock
     - ./logs:/app/logs
+    - ./volume/actuador_02:/app/volumen
     environment:
       MOM_HOST: rabbitmq
       MOM_PORT: '5672'
@@ -1614,5 +1553,10 @@ services:
       MOM_PASSWORD: distributed
       MOM_VHOST: /
       CAIDAS_QUEUE: caidas
+      NODE_PREFIX: actuador
+      ID: '2'
+      TOTAL_WORKERS: '2'
+      HEARTBEAT_INTERVAL_SECONDS: '5'
       LOG_LEVEL: INFO
-      LOG_FILE: /app/logs/actuador_2.txt
+      LOG_FILE: /app/logs/actuador_02.txt
+    image: tp1-actuador
