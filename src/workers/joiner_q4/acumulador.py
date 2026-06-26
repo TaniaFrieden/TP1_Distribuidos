@@ -7,6 +7,9 @@ class AcumuladorJoiner:
         self._txns: dict[str, dict[str, set]] = {}
         self._vistos: dict[str, set] = {}
         self._pending_acks: dict[str, list] = {}
+        self._buf_aristas: dict[str, list] = {}
+        self._buf_txns: dict[str, list] = {}
+        self._buf_ids: dict[str, list] = {}
         self._lock = threading.Lock()
 
     @property
@@ -15,12 +18,15 @@ class AcumuladorJoiner:
 
     def agregar_arista(self, client_id: str, b_key: str, a_info: tuple):
         self._scatter.setdefault(client_id, {}).setdefault(b_key, []).append(a_info)
+        self._buf_aristas.setdefault(client_id, []).append((b_key, a_info))
 
     def agregar_transaccion(self, client_id: str, b_key: str, c_info: tuple):
         self._txns.setdefault(client_id, {}).setdefault(b_key, set()).add(c_info)
+        self._buf_txns.setdefault(client_id, []).append((b_key, c_info))
 
     def marcar_visto(self, client_id: str, request_id: str):
         self._vistos.setdefault(client_id, set()).add(request_id)
+        self._buf_ids.setdefault(client_id, []).append(request_id)
 
     def registrar_ack(self, client_id: str, ack):
         self._pending_acks.setdefault(client_id, []).append(ack)
@@ -33,14 +39,11 @@ class AcumuladorJoiner:
     def ya_visto(self, client_id: str, request_id: str) -> bool:
         return request_id in self._vistos.get(client_id, set())
 
-    def snapshot_scatter(self, client_id: str) -> dict:
-        return self._scatter.get(client_id, {})
-
-    def snapshot_txns(self, client_id: str) -> dict:
-        return self._txns.get(client_id, {})
-
-    def snapshot_vistos(self, client_id: str) -> set:
-        return self._vistos.get(client_id, set())
+    def extraer_buffer(self, client_id: str) -> tuple[list, list, list]:
+        aristas = self._buf_aristas.pop(client_id, [])
+        txns = self._buf_txns.pop(client_id, [])
+        ids = self._buf_ids.pop(client_id, [])
+        return aristas, txns, ids
 
     def total_acks_pendientes(self) -> int:
         return sum(len(v) for v in self._pending_acks.values())
@@ -56,4 +59,7 @@ class AcumuladorJoiner:
         txns = self._txns.pop(client_id, {})
         self._vistos.pop(client_id, None)
         self._pending_acks.pop(client_id, None)
+        self._buf_aristas.pop(client_id, None)
+        self._buf_txns.pop(client_id, None)
+        self._buf_ids.pop(client_id, None)
         return scatter, txns

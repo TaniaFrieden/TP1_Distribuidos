@@ -33,12 +33,8 @@ class WorkerJoinerQ4(WorkerBase):
                 self.acumulador.restaurar(client_id, scatter, txns, vistos)
 
     def _persistir_y_liberar(self, client_id: str) -> list:
-        self.persistencia.guardar(
-            client_id,
-            self.acumulador.snapshot_scatter(client_id),
-            self.acumulador.snapshot_txns(client_id),
-            self.acumulador.snapshot_vistos(client_id),
-        )
+        aristas, txns, ids = self.acumulador.extraer_buffer(client_id)
+        self.persistencia.appendear(client_id, aristas, txns, ids)
         return self.acumulador.extraer_acks(client_id)
 
     def procesar_payload(self, queue_name: str, client_id: str, payload: dict,
@@ -81,12 +77,8 @@ class WorkerJoinerQ4(WorkerBase):
             return
 
         with self.acumulador.lock:
-            self.persistencia.guardar(
-                client_id,
-                self.acumulador.snapshot_scatter(client_id),
-                self.acumulador.snapshot_txns(client_id),
-                self.acumulador.snapshot_vistos(client_id),
-            )
+            aristas, txns_buf, ids = self.acumulador.extraer_buffer(client_id)
+            self.persistencia.appendear(client_id, aristas, txns_buf, ids)
             scatter, txns = self.acumulador.extraer_cliente(client_id)
 
         enviados = self.emisor.emitir(client_id, scatter, txns)

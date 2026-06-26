@@ -56,11 +56,8 @@ class ContadorDistintoWorker(WorkerBase):
                     if self.acumulador.total_acks_pendientes() >= self.TAMANIO_LOTE_GUARDADO:
                         clientes = self.acumulador.clientes_con_acks()
                         for cid in clientes:
-                            self.persistencia.guardar(
-                                cid,
-                                self.acumulador.snapshot_grupos(cid),
-                                self.acumulador.snapshot_vistos(cid),
-                            )
+                            ops, ids = self.acumulador.extraer_buffer(cid)
+                            self.persistencia.appendear(cid, ops, ids)
                         for cid in clientes:
                             acks_a_liberar.extend(self.acumulador.extraer_acks(cid))
 
@@ -75,11 +72,8 @@ class ContadorDistintoWorker(WorkerBase):
     def al_completar_eof_local(self, client_id: str):
         acks_a_liberar = []
         with self.acumulador.lock:
-            self.persistencia.guardar(
-                client_id,
-                self.acumulador.snapshot_grupos(client_id),
-                self.acumulador.snapshot_vistos(client_id),
-            )
+            ops, ids = self.acumulador.extraer_buffer(client_id)
+            self.persistencia.appendear(client_id, ops, ids)
             acks_a_liberar = self.acumulador.extraer_acks(client_id)
         for fn in acks_a_liberar:
             fn()
@@ -90,11 +84,8 @@ class ContadorDistintoWorker(WorkerBase):
             return
 
         with self.acumulador.lock:
-            self.persistencia.guardar(
-                client_id,
-                self.acumulador.snapshot_grupos(client_id),
-                self.acumulador.snapshot_vistos(client_id),
-            )
+            ops, ids = self.acumulador.extraer_buffer(client_id)
+            self.persistencia.appendear(client_id, ops, ids)
             grupos = self.acumulador.extraer_grupos(client_id)
 
         logger.info(f"[ContadorDistinto] grupos totales para client_id={client_id}: {len(grupos)}")
