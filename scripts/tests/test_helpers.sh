@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 DOCKER_COMPOSE="${DOCKER_COMPOSE:-docker compose}"
-TEMP_DIR="${TEMP_DIR:-temp}"
+TEMP_DIR="${TEMP_DIR:-output}"
 
 limpiar_y_arrancar() {
     local clients
@@ -81,16 +81,16 @@ lanzar_clientes() {
             if [ "$i" -gt 1 ]; then
                 echo ""
             fi
-            echo "=== Cliente $i/$cant iniciando ==="
+            echo "=== Iteracion $i/$cant iniciando ==="
             ( export CLIENT_ID_SUFFIX="${run_id}_$i"; make cliente TRANSACTIONS_FILE="$tx" ACCOUNTS_FILE="$acc" OUTPUT_DIR="$TEMP_DIR" \
                 > "$TEMP_DIR/client_stdout_$i.txt" )
             if [ -n "${SEQUENTIAL_SOL:-}" ]; then
                 if ! comparar_ultimo_cliente "$SEQUENTIAL_SOL"; then
-                    echo "=== FALLO en cliente $i/$cant. Abortando. ==="
+                    echo "=== FALLO en iteracion $i/$cant. Abortando. ==="
                     return 1
                 fi
             fi
-            echo "=== Cliente $i/$cant finalizado exitosamente ==="
+            echo "=== Iteracion $i/$cant finalizado exitosamente ==="
         else
             ( export CLIENT_ID_SUFFIX="${run_id}_$i" PROGRESS_BAR=0; make cliente TRANSACTIONS_FILE="$tx" ACCOUNTS_FILE="$acc" OUTPUT_DIR="$TEMP_DIR" \
                 > "$TEMP_DIR/client_stdout_$i.txt" 2>/dev/null ) &
@@ -159,7 +159,28 @@ comparar_ultimo_cliente() {
 
 comparar_resultados() {
     local soluciones_dir=$1
-    .venv/bin/python scripts/utils/comparar_datasets.py "$TEMP_DIR" "solutions/$soluciones_dir"
+    local dirs_despues
+    dirs_despues=$(ls -d "$TEMP_DIR"/*/ 2>/dev/null | sort)
+    local nuevos
+    nuevos=$(comm -13 <(echo "$DIRS_ANTES") <(echo "$dirs_despues"))
+    if [ -z "$nuevos" ]; then
+        echo "No se encontraron carpetas de resultados nuevas"
+        return 1
+    fi
+    local total=0 exitosos=0
+    while IFS= read -r dir; do
+        total=$((total + 1))
+        if .venv/bin/python scripts/utils/comparar_datasets.py "$dir" "solutions/$soluciones_dir" 2>/dev/null; then
+            exitosos=$((exitosos + 1))
+        fi
+    done <<< "$nuevos"
+    if [ "$exitosos" -eq "$total" ]; then
+        echo "═══ Resultado: $total/$total clientes OK ═══"
+        return 0
+    else
+        echo "═══ Resultado: $((total - exitosos))/$total clientes FALLARON ═══"
+        return 1
+    fi
 }
 
 limpiar_test_global() {

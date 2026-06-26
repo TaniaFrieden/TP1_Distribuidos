@@ -17,7 +17,6 @@ clean:
 	@rm -rf .pytest_cache
 	@find . -type d -name '__pycache__' -prune -exec rm -rf {} +
 	@rm -rf logs/*.txt logs/*.log logs/clientes
-	@rm -rf temp
 	@find output/ -mindepth 1 ! -name '.gitkeep' -delete 2>/dev/null || true
 	@if [ -d volume ] && [ -n "$$(ls -A volume/ 2>/dev/null)" ]; then \
 		timeout 15 docker run --rm -v "$$(pwd)/volume:/vol" \
