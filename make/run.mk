@@ -1,6 +1,6 @@
 # Targets de ejecucion manual (levantar, bajar, correr cliente, gateway, etc.)
 
-.PHONY: build start down tirar cliente run-clients gateway log caos tirar-nodos
+.PHONY: build start down tirar cliente run-clients gateway log caos
 
 build:
 	@mkdir -p logs
@@ -32,13 +32,23 @@ down:
 	@$(DOCKER_COMPOSE) down > logs/run_clean_full.log 2>&1 || true
 
 tirar:
-	@NOMBRE="$(filter-out $@,$(MAKECMDGOALS))"; \
-	if [ -z "$$NOMBRE" ]; then \
-		echo "Uso: make tirar <nombre_contenedor>"; \
-		echo "Ejemplo: make tirar client_1782489299"; \
+	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
+	if [ -z "$$ARGS" ]; then \
+		echo "Uso:"; \
+		echo "  make tirar <contenedor>        Mata un contenedor por nombre"; \
+		echo "  make tirar todos               Mata todos los workers (una vez)"; \
+		echo "  make tirar etapa <prefijo>     Mata una etapa (una vez)"; \
 		exit 1; \
 	fi; \
-	docker rm -f $$NOMBRE
+	FIRST=$$(echo $$ARGS | cut -d' ' -f1); \
+	if [ "$$FIRST" = "todos" ]; then \
+		python3 scripts/chaos/chaos_monkey.py --once --todos; \
+	elif [ "$$FIRST" = "etapa" ]; then \
+		REST=$$(echo $$ARGS | cut -d' ' -f2-); \
+		python3 scripts/chaos/chaos_monkey.py --once --etapa $$REST; \
+	else \
+		docker rm -f $$ARGS; \
+	fi
 
 cliente:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
@@ -108,16 +118,10 @@ log:
 	$(DOCKER_COMPOSE) logs -f $(filter-out $@,$(MAKECMDGOALS))
 
 caos:
-	@mkdir -p logs
-	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
-	bash scripts/tests/test_caos_continuo.sh $$ARGS
-
-tirar-nodos:
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
 	if [ -z "$$ARGS" ]; then \
 		python3 scripts/chaos/chaos_monkey.py 10; \
 	else \
-		CMD_ARGS=""; \
 		FOR_PY=""; \
 		for arg in $$ARGS; do \
 			if [ "$$arg" = "todos" ]; then \

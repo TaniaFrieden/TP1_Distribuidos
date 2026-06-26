@@ -134,7 +134,6 @@ if __name__ == "__main__":
         
     if len(nums) == 1:
         segundos_fijos = nums[0]
-        espera_inicial = float(nums[0])
     elif len(nums) >= 2:
         espera_inicial = float(nums[0])
         segundos_fijos = nums[1]
@@ -146,89 +145,86 @@ if __name__ == "__main__":
             SERVICIOS_OPCIONALES.remove(args.pop(idx))
     SERVICIOS_CRITICOS.extend(SERVICIOS_OPCIONALES)
 
-    # Espera inicial antes del primer kill (si se especificó un delay)
-    if espera_inicial > 0:
+    solo_una_vez = "--once" in args
+    if solo_una_vez:
+        args.remove("--once")
+
+    if espera_inicial > 0 and not solo_una_vez:
         log(f"Esperando {espera_inicial}s antes del primer ataque...")
         time.sleep(espera_inicial)
 
+    def _matar_todos():
+        cl = docker.from_env()
+        contenedores = cl.containers.list(filters={"status": "running"})
+        victimas = [
+            c for c in contenedores
+            if not (c.name.startswith("client") or any(crit in c.name for crit in SERVICIOS_CRITICOS))
+        ]
+        if victimas:
+            log(f"Matando a todos los contenedores activos: {[c.name for c in victimas]}")
+            for v in victimas:
+                try:
+                    v.kill()
+                except Exception:
+                    pass
+        else:
+            log("No hay workers activos para matar.")
 
+    def _matar_etapa(etapa_fija=None):
+        cl = docker.from_env()
+        contenedores = cl.containers.list(filters={"status": "running"})
+        candidatos = [
+            c for c in contenedores
+            if not (c.name.startswith("client") or any(crit in c.name for crit in SERVICIOS_CRITICOS))
+        ]
+        etapa = etapa_fija
+        if candidatos:
+            if not etapa:
+                nombres_etapas = []
+                for c in candidatos:
+                    partes = c.name.split('_')
+                    if partes[-1].isdigit() and len(partes) > 1:
+                        prefijo = "_".join(partes[:-1])
+                    else:
+                        prefijo = c.name
+                    if prefijo not in nombres_etapas:
+                        nombres_etapas.append(prefijo)
+                if nombres_etapas:
+                    etapa = random.choice(nombres_etapas)
+            victimas = [c for c in candidatos if etapa in c.name]
+            if victimas:
+                log(f"Matando etapa '{etapa}': {[c.name for c in victimas]}")
+                for v in victimas:
+                    try:
+                        v.kill()
+                    except Exception:
+                        pass
+            else:
+                log(f"No hay workers de la etapa '{etapa}' activos para matar.")
+        else:
+            log("No hay workers activos en el sistema.")
 
     try:
         if "--todos" in args:
-            log(f"Iniciando loop destructor cada {segundos_fijos}s...")
-            while True:
-                log("") # Salto de línea para diferenciar ciclos
-                # Ejecutamos matar todos
-                try:
-                    cl = docker.from_env()
-                    contenedores = cl.containers.list(filters={"status": "running"})
-                    victimas = [
-                        c for c in contenedores 
-                        if not (c.name.startswith("client") or any(crit in c.name for crit in SERVICIOS_CRITICOS))
-                    ]
-                    if victimas:
-                        log(f"Matando a todos los contenedores activos: {[c.name for c in victimas]}")
-                        for v in victimas:
-                            try:
-                                v.kill()
-                            except Exception as e:
-                                pass
-                    else:
-                        log("No hay workers activos para matar.")
-                except Exception as e:
-                    log(f"Error en destructor loop: {e}")
-                time.sleep(segundos_fijos)
+            if solo_una_vez:
+                _matar_todos()
+            else:
+                log(f"Iniciando loop destructor cada {segundos_fijos}s...")
+                while True:
+                    _matar_todos()
+                    time.sleep(segundos_fijos)
 
         elif "--etapa" in args:
             idx = args.index("--etapa")
-            etapa_fija = None
-            if idx + 1 < len(args):
-                etapa_fija = args[idx+1]
-
-            log(f"Iniciando loop de caída de etapa cada {segundos_fijos}s...")
-            while True:
-                log("") # Salto de línea para diferenciar ciclos
-                etapa = etapa_fija
-                try:
-                    cl = docker.from_env()
-                    contenedores = cl.containers.list(filters={"status": "running"})
-                    candidatos = [
-                        c for c in contenedores 
-                        if not (c.name.startswith("client") or any(crit in c.name for crit in SERVICIOS_CRITICOS))
-                    ]
-                    
-                    if candidatos:
-                        # Si no se especificó etapa, elegimos una al azar en cada ciclo de los corriendo
-                        if not etapa:
-                            nombres_etapas = []
-                            for c in candidatos:
-                                partes = c.name.split('_')
-                                if partes[-1].isdigit() and len(partes) > 1:
-                                    prefijo = "_".join(partes[:-1])
-                                else:
-                                    prefijo = c.name
-                                if prefijo not in nombres_etapas:
-                                    nombres_etapas.append(prefijo)
-                            if nombres_etapas:
-                                etapa = random.choice(nombres_etapas)
-                        
-                        victimas = [c for c in candidatos if etapa in c.name]
-                        if victimas:
-                            log(f"Matando etapa '{etapa}': {[c.name for c in victimas]}")
-                            for v in victimas:
-                                try:
-                                    v.kill()
-                                except Exception as e:
-                                    pass
-                        else:
-                            log(f"No hay workers de la etapa '{etapa}' activos para matar.")
-                    else:
-                        log("No hay workers activos en el sistema.")
-                except Exception as e:
-                    log(f"Error en loop de etapa: {e}")
-                time.sleep(segundos_fijos)
+            etapa_fija = args[idx+1] if idx + 1 < len(args) else None
+            if solo_una_vez:
+                _matar_etapa(etapa_fija)
+            else:
+                log(f"Iniciando loop de caída de etapa cada {segundos_fijos}s...")
+                while True:
+                    _matar_etapa(etapa_fija)
+                    time.sleep(segundos_fijos)
         else:
-            # Formato tradicional: se usan los segundos fijos ya leídos
             filtros = args if len(args) > 0 else None
             run_chaos_monkey(segundos_fijos, filtros)
     except KeyboardInterrupt:
