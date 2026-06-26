@@ -52,8 +52,11 @@ class Progreso:
         self._queries_completas = set()
         self._lineas_escritas = 0
         self._finalizado = False
+        self._stop_spinner = threading.Event()
         if _HABILITADO:
             self._instalar_handler()
+            self._hilo_spinner = threading.Thread(target=self._loop_spinner, daemon=True)
+            self._hilo_spinner.start()
 
     def _instalar_handler(self):
         root = logging.getLogger()
@@ -93,12 +96,21 @@ class Progreso:
     def finalizar(self):
         if not _HABILITADO:
             return
+        self._stop_spinner.set()
         with self._lock:
             self._renderizar()
             sys.stderr.write("\n")
             sys.stderr.flush()
             self._lineas_escritas = 0
             self._finalizado = True
+
+    def _loop_spinner(self):
+        while not self._stop_spinner.wait(0.15):
+            with self._lock:
+                if self._finalizado:
+                    break
+                if self._filas_por_query or self._envios:
+                    self._renderizar()
 
     def _renderizar(self):
         self._idx_spinner = (self._idx_spinner + 1) % len(_SPINNER)
